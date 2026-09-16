@@ -1,25 +1,25 @@
-# Registra a rotina noturna no Agendador de Tarefas do Windows.
+# Registra a rotina a cada três horas no Agendador de Tarefas do Windows.
 #
 #   powershell -ExecutionPolicy Bypass -File scripts\agendar-3h.ps1
 #   powershell -ExecutionPolicy Bypass -File scripts\agendar-3h.ps1 -Remover
 #
-# Roda no seu usuário, sem exigir elevação. O computador precisa estar ligado às
-# 03:00 — `StartWhenAvailable` faz a tarefa correr assim que ele voltar, então
-# uma noite com a máquina desligada vira atraso, não buraco no catálogo.
+# Roda no seu usuário, sem exigir elevação. `StartWhenAvailable` executa a tarefa
+# quando a máquina voltar caso um dos horários tenha sido perdido.
 
 param([switch]$Remover)
 
 $ErrorActionPreference = "Stop"
-$Nome = "3AM Licitacao - rotina noturna"
+$Nome = "3AM Licitacao - sincronizacao 3h"
+$NomeAntigo = "3AM Licitacao - rotina noturna"
 $Raiz = Split-Path -Parent $PSScriptRoot
 $Cmd = Join-Path $PSScriptRoot "rotina-3h.cmd"
 
 if ($Remover) {
-  if (Get-ScheduledTask -TaskName $Nome -ErrorAction SilentlyContinue) {
-    Unregister-ScheduledTask -TaskName $Nome -Confirm:$false
-    Write-Host "Tarefa removida."
-  } else {
-    Write-Host "Nao havia tarefa registrada com esse nome."
+  foreach ($Tarefa in @($Nome, $NomeAntigo)) {
+    if (Get-ScheduledTask -TaskName $Tarefa -ErrorAction SilentlyContinue) {
+      Unregister-ScheduledTask -TaskName $Tarefa -Confirm:$false
+      Write-Host "Tarefa removida: $Tarefa"
+    }
   }
   return
 }
@@ -27,7 +27,9 @@ if ($Remover) {
 if (-not (Test-Path $Cmd)) { throw "Nao encontrei $Cmd" }
 
 $Acao = New-ScheduledTaskAction -Execute "cmd.exe" -Argument "/c `"$Cmd`"" -WorkingDirectory $Raiz
-$Gatilho = New-ScheduledTaskTrigger -Daily -At 03:00
+$Gatilhos = 0, 3, 6, 9, 12, 15, 18, 21 | ForEach-Object {
+  New-ScheduledTaskTrigger -Daily -At ([datetime]::Today.AddHours($_).AddMinutes(17))
+}
 
 $Config = New-ScheduledTaskSettingsSet `
   -StartWhenAvailable `
@@ -36,12 +38,15 @@ $Config = New-ScheduledTaskSettingsSet `
   -MultipleInstances IgnoreNew `
   -ExecutionTimeLimit (New-TimeSpan -Hours 4)
 
-# IgnoreNew e o limite de 4 h existem juntos: se uma noite travar contra um PNCP
-# fora do ar, a tarefa e encerrada e a noite seguinte comeca limpa, em vez de
-# duas rodadas concorrentes disputando o mesmo job.
+# IgnoreNew e o limite de 4 h impedem duas rodadas concorrentes. O checkpoint no
+# banco permite que o próximo horário retome uma coleta interrompida.
 
-Register-ScheduledTask -TaskName $Nome -Action $Acao -Trigger $Gatilho -Settings $Config `
-  -Description "Sincroniza o catalogo do PNCP e coleta documentos. Log em logs\rotina-AAAA-MM-DD.log" `
+if (Get-ScheduledTask -TaskName $NomeAntigo -ErrorAction SilentlyContinue) {
+  Unregister-ScheduledTask -TaskName $NomeAntigo -Confirm:$false
+}
+
+Register-ScheduledTask -TaskName $Nome -Action $Acao -Trigger $Gatilhos -Settings $Config `
+  -Description "Sincroniza licitacoes abertas de SP no PNCP a cada 3 horas. Log em logs\rotina-AAAA-MM-DD.log" `
   -Force | Out-Null
 
 $t = Get-ScheduledTask -TaskName $Nome

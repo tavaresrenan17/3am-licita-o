@@ -1,5 +1,5 @@
 @echo off
-rem Rotina noturna do 3AM Licitacao - roda as 03:00 pelo Agendador de Tarefas.
+rem Rotina do 3AM Licitacao - roda a cada tres horas pelo Agendador de Tarefas.
 rem
 rem A ordem importa:
 rem   1. descoberta  - traz as oportunidades novas com proposta aberta
@@ -26,11 +26,11 @@ echo Rotina iniciada em %DATE% %TIME% >> "%ARQ%"
 
 echo. >> "%ARQ%"
 echo --- 1/2 descoberta --- >> "%ARQ%"
-call npm run sincronizar >> "%ARQ%" 2>&1
+call npm run sincronizar -- --uf SP --horizonte 30 >> "%ARQ%" 2>&1
 
 echo. >> "%ARQ%"
 echo --- 2/2 incremental --- >> "%ARQ%"
-call npm run sincronizar -- incremental >> "%ARQ%" 2>&1
+call npm run sincronizar -- incremental --uf SP >> "%ARQ%" 2>&1
 
 echo. >> "%ARQ%"
 echo Rotina encerrada em %DATE% %TIME% >> "%ARQ%"
