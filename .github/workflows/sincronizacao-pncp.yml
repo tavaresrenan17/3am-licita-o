@@ -2,49 +2,78 @@ name: Sincronização PNCP
 
 on:
   schedule:
-    # GitHub usa UTC. O minuto 17 evita a fila mais congestionada da hora cheia.
-    - cron: "17 */3 * * *"
+    # UTC: incremental a cada 3 h, exceto a janela reservada à carga diária.
+    - cron: "17 0,3,9,12,15,18,21 * * *"
+    # 06:47 UTC = 03:47 em São Paulo. Minutos diferentes evitam a fila da hora cheia.
+    - cron: "47 6 * * *"
   workflow_dispatch:
+    inputs:
+      modo:
+        description: Rotina a executar
+        required: true
+        default: incremental
+        type: choice
+        options:
+          - incremental
+          - completa
 
 permissions:
   contents: read
 
-# Uma execução longa mantém a próxima na fila; duas coletas nunca concorrem.
+# Descoberta e incremental compartilham o mesmo grupo para nunca concorrerem.
 concurrency:
   group: pncp-sincronizacao-producao
   cancel-in-progress: false
 
 jobs:
-  sincronizar-sp:
+  incremental:
+    if: github.event.schedule == '17 0,3,9,12,15,18,21 * * *' || (github.event_name == 'workflow_dispatch' && inputs.modo == 'incremental')
     runs-on: ubuntu-latest
-    timeout-minutes: 170
+    timeout-minutes: 80
     env:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-      # Deixa margem antes do timeout do runner e preserva o checkpoint.
-      SYNC_MAX_RUNTIME_MS: "9000000"
-
+      SYNC_MAX_RUNTIME_MS: "4200000"
     steps:
       - name: Baixar projeto
         uses: actions/checkout@v4
-
       - name: Configurar Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-
       - name: Instalar dependências
         run: npm ci
-
       - name: Validar secrets
         shell: bash
         run: |
           test -n "$SUPABASE_URL" || { echo "Secret SUPABASE_URL ausente"; exit 1; }
           test -n "$SUPABASE_SERVICE_ROLE_KEY" || { echo "Secret SUPABASE_SERVICE_ROLE_KEY ausente"; exit 1; }
-
-      - name: Descobrir oportunidades abertas de SP
-        run: npm run sincronizar -- --uf SP --horizonte 30
-
-      - name: Atualizar licitações já catalogadas
+      - name: Atualizar somente registros novos ou alterados
         run: npm run sincronizar -- incremental --uf SP
+
+  completa-diaria:
+    if: github.event.schedule == '47 6 * * *' || (github.event_name == 'workflow_dispatch' && inputs.modo == 'completa')
+    runs-on: ubuntu-latest
+    timeout-minutes: 170
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      SYNC_MAX_RUNTIME_MS: "9000000"
+    steps:
+      - name: Baixar projeto
+        uses: actions/checkout@v4
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Instalar dependências
+        run: npm ci
+      - name: Validar secrets
+        shell: bash
+        run: |
+          test -n "$SUPABASE_URL" || { echo "Secret SUPABASE_URL ausente"; exit 1; }
+          test -n "$SUPABASE_SERVICE_ROLE_KEY" || { echo "Secret SUPABASE_SERVICE_ROLE_KEY ausente"; exit 1; }
+      - name: Reconciliar oportunidades abertas de SP
+        run: npm run sincronizar -- --uf SP --horizonte 30

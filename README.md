@@ -3,9 +3,9 @@
 ## Sincronização automática do PNCP
 
 O workflow [`.github/workflows/sincronizacao-pncp.yml`](.github/workflows/sincronizacao-pncp.yml)
-executa a descoberta de oportunidades abertas de SP e a atualização incremental
-a cada três horas. Ele também pode ser iniciado manualmente na aba **Actions**
-do GitHub.
+executa a atualização incremental de SP a cada três horas e uma reconciliação
+completa das oportunidades abertas nos próximos 30 dias uma vez ao dia. As duas
+rotinas também podem ser iniciadas manualmente na aba **Actions** do GitHub.
 
 Cadastre estes secrets no repositório em **Settings → Secrets and variables →
 Actions**:

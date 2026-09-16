@@ -1,14 +1,12 @@
 @echo off
 rem Rotina do 3AM Licitacao - roda a cada tres horas pelo Agendador de Tarefas.
 rem
-rem A ordem importa:
-rem   1. descoberta  - traz as oportunidades novas com proposta aberta
-rem   2. incremental - traz o que MUDOU no que ja acompanhamos
+rem Busca apenas registros novos ou alterados desde a cobertura anterior.
 rem
 rem Documentos nao entram nesta rotina: o catalogo guarda o resumo e o link
 rem oficial do PNCP. Metadados de anexos podem ser coletados sob demanda.
 rem
-rem Cada etapa e retomavel: se o PNCP cair no meio, a proxima noite continua de
+rem A etapa e retomavel: se o PNCP cair no meio, o proximo horario continua de
 rem onde parou, e nada do que ja foi gravado se perde.
 
 setlocal
@@ -22,16 +20,12 @@ for /f %%d in ('powershell -NoProfile -Command "Get-Date -Format yyyy-MM-dd"') d
 set "ARQ=%LOG%\rotina-%HOJE%.log"
 
 echo ================================================= >> "%ARQ%"
-echo Rotina iniciada em %DATE% %TIME% >> "%ARQ%"
+echo Rotina incremental iniciada em %DATE% %TIME% >> "%ARQ%"
 
 echo. >> "%ARQ%"
-echo --- 1/2 descoberta --- >> "%ARQ%"
-call npm run sincronizar -- --uf SP --horizonte 30 >> "%ARQ%" 2>&1
-
-echo. >> "%ARQ%"
-echo --- 2/2 incremental --- >> "%ARQ%"
+echo --- incremental SP --- >> "%ARQ%"
 call npm run sincronizar -- incremental --uf SP >> "%ARQ%" 2>&1
 
 echo. >> "%ARQ%"
-echo Rotina encerrada em %DATE% %TIME% >> "%ARQ%"
+echo Rotina incremental encerrada em %DATE% %TIME% >> "%ARQ%"
 endlocal
