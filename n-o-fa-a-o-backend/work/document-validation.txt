@@ -1,0 +1,1 @@
+9 Markdown files; 12 OpenAPI paths covered; JSON examples valid; local links valid; encoding and fences valid.

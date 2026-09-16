@@ -1,0 +1,50 @@
+name: Sincronização PNCP
+
+on:
+  schedule:
+    # GitHub usa UTC. O minuto 17 evita a fila mais congestionada da hora cheia.
+    - cron: "17 */3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Uma execução longa mantém a próxima na fila; duas coletas nunca concorrem.
+concurrency:
+  group: pncp-sincronizacao-producao
+  cancel-in-progress: false
+
+jobs:
+  sincronizar-sp:
+    runs-on: ubuntu-latest
+    timeout-minutes: 170
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      # Deixa margem antes do timeout do runner e preserva o checkpoint.
+      SYNC_MAX_RUNTIME_MS: "9000000"
+
+    steps:
+      - name: Baixar projeto
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Validar secrets
+        shell: bash
+        run: |
+          test -n "$SUPABASE_URL" || { echo "Secret SUPABASE_URL ausente"; exit 1; }
+          test -n "$SUPABASE_SERVICE_ROLE_KEY" || { echo "Secret SUPABASE_SERVICE_ROLE_KEY ausente"; exit 1; }
+
+      - name: Descobrir oportunidades abertas de SP
+        run: npm run sincronizar -- --uf SP --horizonte 30
+
+      - name: Atualizar licitações já catalogadas
+        run: npm run sincronizar -- incremental --uf SP

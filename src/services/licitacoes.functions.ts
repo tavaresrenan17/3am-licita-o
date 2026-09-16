@@ -1,0 +1,499 @@
+/**
+ * SERVER FUNCTIONS — a única porta entre as telas e o banco.
+ *
+ * Este arquivo vai para o bundle do cliente, então nada de servidor pode ser
+ * importado no topo: `supabaseAdmin` e o worker entram por `await import()`
+ * dentro dos handlers (ver aviso em integrations/supabase/client.server.ts).
+ */
+import { createServerFn } from "@tanstack/react-start";
+import { z } from "zod";
+import type {
+  CoberturaDocumentosDTO,
+  CoberturaIncrementalDTO,
+  DetalheDTO,
+  LicitacaoDTO,
+  MetricasDTO,
+  ProgressoSyncDTO,
+  ResultadoBuscaDTO,
+  ResumoColetaDocumentosDTO,
+  SincronizacaoDTO,
+} from "@/lib/dto";
+import type { StatusInterno } from "@/lib/types";
+
+/* ------------------------------------------------------------- validação --- */
+
+const filtrosSchema = z
+  .object({
+    palavra_chave: z.string(),
+    uf: z.string(),
+    municipio: z.string(),
+    orgao: z.string(),
+    modalidade: z.string(),
+    categoria: z.string(),
+    status_interno: z.string(),
+    prioridade: z.string(),
+    valor_min: z.string(),
+    valor_max: z.string(),
+    publicacao_de: z.string(),
+    publicacao_ate: z.string(),
+    criadas_de: z.string(),
+    limite_de: z.string(),
+    limite_ate: z.string(),
+    com_edital: z.boolean(),
+    com_projeto: z.boolean(),
+    com_orcamento: z.boolean(),
+    nao_analisadas: z.boolean(),
+    recomendadas: z.boolean(),
+    apenas_abertas: z.boolean(),
+  })
+  .partial();
+
+const consultaSchema = z.object({
+  filtros: filtrosSchema.default({}),
+  ordenarPor: z
+    .enum([
+      "data_encerramento_proposta",
+      "valor_total_estimado",
+      "data_publicacao",
+      "score_aderencia",
+    ])
+    .default("data_encerramento_proposta"),
+  direcao: z.enum(["asc", "desc"]).default("asc"),
+  pagina: z.number().int().min(1).default(1),
+  itensPorPagina: z.number().int().min(1).max(200).default(25),
+});
+
+const escopoSchema = z.object({
+  ufs: z.array(z.string().length(2)).min(1).max(27).default(["SP"]),
+  modalidades: z.array(z.number().int().positive()).max(19).default([]),
+  horizonteDias: z.number().int().min(1).max(365).default(30),
+});
+
+const configSchema = z
+  .object({
+    ufs_coleta: z.array(z.string().length(2)).min(1).max(27),
+    modalidades_coleta: z.array(z.number().int().positive()).max(19),
+    horizonte_dias: z.number().int().min(1).max(365),
+    palavras_chave: z.array(z.string()),
+    score_peso_palavras: z.number().int().min(0).max(100),
+    score_peso_documentos: z.number().int().min(0).max(100),
+    score_peso_valor: z.number().int().min(0).max(100),
+    score_minimo_recomendado: z.number().int().min(0).max(100),
+    itens_por_pagina: z.number().int().min(10).max(200),
+    colunas_visiveis: z.array(z.string()),
+  })
+  .partial();
+
+/* ------------------------------------------------------------ adaptador --- */
+
+type Linha = Record<string, unknown>;
+
+const s = (v: unknown): string | null => (typeof v === "string" && v !== "" ? v : null);
+const n = (v: unknown): number | null => (v === null || v === undefined ? null : Number(v));
+
+function paraDTO(l: Linha): LicitacaoDTO {
+  return {
+    id: String(l["id"]),
+    pncp_id: String(l["numero_controle_pncp"]),
+    orgao: String(l["orgao"] ?? ""),
+    cnpj_orgao: String(l["cnpj_orgao"] ?? ""),
+    unidade_nome: s(l["unidade_nome"]),
+    municipio: s(l["municipio"]),
+    uf: s(l["uf"]),
+    objeto: String(l["objeto"] ?? ""),
+    valor_estimado: n(l["valor_total_estimado"]),
+    data_publicacao: s(l["data_publicacao"]),
+    data_abertura_proposta: s(l["data_abertura_proposta"]),
+    data_limite_proposta: s(l["data_encerramento_proposta"]),
+    modalidade: s(l["modalidade_nome"]),
+    modalidade_id: n(l["modalidade_id"]),
+    status_pncp: s(l["situacao_nome"]),
+    situacao_compra_id: n(l["situacao_compra_id"]),
+    aberta: Boolean(l["aberta"]),
+    situacao_temporal: (l["situacao_temporal"] ??
+      "indeterminada") as LicitacaoDTO["situacao_temporal"],
+    categoria: String(l["categoria"] ?? "Outros"),
+    score_aderencia: Number(l["score_aderencia"] ?? 0),
+    status_interno: (l["status_interno"] ?? "nova") as StatusInterno,
+    observacoes: String(l["observacoes"] ?? ""),
+    prioridade: Boolean(l["prioridade"]),
+    documentos_total: Number(l["documentos_total"] ?? 0),
+    documentos_estado: (l["documentos_estado"] ?? "pendente") as LicitacaoDTO["documentos_estado"],
+    url_pncp: s(l["url_pncp"]),
+    link_sistema_origem: s(l["link_sistema_origem"]),
+    informacao_complementar: s(l["informacao_complementar"]),
+    processo: s(l["processo"]),
+    srp: typeof l["srp"] === "boolean" ? (l["srp"] as boolean) : null,
+    data_atualizacao_global: s(l["data_atualizacao_global"]),
+    synced_at: String(l["synced_at"] ?? ""),
+    updated_at: String(l["updated_at"] ?? ""),
+  };
+}
+
+/* ------------------------------------------------------------- consultas --- */
+
+export const buscarLicitacoesFn = createServerFn({ method: "POST" })
+  .validator((d: unknown) => consultaSchema.parse(d))
+  .handler(async ({ data }): Promise<ResultadoBuscaDTO> => {
+    const repo = await import("./pncp/repositorio.server");
+    const cfg = await repo.obterConfiguracoes();
+
+    const resultado = await repo.buscarLicitacoes({
+      // Invariante do catálogo operacional. Mesmo que um cliente antigo envie
+      // `false` ou omita o campo, a API nunca devolve licitação encerrada ou
+      // sem data limite. `licitacao_aberta` no banco também exige abertura e
+      // encerramento preenchidos, situação ativa e prazo ainda vigente.
+      filtros: { ...data.filtros, apenas_abertas: true },
+      ordenarPor: data.ordenarPor,
+      direcao: data.direcao,
+      limite: data.itensPorPagina,
+      deslocamento: (data.pagina - 1) * data.itensPorPagina,
+      scoreMinimo: cfg.score_minimo_recomendado,
+    });
+
+    return {
+      itens: resultado.itens.map(paraDTO),
+      total: resultado.total,
+      pagina: data.pagina,
+      totalPaginas: Math.max(1, Math.ceil(resultado.total / data.itensPorPagina)),
+      consultadoEm: resultado.consultado_em,
+    };
+  });
+
+export const obterLicitacaoFn = createServerFn({ method: "POST" })
+  .validator((d: unknown) => z.object({ id: z.string().uuid() }).parse(d))
+  .handler(async ({ data }): Promise<DetalheDTO | null> => {
+    const repo = await import("./pncp/repositorio.server");
+    const detalhe = await repo.obterLicitacao(data.id);
+    if (!detalhe) return null;
+
+    return {
+      licitacao: paraDTO({
+        ...detalhe.licitacao,
+        // Só documento vigente conta: um anexo retirado na fonte não é material
+        // disponível para a equipe.
+        documentos_total: detalhe.documentos.filter((d) => d["ativo"] !== false).length,
+        documentos_estado: detalhe.documentosEstado,
+      }),
+      documentos: detalhe.documentos.map((d) => ({
+        id: String(d["id"]),
+        tipo_documento: d["tipo_documento"] as DetalheDTO["documentos"][number]["tipo_documento"],
+        tipo_documento_pncp: s(d["tipo_documento_pncp"]),
+        nome: String(d["nome"] ?? ""),
+        url: s(d["url"]),
+        data_publicacao: s(d["data_publicacao"]),
+        ativo: d["ativo"] !== false,
+      })),
+      historico: detalhe.historico.map((h) => ({
+        id: String(h["id"]),
+        em: String(h["em"]),
+        texto: String(h["texto"]),
+        origem: h["origem"] as "pncp" | "equipe",
+      })),
+      documentosPendentes: detalhe.documentosPendentes,
+      documentosEstado: detalhe.documentosEstado as DetalheDTO["documentosEstado"],
+      documentosColetadoEm: detalhe.documentosColetadoEm,
+      documentosErro: detalhe.documentosErro,
+    };
+  });
+
+export const metricasFn = createServerFn({ method: "POST" }).handler(
+  async (): Promise<MetricasDTO> => {
+    const repo = await import("./pncp/repositorio.server");
+    const cfg = await repo.obterConfiguracoes();
+    const m = await repo.metricasDashboard(cfg.score_minimo_recomendado);
+    return m as unknown as MetricasDTO;
+  },
+);
+
+export const opcoesFiltrosFn = createServerFn({ method: "POST" }).handler(async () => {
+  const repo = await import("./pncp/repositorio.server");
+  return repo.opcoesFiltros();
+});
+
+export const listarModalidadesFn = createServerFn({ method: "POST" }).handler(async () => {
+  const repo = await import("./pncp/repositorio.server");
+  return repo.listarModalidades();
+});
+
+/* --------------------------------------------------- campos internos ------ */
+
+export const atualizarInternoFn = createServerFn({ method: "POST" })
+  .validator((d: unknown) =>
+    z
+      .object({
+        id: z.string().uuid(),
+        statusInterno: z
+          .enum(["nova", "em_analise", "interessante", "descartada", "proposta_enviada"])
+          .optional(),
+        prioridade: z.boolean().optional(),
+        observacoes: z.string().max(10_000).optional(),
+        historico: z.string().max(500).optional(),
+      })
+      .parse(d),
+  )
+  .handler(async ({ data }) => {
+    const repo = await import("./pncp/repositorio.server");
+    const linha = await repo.atualizarLicitacaoInterna({
+      id: data.id,
+      statusInterno: data.statusInterno ?? null,
+      prioridade: data.prioridade ?? null,
+      observacoes: data.observacoes ?? null,
+      historico: data.historico ?? null,
+    });
+    return paraDTO(linha);
+  });
+
+/* ------------------------------------------------------- configurações ---- */
+
+export const obterConfiguracoesFn = createServerFn({ method: "POST" }).handler(async () => {
+  const repo = await import("./pncp/repositorio.server");
+  return repo.obterConfiguracoes();
+});
+
+export const salvarConfiguracoesFn = createServerFn({ method: "POST" })
+  .validator((d: unknown) => configSchema.parse(d))
+  .handler(async ({ data }) => {
+    const repo = await import("./pncp/repositorio.server");
+    return repo.salvarConfiguracoes(data);
+  });
+
+/* ------------------------------------------------------- sincronização ---- */
+
+function coberturaDe(
+  job: SincronizacaoDTO | null,
+  pendentes: number,
+  falhados: number,
+): ProgressoSyncDTO["cobertura"] {
+  if (!job) return "nunca";
+  if (job.status === "em_andamento") return "coletando";
+  if (job.status === "falhou") return "falhou";
+  // "Completo no escopo" exige todos os segmentos previstos percorridos, sem
+  // lacuna conhecida (arquivo 04 §1). O que define isso são os segmentos, não o
+  // rótulo do job: um aviso acessório — payload bruto não guardado, por exemplo —
+  // marca o job como "concluído com erros" sem deixar buraco na coleta.
+  if (
+    pendentes === 0 &&
+    falhados === 0 &&
+    (job.status === "concluido" || job.status === "concluido_com_erros")
+  ) {
+    return "completo_no_escopo";
+  }
+  return "parcial";
+}
+
+export const iniciarSincronizacaoFn = createServerFn({ method: "POST" })
+  .validator((d: unknown) => escopoSchema.partial().parse(d ?? {}))
+  .handler(async ({ data }) => {
+    const repo = await import("./pncp/repositorio.server");
+    const { planejarPropostasAbertas, descreverEscopo } = await import("./pncp/planner");
+
+    const emAndamento = await repo.jobEmAndamento();
+    if (emAndamento) {
+      return { jobId: emAndamento.id, reaproveitado: true };
+    }
+
+    const cfg = await repo.obterConfiguracoes();
+    const escopo = {
+      ufs: data.ufs ?? cfg.ufs_coleta,
+      modalidades: data.modalidades ?? cfg.modalidades_coleta,
+      horizonteDias: data.horizonteDias ?? cfg.horizonte_dias,
+    };
+
+    const segmentos = planejarPropostasAbertas(escopo);
+    const job = await repo.criarSincronizacao(escopo, descreverEscopo(escopo), segmentos);
+
+    return { jobId: job.id, reaproveitado: false };
+  });
+
+export const executarTickFn = createServerFn({ method: "POST" })
+  .validator((d: unknown) => z.object({ jobId: z.string().uuid() }).parse(d))
+  .handler(async ({ data }) => {
+    const repo = await import("./pncp/repositorio.server");
+    const { executarTick } = await import("./pncp/worker.server");
+    const cfg = await repo.obterConfiguracoes();
+
+    const resumo = await executarTick(data.jobId, {
+      banco: repo.portaIngestao(),
+      cfg: {
+        palavras_chave: cfg.palavras_chave,
+        score_peso_palavras: cfg.score_peso_palavras,
+        score_peso_documentos: cfg.score_peso_documentos,
+        score_peso_valor: cfg.score_peso_valor,
+      },
+    });
+
+    // A fronteira de cobertura só avança no fim, e só nas partições que
+    // concluíram todas as suas janelas (arquivo 03 §4, item 6). Custa uma
+    // consulta a mais, e só no último tick.
+    if (resumo.jobConcluido) {
+      const job = await repo.obterSincronizacao(data.jobId);
+      if (job?.tipo === "incremental") await repo.avancarCobertura(data.jobId);
+    }
+
+    return resumo;
+  });
+
+export const statusSincronizacaoFn = createServerFn({ method: "POST" })
+  .validator((d: unknown) => z.object({ jobId: z.string().uuid().optional() }).parse(d ?? {}))
+  .handler(async ({ data }): Promise<ProgressoSyncDTO> => {
+    const repo = await import("./pncp/repositorio.server");
+
+    const job = (await repo.jobEmAndamento()) ?? (await repo.listarSincronizacoes(1))[0] ?? null;
+    if (!job) {
+      return { job: null, cobertura: "nunca", segmentos: null, percentual: null };
+    }
+
+    const alvo = data.jobId ?? job.id;
+    const segmentos = await repo.progressoSegmentos(alvo);
+    const percentual =
+      segmentos.paginasEstimadas && segmentos.paginasEstimadas > 0
+        ? Math.min(100, Math.round((segmentos.paginasAplicadas / segmentos.paginasEstimadas) * 100))
+        : null;
+
+    return {
+      job: job as unknown as SincronizacaoDTO,
+      cobertura: coberturaDe(
+        job as unknown as SincronizacaoDTO,
+        segmentos.pendentes,
+        segmentos.falhados,
+      ),
+      segmentos,
+      percentual,
+    };
+  });
+
+export const listarSincronizacoesFn = createServerFn({ method: "POST" })
+  .validator((d: unknown) =>
+    z.object({ limite: z.number().int().min(1).max(50).default(20) }).parse(d ?? {}),
+  )
+  .handler(async ({ data }) => {
+    const repo = await import("./pncp/repositorio.server");
+    return (await repo.listarSincronizacoes(data.limite)) as unknown as SincronizacaoDTO[];
+  });
+
+export const interromperSincronizacaoFn = createServerFn({ method: "POST" })
+  .validator((d: unknown) =>
+    z.object({ jobId: z.string().uuid(), motivo: z.string().max(300).optional() }).parse(d),
+  )
+  .handler(async ({ data }) => {
+    const repo = await import("./pncp/repositorio.server");
+    // Interromper não apaga o que já foi gravado: o job fica parcial e pode ser
+    // retomado, com o checkpoint de cada segmento preservado.
+    //
+    // Todo caminho que abandona um job precisa passar por aqui. Um job deixado
+    // em 'em_andamento' trava o índice único e bloqueia QUALQUER sincronização
+    // seguinte — aconteceu duas vezes em 14 e 15/09, nas duas por a fonte ter
+    // falhado e o laço da tela ter saído sem encerrar nada.
+    await repo.marcarJobParcial(data.jobId, data.motivo ?? "Interrompida pelo usuário");
+    return { ok: true };
+  });
+
+/* ---------------------------------------------------- fila de documentos --- */
+
+export const coberturaDocumentosFn = createServerFn({ method: "POST" }).handler(
+  async (): Promise<CoberturaDocumentosDTO> => {
+    const repo = await import("./pncp/repositorio.server");
+    return (await repo.coberturaDocumentos()) as unknown as CoberturaDocumentosDTO;
+  },
+);
+
+/**
+ * Um passo da coleta de documentos. Assim como a sincronização, a fila avança
+ * em ticks curtos: o runtime não tem processo longo, e cada chamada precisa
+ * terminar em estado retomável. A tela chama de novo enquanto houver fila.
+ */
+export const executarTickDocumentosFn = createServerFn({ method: "POST" })
+  .validator((d: unknown) =>
+    z.object({ maxLicitacoes: z.number().int().min(1).max(500).optional() }).parse(d ?? {}),
+  )
+  .handler(async ({ data }): Promise<ResumoColetaDocumentosDTO> => {
+    const repo = await import("./pncp/repositorio.server");
+    const { executarTickDocumentos } = await import("./pncp/worker.documentos.server");
+    const cfg = await repo.obterConfiguracoes();
+
+    return executarTickDocumentos({
+      banco: repo.portaDocumentos(),
+      cfg: {
+        palavras_chave: cfg.palavras_chave,
+        score_peso_palavras: cfg.score_peso_palavras,
+        score_peso_documentos: cfg.score_peso_documentos,
+        score_peso_valor: cfg.score_peso_valor,
+      },
+      ...(data.maxLicitacoes ? { maxLicitacoesPorTick: data.maxLicitacoes } : {}),
+    });
+  });
+
+/* ------------------------------------------ sincronização incremental (F3) */
+
+const escopoIncrementalSchema = z.object({
+  ufs: z.array(z.string().length(2)).min(1).max(27).optional(),
+  modalidades: z.array(z.number().int().positive()).max(19).optional(),
+  sobreposicaoDias: z.number().int().min(0).max(30).optional(),
+  janelaDias: z.number().int().min(1).max(7).optional(),
+});
+
+/**
+ * Planeja e abre um ciclo de atualização global.
+ *
+ * O custo aqui não é o do catálogo, é o do domínio: `/contratacoes/atualizacao`
+ * exige modalidade, então cada UF vira uma partição por modalidade. Devolver a
+ * contagem de segmentos deixa isso visível antes de a coleta começar.
+ */
+export const iniciarIncrementalFn = createServerFn({ method: "POST" })
+  .validator((d: unknown) => escopoIncrementalSchema.parse(d ?? {}))
+  .handler(async ({ data }) => {
+    const repo = await import("./pncp/repositorio.server");
+    const { planejarIncremental, descreverIncremental } = await import("./pncp/planner");
+
+    const cfg = await repo.obterConfiguracoes();
+    const ufs = data.ufs ?? cfg.ufs_coleta;
+
+    // A rota exige modalidade: "todas" precisa virar a lista real do domínio,
+    // não a ausência de filtro que `/proposta` aceita.
+    let modalidades = data.modalidades ?? cfg.modalidades_coleta;
+    if (modalidades.length === 0) {
+      modalidades = (await repo.listarModalidades()).filter((m) => m.ativo).map((m) => m.id);
+    }
+
+    // Sem carga inicial não há de quando partir, e inventar uma data faria o
+    // ciclo varrer um passado arbitrário.
+    const inicioPadrao = await repo.inicioPadraoIncremental();
+    if (!inicioPadrao) {
+      throw new Error(
+        "Nenhuma sincronização de descoberta registrada: rode a coleta inicial antes do incremental.",
+      );
+    }
+
+    const escopo = {
+      ufs,
+      modalidades,
+      inicioPadrao,
+      ...(data.sobreposicaoDias !== undefined ? { sobreposicaoDias: data.sobreposicaoDias } : {}),
+      ...(data.janelaDias !== undefined ? { janelaDias: data.janelaDias } : {}),
+    };
+
+    const agora = new Date();
+    const coberturas = await repo.listarCoberturaIncremental();
+    const segmentos = planejarIncremental(escopo, coberturas, agora);
+
+    if (segmentos.length === 0) {
+      throw new Error("Nada a atualizar: todas as partições já estão na fronteira de hoje.");
+    }
+
+    const job = await repo.criarSincronizacao(
+      escopo,
+      descreverIncremental(escopo, segmentos.length),
+      segmentos,
+      // O recorte é fixado ANTES do primeiro GET; o fim do job não vira
+      // "sincronizado até agora" (arquivo 03 §4).
+      { tipo: "incremental", cutoff: agora.toISOString() },
+    );
+
+    return { jobId: job.id, segmentos: segmentos.length };
+  });
+
+export const coberturaIncrementalFn = createServerFn({ method: "POST" }).handler(async () => {
+  const repo = await import("./pncp/repositorio.server");
+  return (await repo.diagnosticoCobertura()) as unknown as CoberturaIncrementalDTO;
+});

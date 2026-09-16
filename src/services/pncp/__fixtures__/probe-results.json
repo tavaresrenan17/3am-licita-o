@@ -1,0 +1,175 @@
+{
+  "executedAt": "2026-09-11T16:59:54.088Z",
+  "cases": [
+    {
+      "name": "proposta_sem_modalidade",
+      "url": "https://pncp.gov.br/api/consulta/v1/contratacoes/proposta?dataFinal=20261011&uf=DF&pagina=1&tamanhoPagina=10",
+      "status": 200,
+      "elapsedMs": 19646,
+      "bytes": 22759,
+      "contentType": "application/json",
+      "totalRegistros": 395,
+      "totalPaginas": 40,
+      "numeroPagina": 1,
+      "count": 10,
+      "empty": false,
+      "sample": [
+        {
+          "id": "33839275000172-1-000029/2024",
+          "abertura": "2024-09-18T08:00:00",
+          "encerramento": "2026-09-18T18:00:00",
+          "publicacao": "2024-09-13T15:21:21",
+          "atualizacao": "2024-12-27T20:45:02",
+          "modalidade": 12,
+          "situacao": 1,
+          "uf": "DF"
+        },
+        {
+          "id": "00037457000170-1-000021/2025",
+          "abertura": "2026-07-02T08:00:00",
+          "encerramento": "2026-09-25T09:00:00",
+          "publicacao": "2025-09-18T07:28:53",
+          "atualizacao": "2026-07-01T07:09:11",
+          "modalidade": 4,
+          "situacao": 1,
+          "uf": "DF"
+        }
+      ]
+    },
+    {
+      "name": "proposta_limite_51",
+      "url": "https://pncp.gov.br/api/consulta/v1/contratacoes/proposta?dataFinal=20261011&uf=DF&pagina=1&tamanhoPagina=51",
+      "status": 400,
+      "elapsedMs": 128,
+      "bytes": 172,
+      "contentType": "application/json",
+      "error": {
+        "message": "Tamanho de página inválido",
+        "path": "/pncp-consulta/v1/contratacoes/proposta",
+        "timestamp": "2026-09-11T13:59:51.598-03:00",
+        "status": "400",
+        "error": "Bad Request"
+      }
+    },
+    {
+      "name": "publicacao_sem_modalidade",
+      "url": "https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao?dataInicial=20260910&dataFinal=20260910&uf=DF&pagina=1&tamanhoPagina=10",
+      "status": 400,
+      "elapsedMs": 34,
+      "bytes": 246,
+      "contentType": "application/json",
+      "error": {
+        "timestamp": "2026-09-11T16:59:51.630+00:00",
+        "status": 400,
+        "error": "Bad Request",
+        "message": "Required request parameter 'codigoModalidadeContratacao' for method parameter type Long is not present",
+        "path": "/pncp-consulta/v1/contratacoes/publicacao"
+      }
+    },
+    {
+      "name": "publicacao_valida",
+      "url": "https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao?dataInicial=20260910&dataFinal=20260910&codigoModalidadeContratacao=6&uf=DF&pagina=1&tamanhoPagina=10",
+      "status": 200,
+      "elapsedMs": 1538,
+      "bytes": 22632,
+      "contentType": "application/json",
+      "totalRegistros": 32,
+      "totalPaginas": 4,
+      "numeroPagina": 1,
+      "count": 10,
+      "empty": false,
+      "sample": [
+        {
+          "id": "26989715000102-1-001386/2026",
+          "abertura": "2026-09-10T08:00:00",
+          "encerramento": "2026-09-24T10:00:00",
+          "publicacao": "2026-09-10T04:00:02",
+          "atualizacao": "2026-09-10T04:01:12",
+          "modalidade": 6,
+          "situacao": 1,
+          "uf": "DF"
+        },
+        {
+          "id": "00509968000148-1-002993/2026",
+          "abertura": "2026-09-10T08:00:00",
+          "encerramento": "2026-09-24T09:00:00",
+          "publicacao": "2026-09-10T04:00:08",
+          "atualizacao": "2026-09-10T04:01:20",
+          "modalidade": 6,
+          "situacao": 1,
+          "uf": "DF"
+        }
+      ]
+    },
+    {
+      "name": "atualizacao_valida",
+      "url": "https://pncp.gov.br/api/consulta/v1/contratacoes/atualizacao?dataInicial=20260910&dataFinal=20260910&codigoModalidadeContratacao=6&uf=DF&pagina=1&tamanhoPagina=10",
+      "status": 200,
+      "elapsedMs": 749,
+      "bytes": 23465,
+      "contentType": "application/json",
+      "totalRegistros": 104,
+      "totalPaginas": 11,
+      "numeroPagina": 1,
+      "count": 10,
+      "empty": false,
+      "sample": [
+        {
+          "id": "15126437000305-1-003431/2026",
+          "abertura": "2026-09-10T08:00:00",
+          "encerramento": "2026-09-22T09:30:00",
+          "publicacao": "2026-08-27T04:01:34",
+          "atualizacao": "2026-09-10T04:01:02",
+          "modalidade": 6,
+          "situacao": 1,
+          "uf": "DF"
+        },
+        {
+          "id": "00488478000102-1-000258/2026",
+          "abertura": "2026-09-10T08:00:00",
+          "encerramento": "2026-09-23T10:00:00",
+          "publicacao": "2026-09-10T04:00:28",
+          "atualizacao": "2026-09-10T04:01:03",
+          "modalidade": 6,
+          "situacao": 1,
+          "uf": "DF"
+        }
+      ]
+    },
+    {
+      "name": "proposta_datafinal_hoje",
+      "url": "https://pncp.gov.br/api/consulta/v1/contratacoes/proposta?dataFinal=20260911&uf=DF&pagina=1&tamanhoPagina=10",
+      "status": 200,
+      "elapsedMs": 61,
+      "bytes": 4584,
+      "contentType": "application/json",
+      "totalRegistros": 2,
+      "totalPaginas": 1,
+      "numeroPagina": 1,
+      "count": 2,
+      "empty": false,
+      "sample": [
+        {
+          "id": "00508903000188-1-000900/2026",
+          "abertura": "2026-08-27T08:00:00",
+          "encerramento": "2026-09-11T14:00:00",
+          "publicacao": "2026-05-18T07:13:39",
+          "atualizacao": "2026-08-27T07:09:15",
+          "modalidade": 6,
+          "situacao": 1,
+          "uf": "DF"
+        },
+        {
+          "id": "34028316000103-1-000023/2026",
+          "abertura": "2026-08-19T09:00:00",
+          "encerramento": "2026-09-11T14:00:00",
+          "publicacao": "2026-08-18T18:31:05",
+          "atualizacao": "2026-08-18T18:35:12",
+          "modalidade": 6,
+          "situacao": 1,
+          "uf": "DF"
+        }
+      ]
+    }
+  ]
+}
