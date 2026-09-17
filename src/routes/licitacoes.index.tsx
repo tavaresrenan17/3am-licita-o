@@ -7,7 +7,6 @@ import {
   ChevronRight,
   MessageSquarePlus,
   Search,
-  SlidersHorizontal,
   Star,
   X,
 } from "lucide-react";
@@ -18,7 +17,6 @@ import { EmptyState, StatusInternoBadge, StatusPncpBadge } from "@/components/da
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
@@ -36,14 +34,13 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import {
-  CATEGORIAS,
   STATUS_INTERNO_LABEL,
   filtrosVazios,
   type FiltrosLicitacoes,
   type OrdenacaoCampo,
   type StatusInterno,
 } from "@/lib/types";
-import { brl, dataBR, diaBR, diasRestantes, numero } from "@/lib/format";
+import { brl, dataBR, diasRestantes, numero } from "@/lib/format";
 import {
   useAtualizarInterno,
   useConfiguracoes,
@@ -261,7 +258,6 @@ function LicitacoesSalvas() {
   const [pagina, setPagina] = useState(1);
   const [obsAberta, setObsAberta] = useState<string | null>(null);
   const [obsTexto, setObsTexto] = useState("");
-  const [filtrosAbertos, setFiltrosAbertos] = useState(false);
 
   // Digitar não dispara uma consulta por tecla.
   useEffect(() => {
@@ -273,7 +269,6 @@ function LicitacoesSalvas() {
   }, [termo]);
 
   const itensPorPagina = config?.itens_por_pagina ?? 25;
-  const scoreMinimo = config?.score_minimo_recomendado ?? 60;
   const colunas = config?.colunas_visiveis ?? COLUNAS.map((c) => c.key);
   const visivel = (k: string) => colunas.includes(k);
 
@@ -341,13 +336,16 @@ function LicitacoesSalvas() {
     );
   };
 
-  const filtrosAtivos = Object.entries(filtros).filter(([chave, v]) => {
-    // `apenas_abertas` é uma regra fixa do catálogo, não uma escolha do usuário.
-    if (chave === "apenas_abertas") return false;
-    // SP é o escopo inicial do produto e só conta quando o usuário troca a UF.
-    if (chave === "uf" && v === UF_INICIAL) return false;
-    return typeof v === "boolean" ? v : v !== "";
-  }).length;
+  const filtrosAtivos = [
+    filtros.palavra_chave,
+    filtros.modalidade,
+    filtros.uf !== UF_INICIAL ? filtros.uf : "",
+    filtros.municipio,
+    filtros.publicacao_de,
+    filtros.publicacao_ate,
+    filtros.valor_min,
+    filtros.valor_max,
+  ].filter(Boolean).length;
 
   const limparTudo = () => {
     // Limpa as escolhas do usuário, preservando as invariantes do catálogo:
@@ -370,12 +368,6 @@ function LicitacoesSalvas() {
         set("palavra_chave", "");
       },
     });
-  if (filtros.limite_ate)
-    chipsAtivos.push({
-      chave: "limite_ate",
-      label: `Prazo até ${dataBR(filtros.limite_ate)}`,
-      limpar: () => set("limite_ate", ""),
-    });
   if (filtros.municipio)
     chipsAtivos.push({
       chave: "municipio",
@@ -388,41 +380,29 @@ function LicitacoesSalvas() {
       label: filtros.modalidade,
       limpar: () => set("modalidade", ""),
     });
-  if (filtros.status_interno)
+  if (filtros.publicacao_de)
     chipsAtivos.push({
-      chave: "status_interno",
-      label: STATUS_INTERNO_LABEL[filtros.status_interno as StatusInterno],
-      limpar: () => set("status_interno", ""),
+      chave: "publicacao_de",
+      label: `Publicadas desde ${dataBR(filtros.publicacao_de)}`,
+      limpar: () => set("publicacao_de", ""),
     });
-  if (filtros.prioridade)
+  if (filtros.publicacao_ate)
     chipsAtivos.push({
-      chave: "prioridade",
-      label: filtros.prioridade === "sim" ? "Prioritárias" : "Sem prioridade",
-      limpar: () => set("prioridade", ""),
+      chave: "publicacao_ate",
+      label: `Publicadas até ${dataBR(filtros.publicacao_ate)}`,
+      limpar: () => set("publicacao_ate", ""),
     });
-  if (filtros.categoria)
+  if (filtros.valor_min)
     chipsAtivos.push({
-      chave: "categoria",
-      label: filtros.categoria,
-      limpar: () => set("categoria", ""),
+      chave: "valor_min",
+      label: `Valor mínimo: ${brl(Number(filtros.valor_min))}`,
+      limpar: () => set("valor_min", ""),
     });
-  if (filtros.orgao)
+  if (filtros.valor_max)
     chipsAtivos.push({
-      chave: "orgao",
-      label: filtros.orgao,
-      limpar: () => set("orgao", ""),
-    });
-  if (filtros.nao_analisadas)
-    chipsAtivos.push({
-      chave: "nao_analisadas",
-      label: "Não analisadas",
-      limpar: () => set("nao_analisadas", false),
-    });
-  if (filtros.recomendadas)
-    chipsAtivos.push({
-      chave: "recomendadas",
-      label: "Recomendadas",
-      limpar: () => set("recomendadas", false),
+      chave: "valor_max",
+      label: `Valor máximo: ${brl(Number(filtros.valor_max))}`,
+      limpar: () => set("valor_max", ""),
     });
 
   const SortHead = ({ campo, label }: { campo: OrdenacaoCampo; label: string }) => (
@@ -455,73 +435,92 @@ function LicitacoesSalvas() {
       }
     >
       <section className="rounded-xl border border-border bg-card p-4 shadow-sm">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
+        <div>
           <div className="min-w-0 flex-1 space-y-1.5">
-            <Label className="text-xs font-medium">Buscar licitação</Label>
+            <Label className="text-xs font-medium">Palavras-chave</Label>
             <div className="relative">
               <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 className="h-10 pl-9 text-sm"
-                placeholder="Busque pelo objeto, órgão ou palavra-chave"
+                placeholder="Ex.: pavimentação, reforma, escola"
                 value={termo}
                 onChange={(e) => setTermo(e.target.value)}
               />
             </div>
           </div>
-          <Button
-            variant={filtrosAbertos ? "secondary" : "outline"}
-            className="h-10 shrink-0"
-            onClick={() => setFiltrosAbertos((v) => !v)}
-          >
-            <SlidersHorizontal className="mr-2 size-4" />
-            Filtros avançados
-            {filtrosAtivos > 0 && (
-              <span className="ml-2 rounded-full bg-primary px-1.5 py-0.5 text-[10px] text-primary-foreground">
-                {filtrosAtivos}
-              </span>
-            )}
-          </Button>
         </div>
 
-        <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-border pt-3">
-          <span className="text-xs font-medium text-muted-foreground">Prazo:</span>
-          {[5, 15, 30].map((dias) => {
-            const ate = diaBR(dias);
-            const ativo = filtros.apenas_abertas && filtros.limite_ate === ate;
-            return (
-              <Button
-                key={dias}
-                size="sm"
-                variant={ativo ? "default" : "outline"}
-                className="h-8 rounded-full px-3 text-xs"
-                onClick={() => {
-                  // Clicar no atalho ativo remove somente o prazo rápido. A regra
-                  // de mostrar apenas oportunidades abertas permanece ativa.
-                  setFiltros((f) => ({
-                    ...f,
-                    apenas_abertas: true,
-                    limite_ate: ativo ? "" : ate,
-                  }));
-                  // O resultado encolhe: ficar na página 7 mostraria vazio.
-                  setPagina(1);
-                }}
-              >
-                {dias} dias
-              </Button>
-            );
-          })}
-          <span className="ml-auto text-[11px] text-muted-foreground">
-            Somente propostas abertas com prazo disponível
-          </span>
+        <div className="mt-4 grid gap-3 border-t border-border pt-4 sm:grid-cols-2 lg:grid-cols-3">
+          <ComboFiltro
+            label="Modalidade"
+            value={filtros.modalidade}
+            options={(modalidades ?? []).map((m) => m.nome)}
+            onChange={(v) => set("modalidade", v)}
+          />
+          <ComboFiltro
+            label="UF"
+            value={filtros.uf}
+            options={opcoes?.["ufs"] ?? []}
+            onChange={(v) => set("uf", v)}
+          />
+          <ComboFiltro
+            label="Município"
+            value={filtros.municipio}
+            options={opcoes?.["municipios"] ?? []}
+            onChange={(v) => set("municipio", v)}
+          />
+
+          <div className="space-y-1">
+            <Label className="text-[11px]">Data de publicação</Label>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <span className="mb-1 block text-[10px] text-muted-foreground">De</span>
+                <Input
+                  type="date"
+                  aria-label="Publicação de"
+                  value={filtros.publicacao_de}
+                  onChange={(e) => set("publicacao_de", e.target.value)}
+                />
+              </div>
+              <div>
+                <span className="mb-1 block text-[10px] text-muted-foreground">Até</span>
+                <Input
+                  type="date"
+                  aria-label="Publicação até"
+                  value={filtros.publicacao_ate}
+                  onChange={(e) => set("publicacao_ate", e.target.value)}
+                />
+              </div>
+            </div>
+          </div>
+          <div className="space-y-1">
+            <Label className="text-[11px]">Valor mínimo</Label>
+            <Input
+              type="number"
+              min="0"
+              placeholder="R$ 0,00"
+              value={filtros.valor_min}
+              onChange={(e) => set("valor_min", e.target.value)}
+            />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-[11px]">Valor máximo</Label>
+            <Input
+              type="number"
+              min="0"
+              placeholder="Sem limite"
+              value={filtros.valor_max}
+              onChange={(e) => set("valor_max", e.target.value)}
+            />
+          </div>
         </div>
 
-        <div className="mt-3 flex flex-wrap gap-1.5">
+        <div className="mt-4 flex flex-wrap items-center gap-1.5 border-t border-border pt-3">
           {chipsAtivos.map((chip) => (
             <span
               key={chip.chave}
               className="inline-flex h-7 items-center gap-1.5 rounded-full border border-border bg-muted/50 px-2.5 text-[11px] font-medium"
             >
-              {chip.chave === "prioridade" && <Star className="size-3 fill-current text-primary" />}
               {chip.label}
               {chip.limpar && (
                 <button onClick={chip.limpar} aria-label={`Remover filtro ${chip.label}`}>
@@ -530,122 +529,12 @@ function LicitacoesSalvas() {
               )}
             </span>
           ))}
+          {filtrosAtivos > 0 && (
+            <Button variant="ghost" size="sm" className="ml-auto h-7" onClick={limparTudo}>
+              <X className="mr-1 size-3.5" /> Limpar filtros
+            </Button>
+          )}
         </div>
-
-        {filtrosAbertos && (
-          <div className="mt-4 border-t border-border pt-4">
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
-              <ComboFiltro
-                label="UF"
-                value={filtros.uf}
-                options={opcoes?.["ufs"] ?? []}
-                onChange={(v) => set("uf", v)}
-              />
-              <ComboFiltro
-                label="Município"
-                value={filtros.municipio}
-                options={opcoes?.["municipios"] ?? []}
-                onChange={(v) => set("municipio", v)}
-              />
-              <ComboFiltro
-                label="Órgão"
-                value={filtros.orgao}
-                options={opcoes?.["orgaos"] ?? []}
-                onChange={(v) => set("orgao", v)}
-              />
-              <ComboFiltro
-                label="Modalidade"
-                value={filtros.modalidade}
-                options={(modalidades ?? []).map((m) => m.nome)}
-                onChange={(v) => set("modalidade", v)}
-              />
-              <ComboFiltro
-                label="Categoria"
-                value={filtros.categoria}
-                options={opcoes?.["categorias"] ?? CATEGORIAS}
-                onChange={(v) => set("categoria", v)}
-              />
-              <ComboFiltro
-                label="Status interno"
-                value={filtros.status_interno}
-                options={Object.keys(STATUS_INTERNO_LABEL) as StatusInterno[]}
-                renderOption={(k) => STATUS_INTERNO_LABEL[k as StatusInterno]}
-                onChange={(v) => set("status_interno", v)}
-              />
-              <ComboFiltro
-                label="Prioridade"
-                value={filtros.prioridade}
-                options={["sim", "nao"]}
-                renderOption={(v) => (v === "sim" ? "Somente prioritárias" : "Sem prioridade")}
-                onChange={(v) => set("prioridade", v)}
-              />
-              <div className="space-y-1">
-                <Label className="text-[11px]">Valor mínimo</Label>
-                <Input
-                  type="number"
-                  placeholder="0"
-                  value={filtros.valor_min}
-                  onChange={(e) => set("valor_min", e.target.value)}
-                />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-[11px]">Valor máximo</Label>
-                <Input
-                  type="number"
-                  placeholder="sem limite"
-                  value={filtros.valor_max}
-                  onChange={(e) => set("valor_max", e.target.value)}
-                />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-[11px]">Publicação de</Label>
-                <Input
-                  type="date"
-                  value={filtros.publicacao_de}
-                  onChange={(e) => set("publicacao_de", e.target.value)}
-                />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-[11px]">Publicação até</Label>
-                <Input
-                  type="date"
-                  value={filtros.publicacao_ate}
-                  onChange={(e) => set("publicacao_ate", e.target.value)}
-                />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-[11px]">Limite de</Label>
-                <Input
-                  type="date"
-                  value={filtros.limite_de}
-                  onChange={(e) => set("limite_de", e.target.value)}
-                />
-              </div>
-            </div>
-            <div className="mt-4 flex flex-wrap items-center gap-5 border-t border-border pt-3">
-              <label className="flex items-center gap-2 text-xs">
-                <Checkbox
-                  checked={filtros.nao_analisadas}
-                  onCheckedChange={(v) => set("nao_analisadas", Boolean(v))}
-                />
-                Apenas não analisadas
-              </label>
-              <label className="flex items-center gap-2 text-xs">
-                <Checkbox
-                  checked={filtros.recomendadas}
-                  onCheckedChange={(v) => set("recomendadas", Boolean(v))}
-                />
-                Recomendadas (score ≥ {scoreMinimo})
-              </label>
-              {filtrosAtivos > 0 && (
-                <Button variant="ghost" size="sm" className="ml-auto h-8" onClick={limparTudo}>
-                  <X className="mr-1 size-3.5" />
-                  Limpar filtros
-                </Button>
-              )}
-            </div>
-          </div>
-        )}
       </section>
 
       <section className="mt-3 overflow-hidden rounded-lg border border-border bg-card">
