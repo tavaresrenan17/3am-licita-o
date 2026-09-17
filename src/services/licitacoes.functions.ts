@@ -294,9 +294,14 @@ export const iniciarSincronizacaoFn = createServerFn({ method: "POST" })
     }
 
     const cfg = await repo.obterConfiguracoes();
+    let modalidades = data.modalidades ?? cfg.modalidades_coleta;
+    if (modalidades.length === 0) {
+      modalidades = (await repo.listarModalidades()).filter((m) => m.ativo).map((m) => m.id);
+    }
+
     const escopo = {
       ufs: data.ufs ?? cfg.ufs_coleta,
-      modalidades: data.modalidades ?? cfg.modalidades_coleta,
+      modalidades,
       horizonteDias: data.horizonteDias ?? cfg.horizonte_dias,
     };
 

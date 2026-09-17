@@ -64,6 +64,7 @@ function bancoFalso(segmentos: SegmentoPersistido[]) {
     ...s,
     concluido: false,
     falhou: false,
+    adiado: false,
     posseToken: null as string | null,
   }));
   const merges: EntradaMerge[] = [];
@@ -74,7 +75,7 @@ function bancoFalso(segmentos: SegmentoPersistido[]) {
   const banco: PortaIngestao = {
     async proximoSegmento() {
       // Espelha o `skip locked` do banco: segmento com posse não é reentregue.
-      const livre = estado.find((s) => !s.concluido && !s.falhou && !s.posseToken);
+      const livre = estado.find((s) => !s.concluido && !s.falhou && !s.adiado && !s.posseToken);
       if (!livre) return null;
       livre.posseToken = `posse-${livre.id}`;
       return livre;
@@ -124,7 +125,12 @@ function bancoFalso(segmentos: SegmentoPersistido[]) {
     salvarPayloads: vi.fn(async () => {}),
     async registrarFalhaSegmento(id, motivo, definitiva) {
       falhas.push({ id, motivo, definitiva });
-      if (definitiva) estado.find((s) => s.id === id)!.falhou = true;
+      const alvo = estado.find((s) => s.id === id)!;
+      if (definitiva) alvo.falhou = true;
+      else alvo.adiado = true;
+    },
+    async haSegmentosPendentes() {
+      return estado.some((s) => !s.concluido && !s.falhou);
     },
     async finalizarJob(_jobId, status) {
       jobStatus = status;
@@ -221,7 +227,7 @@ describe("I04/R03 — falhas preservam progresso", () => {
     expect(r.jobConcluido).toBe(true);
   });
 
-  it("falha transitória encerra o tick sem avançar o checkpoint", async () => {
+  it("falha transitória adia o segmento sem avançar o checkpoint", async () => {
     const { banco, estado, falhas } = bancoFalso([segmento("s1")]);
     const buscar = vi.fn().mockRejectedValue(new Error("socket hang up"));
 
@@ -237,6 +243,23 @@ describe("I04/R03 — falhas preservam progresso", () => {
       outras: 1,
       falhasConsecutivas: 1,
     });
+  });
+
+  it("continua nas outras modalidades quando um segmento tem falha transitória", async () => {
+    const { banco, estado, falhas } = bancoFalso([segmento("s1"), segmento("s2")]);
+    const buscar = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("HTTP 504"))
+      .mockResolvedValueOnce(pagina([contratacao(2)], 1));
+
+    const r = await executarTick("job-1", { banco, cfg, buscar, ...relogio() });
+
+    expect(falhas).toEqual([expect.objectContaining({ id: "s1", definitiva: false })]);
+    expect(estado[0]).toMatchObject({ proximaPagina: 1, adiado: true });
+    expect(estado[1]).toMatchObject({ concluido: true });
+    expect(r.paginasAplicadas).toBe(1);
+    expect(r.jobConcluido).toBe(false);
+    expect(buscar).toHaveBeenCalledTimes(2);
   });
 
   it("erro ao gravar não avança o checkpoint: a página é relida depois", async () => {

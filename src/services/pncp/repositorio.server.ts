@@ -294,6 +294,7 @@ export function portaIngestao(): PortaIngestao {
         .eq("id", segmentoId)
         .maybeSingle();
       const tentativas = ((data as { tentativas?: number } | null)?.tentativas ?? 0) + 1;
+      const esperaMs = Math.min(15 * 60_000, 60_000 * 2 ** Math.min(tentativas - 1, 4));
 
       const { error } = await db()
         .from("ingestao_segmentos")
@@ -303,10 +304,21 @@ export function portaIngestao(): PortaIngestao {
           status: definitiva ? "falhou" : "pendente",
           tentativas,
           ultimo_erro: motivo.slice(0, 500),
+          proxima_tentativa_em: definitiva ? null : new Date(Date.now() + esperaMs).toISOString(),
           atualizado_em: new Date().toISOString(),
         })
         .eq("id", segmentoId);
       erro("Falha ao registrar erro do segmento", error);
+    },
+
+    async haSegmentosPendentes(jobId: string): Promise<boolean> {
+      const { count, error } = await db()
+        .from("ingestao_segmentos")
+        .select("id", { count: "exact", head: true })
+        .eq("sincronizacao_id", jobId)
+        .in("status", ["pendente", "executando"]);
+      erro("Falha ao verificar segmentos pendentes", error);
+      return (count ?? 0) > 0;
     },
 
     async registrarMetricasApi(jobId: string, metricas: MetricasApiTick): Promise<void> {

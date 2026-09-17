@@ -118,9 +118,16 @@ async function main() {
       { tipo: "incremental", cutoff: new Date().toISOString() },
     );
   } else {
+    let modalidades = modalidadesArg ?? cfg.modalidades_coleta;
+    // Na descoberta, configuração vazia historicamente significava omitir a
+    // modalidade. Em SP isso produz uma consulta ampla que o PNCP encerra com
+    // 504. Expandir para o domínio ativo cria partições menores e retomáveis.
+    if (modalidades.length === 0) {
+      modalidades = (await repo.listarModalidades()).filter((m) => m.ativo).map((m) => m.id);
+    }
     const escopo = {
       ufs: ufArg ? [ufArg.toUpperCase()] : cfg.ufs_coleta,
-      modalidades: modalidadesArg ?? cfg.modalidades_coleta,
+      modalidades,
       horizonteDias:
         Number.isInteger(horizonteArg) && horizonteArg > 0 ? horizonteArg : cfg.horizonte_dias,
     };

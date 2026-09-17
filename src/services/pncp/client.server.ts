@@ -111,7 +111,10 @@ const PADROES = {
   // numa consulta mínima (DF, 10 por página) e 58,6 s numa de 50 por página.
   // Um timeout de 30 s abortava praticamente toda chamada válida.
   timeoutMs: 90_000,
-  tentativasMax: 5,
+  // Cinco tentativas contra um 504 sustentado prendiam um segmento por cerca
+  // de seis minutos. Três preservam tolerância a falha passageira e devolvem o
+  // segmento à fila cedo para que as outras modalidades possam avançar.
+  tentativasMax: 3,
   esperaMaxMs: 60_000,
   orcamentoMs: Number.POSITIVE_INFINITY,
 };

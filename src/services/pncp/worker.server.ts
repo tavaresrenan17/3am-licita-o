@@ -87,6 +87,8 @@ export interface PortaIngestao {
   mergePagina(entrada: EntradaMerge): Promise<ResultadoMerge>;
   salvarPayloads(endpoint: EndpointPNCP, itens: PayloadBruto[]): Promise<void>;
   registrarFalhaSegmento(segmentoId: string, motivo: string, definitiva: boolean): Promise<void>;
+  /** Há trabalho não concluído, mesmo que tudo esteja temporariamente em cooldown. */
+  haSegmentosPendentes?(jobId: string): Promise<boolean>;
   finalizarJob(
     jobId: string,
     status: "concluido" | "concluido_com_erros" | "parcial" | "falhou",
@@ -325,8 +327,10 @@ export async function executarTick(jobId: string, opcoes: OpcoesTick): Promise<R
     }
   };
 
-  type ResultadoProcessamento = "ok" | "definitiva" | "parar";
+  type ResultadoProcessamento = "ok" | "definitiva" | "transitoria" | "parar";
   let requisicoesEmVoo = 0;
+  const falhosNesteTick = new Set<string>();
+  let aguardandoCooldown = false;
 
   const processarPagina = async (segmento: SegmentoPersistido): Promise<ResultadoProcessamento> => {
     try {
@@ -424,8 +428,11 @@ export async function executarTick(jobId: string, opcoes: OpcoesTick): Promise<R
         }
 
         await banco.registrarFalhaSegmento(segmento.id, motivo, false);
+        falhosNesteTick.add(segmento.id);
         resumo.erros.push(`${segmento.id}: ${motivo}`);
-        return "parar";
+        // A falha pertence a este segmento. Ele entra em cooldown no banco e
+        // não impede que modalidades independentes continuem neste tick.
+        return "transitoria";
       }
 
       const fetchedAt = new Date(agora()).toISOString();
@@ -485,11 +492,24 @@ export async function executarTick(jobId: string, opcoes: OpcoesTick): Promise<R
     for (let i = 0; i < vagas; i++) {
       const segmento = await banco.proximoSegmento(jobId);
       if (!segmento) break;
+      // Proteção adicional para portas sem cooldown (e durante rollout da
+      // migração): a mesma falha não pode consumir todas as vagas do tick.
+      if (falhosNesteTick.has(segmento.id)) {
+        await banco.liberarSegmento(segmento);
+        aguardandoCooldown = true;
+        break;
+      }
       segmentos.push(segmento);
     }
 
     if (segmentos.length === 0) {
-      resumo.jobConcluido = true;
+      const aindaHaTrabalho =
+        aguardandoCooldown ||
+        (banco.haSegmentosPendentes ? await banco.haSegmentosPendentes(jobId) : false);
+      resumo.jobConcluido = !aindaHaTrabalho;
+      if (aindaHaTrabalho && resumo.erros.length === 0) {
+        resumo.erros.push("Segmentos aguardando nova tentativa após falha temporária do PNCP.");
+      }
       break;
     }
 
