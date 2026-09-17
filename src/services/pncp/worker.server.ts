@@ -105,6 +105,10 @@ export interface MetricasApiTick extends FalhasTentativasPNCP {
   falhasConsecutivas: number;
   /** Permite zerar a sequência persistida quando houve sucesso neste tick. */
   reiniciarFalhasConsecutivas: boolean;
+  /** Tempo deliberadamente aguardado pelo limitador entre páginas. */
+  esperaLimitadorMs: number;
+  /** Intervalo vigente ao terminar o tick. */
+  intervaloFinalMs: number;
 }
 
 export interface OpcoesTick {
@@ -115,6 +119,8 @@ export interface OpcoesTick {
   dormir?: (ms: number) => Promise<void>;
   /** Intervalo mínimo entre o início de duas páginas. Ver PADRAO. */
   intervaloPartidaMs?: number;
+  /** Desative para benchmarks que precisam de ritmo rigorosamente fixo. */
+  ritmoAdaptativo?: boolean;
   /** Orçamento do tick; o padrão deixa folga sob o limite do runtime. */
   orcamentoMs?: number;
   /** Tempo mínimo que precisa sobrar para tentar mais uma página. */
@@ -159,9 +165,9 @@ const PADRAO = {
   // Os números não fecham entre si porque a variável não é só o nosso ritmo: a
   // tolerância do PNCP muda com o estado dele, que no mesmo dia oscilou entre
   // responder em 200 ms, limitar e devolver "Erro na comunicação com o banco de
-  // dados". Então 4 s NÃO é um limite derivado: é um piso conservador, acima do
-  // único ritmo que passou limpo, escolhido sob incerteza. Ajustar para menos
-  // exige medir de novo com a fonte saudável.
+  // dados". Por isso o ritmo agora parte de 3 s: após respostas limpas desce
+  // gradualmente até 2,5 s; qualquer retry ou falha observada aumenta o intervalo
+  // rapidamente, até o teto de 12 s.
   //
   // Enquanto o PNCP levava 30–60 s por página isto não aparecia — o tempo de
   // resposta espaçava as chamadas sozinho. Quando ficou rápido, o worker passou
@@ -169,7 +175,10 @@ const PADRAO = {
   //
   // O que de fato torna a coleta robusta não é acertar este número, é o tick
   // seguinte retomar do checkpoint: bloqueio vira atraso, nunca perda.
-  intervaloPartidaMs: 4_000,
+  intervaloPartidaMs: 3_000,
+  intervaloMinimoMs: 2_500,
+  intervaloMaximoMs: 12_000,
+  sucessosParaAcelerar: 2,
 };
 
 interface Mapeamento {
@@ -228,6 +237,11 @@ export async function executarTick(jobId: string, opcoes: OpcoesTick): Promise<R
     maxPaginasPorTick = PADRAO.maxPaginasPorTick,
     intervaloPartidaMs = PADRAO.intervaloPartidaMs,
   } = opcoes;
+  // Um intervalo fornecido pelo chamador permanece fixo por padrão, deixando
+  // benchmarks e diagnósticos reproduzíveis.
+  const ritmoAdaptativo = opcoes.ritmoAdaptativo ?? opcoes.intervaloPartidaMs === undefined;
+  let intervaloAtualMs = intervaloPartidaMs;
+  let sucessosLimposSeguidos = 0;
 
   const inicio = agora();
   const resumo: ResumoTick = {
@@ -253,6 +267,8 @@ export async function executarTick(jobId: string, opcoes: OpcoesTick): Promise<R
       latenciaMaxMs: 0,
       falhasConsecutivas: 0,
       reiniciarFalhasConsecutivas: false,
+      esperaLimitadorMs: 0,
+      intervaloFinalMs: intervaloAtualMs,
     },
   };
 
@@ -266,8 +282,8 @@ export async function executarTick(jobId: string, opcoes: OpcoesTick): Promise<R
 
   const restante = () => orcamentoMs - (agora() - inicio);
 
-  // Primeira página parte na hora; as seguintes respeitam o intervalo.
-  let proximaPartida = inicio;
+  // Primeira página parte na hora; as seguintes usam o intervalo vigente.
+  let ultimaPartida: number | null = null;
 
   while (resumo.paginasAplicadas < maxPaginasPorTick && restante() > reservaMs) {
     const segmento = await banco.proximoSegmento(jobId);
@@ -287,14 +303,15 @@ export async function executarTick(jobId: string, opcoes: OpcoesTick): Promise<R
       // Espaça o início das páginas. Esperar aqui, e não depois da resposta, faz
       // o intervalo valer entre PARTIDAS: se a página anterior já demorou mais que
       // isso, não se espera nada e a coleta não fica artificialmente lenta.
-      const espera = proximaPartida - agora();
-      proximaPartida = Math.max(proximaPartida, agora()) + intervaloPartidaMs;
+      const espera = ultimaPartida === null ? 0 : ultimaPartida + intervaloAtualMs - agora();
       if (espera > 0) {
         // Dormir além do que sobra do tick desperdiçaria o orçamento inteiro numa
         // pausa; melhor encerrar retomável e deixar a próxima volta continuar.
         if (espera >= restante()) break;
         await dormir(espera);
+        resumo.metricasApi.esperaLimitadorMs += espera;
       }
+      ultimaPartida = agora();
 
       let resposta;
       const inicioRequisicao = agora();
@@ -311,6 +328,29 @@ export async function executarTick(jobId: string, opcoes: OpcoesTick): Promise<R
         resumo.metricasApi.falhasConsecutivas = 0;
         resumo.metricasApi.reiniciarFalhasConsecutivas = true;
         somarFalhas(resposta.falhas);
+
+        if (ritmoAdaptativo) {
+          const falhasDaPagina = resposta.falhas
+            ? resposta.falhas.timeouts +
+              resposta.falhas.erros429 +
+              resposta.falhas.erros5xx +
+              resposta.falhas.outras
+            : 0;
+          if (resposta.tentativas > 1 || falhasDaPagina > 0) {
+            sucessosLimposSeguidos = 0;
+            intervaloAtualMs = Math.min(
+              PADRAO.intervaloMaximoMs,
+              Math.max(intervaloAtualMs + 1_000, Math.ceil(intervaloAtualMs * 1.5)),
+            );
+          } else {
+            sucessosLimposSeguidos++;
+            if (sucessosLimposSeguidos >= PADRAO.sucessosParaAcelerar) {
+              intervaloAtualMs = Math.max(PADRAO.intervaloMinimoMs, intervaloAtualMs - 250);
+              sucessosLimposSeguidos = 0;
+            }
+          }
+        }
+        resumo.metricasApi.intervaloFinalMs = intervaloAtualMs;
       } catch (erro) {
         const motivo = erro instanceof Error ? erro.message : String(erro);
         const duracaoFalha =
@@ -323,6 +363,13 @@ export async function executarTick(jobId: string, opcoes: OpcoesTick): Promise<R
         resumo.metricasApi.falhasConsecutivas += tentativas;
         if (erro instanceof FalhaTransitoriaPNCP) somarFalhas(erro.falhas);
         else resumo.metricasApi.outras++;
+        if (ritmoAdaptativo) {
+          intervaloAtualMs = Math.min(
+            PADRAO.intervaloMaximoMs,
+            Math.max(intervaloAtualMs + 2_000, intervaloAtualMs * 2),
+          );
+          resumo.metricasApi.intervaloFinalMs = intervaloAtualMs;
+        }
 
         if (erro instanceof ErroContratoPNCP || erro instanceof RespostaInvalidaPNCP) {
           // Repetir a mesma requisição inválida não adianta: encerra o segmento e

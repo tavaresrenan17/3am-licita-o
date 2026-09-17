@@ -170,6 +170,10 @@ async function main() {
           (resumo.metricasApi.requisicoes > 0
             ? ` · média ${Math.round(resumo.metricasApi.latenciaTotalMs / resumo.metricasApi.requisicoes)} ms`
             : "") +
+          ` · ritmo ${resumo.metricasApi.intervaloFinalMs} ms` +
+          (resumo.metricasApi.esperaLimitadorMs > 0
+            ? ` · espera ${Math.round(resumo.metricasApi.esperaLimitadorMs / 1000)} s`
+            : "") +
           (resumo.naoAdmitidos > 0 ? ` · ${resumo.naoAdmitidos} não admitidas` : "") +
           (resumo.erros.length > 0 ? ` · ${resumo.erros.length} erro(s)` : ""),
       );

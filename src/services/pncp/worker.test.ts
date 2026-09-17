@@ -409,6 +409,59 @@ describe("política de admissão por endpoint", () => {
 });
 
 describe("ritmo contra o limitador do PNCP", () => {
+  it("acelera gradualmente até 2,5 s após respostas limpas", async () => {
+    const { banco } = bancoFalso([segmento("s1")]);
+    const r = relogio();
+    const partidas: number[] = [];
+
+    const buscar = vi.fn(async () => {
+      partidas.push(r.agora());
+      return pagina([contratacao(partidas.length)], 6);
+    });
+
+    const resumo = await executarTick("job-1", {
+      banco,
+      cfg,
+      buscar,
+      agora: r.agora,
+      dormir: r.dormir,
+    });
+
+    expect(partidas).toEqual([0, 3_000, 5_750, 8_500, 11_000, 13_500]);
+    expect(resumo.metricasApi.intervaloFinalMs).toBe(2_500);
+    expect(resumo.metricasApi.esperaLimitadorMs).toBe(13_500);
+  });
+
+  it("desacelera depois de uma página que precisou repetir", async () => {
+    const { banco } = bancoFalso([segmento("s1")]);
+    const r = relogio();
+    const partidas: number[] = [];
+
+    const buscar = vi.fn(async () => {
+      partidas.push(r.agora());
+      const resposta = pagina([contratacao(partidas.length)], 3);
+      return partidas.length === 2
+        ? {
+            ...resposta,
+            tentativas: 2,
+            falhas: { timeouts: 0, erros429: 0, erros5xx: 1, outras: 0 },
+          }
+        : resposta;
+    });
+
+    const resumo = await executarTick("job-1", {
+      banco,
+      cfg,
+      buscar,
+      agora: r.agora,
+      dormir: r.dormir,
+    });
+
+    expect(partidas).toEqual([0, 3_000, 7_500]);
+    expect(resumo.metricasApi.intervaloFinalMs).toBe(4_500);
+    expect(resumo.metricasApi.erros5xx).toBe(1);
+  });
+
   it("espaça o início das páginas", async () => {
     // Medição de 15/09/2026: a 6ª requisição seguida volta 429, sem
     // Retry-After, e só libera após ~20 s parado. SP tem 101 páginas, então
