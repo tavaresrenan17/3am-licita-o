@@ -409,8 +409,14 @@ describe("política de admissão por endpoint", () => {
 });
 
 describe("ritmo contra o limitador do PNCP", () => {
-  it("mantém duas janelas independentes em voo com partidas globalmente espaçadas", async () => {
-    const { banco, merges } = bancoFalso([segmento("s1"), segmento("s2")]);
+  it("aquece com uma vaga e depois mantém duas janelas independentes em voo", async () => {
+    const { banco, merges } = bancoFalso([
+      segmento("s1"),
+      segmento("s2"),
+      segmento("s3"),
+      segmento("s4"),
+      segmento("s5"),
+    ]);
     const r = relogio();
     const partidas: number[] = [];
     const resolver: Array<() => void> = [];
@@ -421,7 +427,8 @@ describe("ritmo contra o limitador do PNCP", () => {
         new Promise<ResultadoPagina>((resolve) => {
           const numero = ++chamada;
           partidas.push(r.agora());
-          resolver.push(() => resolve(pagina([contratacao(numero)], 1)));
+          if (numero <= 3) resolve(pagina([contratacao(numero)], 1));
+          else resolver.push(() => resolve(pagina([contratacao(numero)], 1)));
         }),
     );
 
@@ -435,13 +442,15 @@ describe("ritmo contra o limitador do PNCP", () => {
       dormir: r.dormir,
     });
 
-    await vi.waitFor(() => expect(buscar).toHaveBeenCalledTimes(2));
-    expect(partidas).toHaveLength(2);
+    await vi.waitFor(() => expect(buscar).toHaveBeenCalledTimes(5));
+    expect(partidas).toHaveLength(5);
     expect(r.dormir).toHaveBeenCalledWith(1_500);
     resolver.forEach((concluir) => concluir());
 
     const resumo = await execucao;
-    expect(new Set(merges.map((m) => m.segmentoId))).toEqual(new Set(["s1", "s2"]));
+    expect(new Set(merges.map((m) => m.segmentoId))).toEqual(
+      new Set(["s1", "s2", "s3", "s4", "s5"]),
+    );
     expect(resumo.metricasApi.concorrenciaMaxObservada).toBe(2);
   });
 

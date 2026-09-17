@@ -186,6 +186,7 @@ const PADRAO = {
   intervaloMaximoMs: 12_000,
   sucessosParaAcelerar: 2,
   concorrenciaMax: 2,
+  sucessosParaAquecerConcorrencia: 3,
   sucessosParaRestaurarConcorrencia: 6,
 };
 
@@ -252,8 +253,11 @@ export async function executarTick(jobId: string, opcoes: OpcoesTick): Promise<R
   let intervaloAtualMs = intervaloPartidaMs;
   let sucessosLimposSeguidos = 0;
   const concorrenciaConfigurada = Math.max(1, Math.min(2, Math.trunc(concorrenciaMax)));
-  let concorrenciaAtual = concorrenciaConfigurada;
+  // Toda execução começa cautelosa. A segunda vaga só abre depois que a fonte
+  // prova que está saudável; isso evita dobrar chamadas durante uma pane.
+  let concorrenciaAtual = 1;
   let sucessosParaRestaurarConcorrencia = 0;
+  let sucessosNecessariosConcorrencia = PADRAO.sucessosParaAquecerConcorrencia;
 
   const inicio = agora();
   const resumo: ResumoTick = {
@@ -363,6 +367,7 @@ export async function executarTick(jobId: string, opcoes: OpcoesTick): Promise<R
         if (resposta.tentativas > 1 || falhasDaPagina > 0) {
           sucessosLimposSeguidos = 0;
           sucessosParaRestaurarConcorrencia = 0;
+          sucessosNecessariosConcorrencia = PADRAO.sucessosParaRestaurarConcorrencia;
           concorrenciaAtual = 1;
           resumo.metricasApi.concorrenciaFinal = concorrenciaAtual;
           if (ritmoAdaptativo) {
@@ -380,7 +385,7 @@ export async function executarTick(jobId: string, opcoes: OpcoesTick): Promise<R
           }
           if (
             concorrenciaAtual < concorrenciaConfigurada &&
-            sucessosParaRestaurarConcorrencia >= PADRAO.sucessosParaRestaurarConcorrencia
+            sucessosParaRestaurarConcorrencia >= sucessosNecessariosConcorrencia
           ) {
             concorrenciaAtual = concorrenciaConfigurada;
             resumo.metricasApi.concorrenciaFinal = concorrenciaAtual;
@@ -403,6 +408,7 @@ export async function executarTick(jobId: string, opcoes: OpcoesTick): Promise<R
         concorrenciaAtual = 1;
         resumo.metricasApi.concorrenciaFinal = concorrenciaAtual;
         sucessosParaRestaurarConcorrencia = 0;
+        sucessosNecessariosConcorrencia = PADRAO.sucessosParaRestaurarConcorrencia;
         if (ritmoAdaptativo) {
           intervaloAtualMs = Math.min(
             PADRAO.intervaloMaximoMs,
