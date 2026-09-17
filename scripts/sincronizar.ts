@@ -130,6 +130,9 @@ async function main() {
       modalidades,
       horizonteDias:
         Number.isInteger(horizonteArg) && horizonteArg > 0 ? horizonteArg : cfg.horizonte_dias,
+      etapasHorizonteDias: planner.etapasProgressivas(
+        Number.isInteger(horizonteArg) && horizonteArg > 0 ? horizonteArg : cfg.horizonte_dias,
+      ),
     };
     const segmentos = planner.planejarPropostasAbertas(escopo);
     log(`Planejado: ${segmentos.length} segmento(s) — ${planner.descreverEscopo(escopo)}`);

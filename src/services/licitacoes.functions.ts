@@ -286,7 +286,8 @@ export const iniciarSincronizacaoFn = createServerFn({ method: "POST" })
   .validator((d: unknown) => escopoSchema.partial().parse(d ?? {}))
   .handler(async ({ data }) => {
     const repo = await import("./pncp/repositorio.server");
-    const { planejarPropostasAbertas, descreverEscopo } = await import("./pncp/planner");
+    const { planejarPropostasAbertas, descreverEscopo, etapasProgressivas } =
+      await import("./pncp/planner");
 
     const emAndamento = await repo.jobEmAndamento();
     if (emAndamento) {
@@ -303,6 +304,7 @@ export const iniciarSincronizacaoFn = createServerFn({ method: "POST" })
       ufs: data.ufs ?? cfg.ufs_coleta,
       modalidades,
       horizonteDias: data.horizonteDias ?? cfg.horizonte_dias,
+      etapasHorizonteDias: etapasProgressivas(data.horizonteDias ?? cfg.horizonte_dias),
     };
 
     const segmentos = planejarPropostasAbertas(escopo);

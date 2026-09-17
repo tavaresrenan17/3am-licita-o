@@ -19,7 +19,9 @@ import {
 import { FUSO_PNCP, hashEstavel } from "./mapper";
 
 /** Mudança nesta versão invalida checkpoints de segmentos anteriores. */
-export const VERSAO_PLANEJADOR = 1;
+export const VERSAO_PLANEJADOR = 2;
+export const MODALIDADE_PREGAO_ELETRONICO = 6;
+export const TAMANHO_PAGINA_PREGAO = 20;
 
 export interface EscopoColeta {
   /** Ao menos uma UF é obrigatória; coleta nacional precisa de uma decisão explícita futura. */
@@ -27,6 +29,8 @@ export interface EscopoColeta {
   /** Vazio significa todas as modalidades (omitidas em `/proposta`). */
   modalidades: number[];
   horizonteDias: number;
+  /** Horizontes cumulativos usados para disponibilizar as urgentes primeiro. */
+  etapasHorizonteDias?: number[];
   tamanhoPagina?: number;
 }
 
@@ -35,6 +39,8 @@ export interface SegmentoColeta {
   params: ParametrosConsulta;
   assinatura: string;
   descricao: string;
+  /** Menor valor é processado primeiro. */
+  prioridade?: number;
 }
 
 export class EscopoInvalidoError extends Error {
@@ -76,6 +82,12 @@ const normalizarUfs = (ufs: string[]) => {
 const normalizarModalidades = (mods: number[]) =>
   [...new Set(mods.filter((m) => Number.isInteger(m) && m > 0))].sort((a, b) => a - b);
 
+export function etapasProgressivas(horizonteDias: number): number[] {
+  return [...new Set([5, 15, horizonteDias].filter((d) => d <= horizonteDias))].sort(
+    (a, b) => a - b,
+  );
+}
+
 /**
  * Segmentos para descobrir oportunidades com recebimento de propostas aberto.
  * Uma UF sem modalidade escolhida gera 1 segmento; com N modalidades, N segmentos.
@@ -91,8 +103,12 @@ export function planejarPropostasAbertas(
 
   const ufs = normalizarUfs(escopo.ufs);
   const modalidades = normalizarModalidades(escopo.modalidades);
-  const tamanhoPagina = escopo.tamanhoPagina ?? TAMANHO_PAGINA_PADRAO;
-  const dataFinal = dataFinalHorizonte(agora, horizonteDias);
+  const etapas = escopo.etapasHorizonteDias?.length
+    ? [...new Set(escopo.etapasHorizonteDias.filter((d) => d > 0 && d <= horizonteDias))].sort(
+        (a, b) => a - b,
+      )
+    : [horizonteDias];
+  if (!etapas.includes(horizonteDias)) etapas.push(horizonteDias);
 
   // A UF é sempre explícita. `undefined` existe apenas na modalidade, onde
   // significa todas: não existe valor "0"/"todos" no contrato do PNCP.
@@ -101,32 +117,45 @@ export function planejarPropostasAbertas(
     modalidades.length > 0 ? modalidades : [undefined];
 
   const segmentos: SegmentoColeta[] = [];
-  for (const uf of dimensaoUf) {
-    for (const modalidade of dimensaoModalidade) {
-      const params: ParametrosConsulta = {
-        dataFinal,
-        pagina: 1,
-        tamanhoPagina,
-        uf,
-        ...(modalidade ? { codigoModalidadeContratacao: modalidade } : {}),
-      };
-
-      // Falha aqui, antes de qualquer rede, se o escopo produzir consulta inválida.
-      montarQuery("proposta", params);
-
-      segmentos.push({
-        endpoint: "proposta",
-        params,
-        assinatura: hashEstavel({
-          versao: VERSAO_PLANEJADOR,
-          endpoint: "proposta",
+  for (const [etapaIndice, etapaDias] of etapas.entries()) {
+    const dataFinal = dataFinalHorizonte(agora, etapaDias);
+    for (const uf of dimensaoUf) {
+      for (const modalidade of dimensaoModalidade) {
+        const tamanhoPagina =
+          escopo.tamanhoPagina ??
+          (modalidade === MODALIDADE_PREGAO_ELETRONICO
+            ? TAMANHO_PAGINA_PREGAO
+            : TAMANHO_PAGINA_PADRAO);
+        const params: ParametrosConsulta = {
           dataFinal,
-          uf,
-          modalidade: modalidade ?? null,
+          pagina: 1,
           tamanhoPagina,
-        }),
-        descricao: `${uf} · ${modalidade ? `modalidade ${modalidade}` : "todas as modalidades"} · encerramento até ${dataFinal}`,
-      });
+          uf,
+          ...(modalidade ? { codigoModalidadeContratacao: modalidade } : {}),
+        };
+
+        // Falha aqui, antes de qualquer rede, se o escopo produzir consulta inválida.
+        montarQuery("proposta", params);
+
+        segmentos.push({
+          endpoint: "proposta",
+          params,
+          assinatura: hashEstavel({
+            versao: VERSAO_PLANEJADOR,
+            endpoint: "proposta",
+            etapaDias,
+            dataFinal,
+            uf,
+            modalidade: modalidade ?? null,
+            tamanhoPagina,
+          }),
+          descricao: `${uf} · etapa ${etapaDias} dias · ${modalidade ? `modalidade ${modalidade}` : "todas as modalidades"} · encerramento até ${dataFinal}`,
+          // Todas as modalidades da mesma etapa têm a mesma prioridade. O
+          // desempate por `atualizado_em` no banco produz round-robin entre
+          // elas, evitando que uma modalidade volumosa monopolize a fila.
+          prioridade: etapaIndice,
+        });
+      }
     }
   }
 
@@ -139,7 +168,10 @@ export function descreverEscopo(escopo: EscopoColeta): string {
   const mods = normalizarModalidades(escopo.modalidades);
   const onde = ufs.join(", ");
   const quais = mods.length > 0 ? `${mods.length} modalidade(s)` : "todas as modalidades";
-  return `${onde} · ${quais} · propostas encerrando nos próximos ${escopo.horizonteDias} dias`;
+  const etapas = escopo.etapasHorizonteDias?.length
+    ? ` · etapas ${etapasProgressivas(escopo.horizonteDias).join("/")} dias`
+    : "";
+  return `${onde} · ${quais}${etapas} · propostas encerrando nos próximos ${escopo.horizonteDias} dias`;
 }
 
 /* ------------------------------------------------ incremental (Fase 3) --- */

@@ -87,6 +87,45 @@ describe("horizonte no calendário de Brasília", () => {
   });
 });
 
+describe("carga progressiva percebida pelo usuário", () => {
+  it("processa 5, 15 e 30 dias nessa ordem para cada modalidade", () => {
+    const segs = planejarPropostasAbertas(
+      {
+        ufs: ["SP"],
+        modalidades: [4, 6],
+        horizonteDias: 30,
+        etapasHorizonteDias: [5, 15, 30],
+      },
+      AGORA,
+    );
+
+    expect(segs).toHaveLength(6);
+    expect(segs.map((s) => s.params.dataFinal)).toEqual([
+      "20260916",
+      "20260916",
+      "20260926",
+      "20260926",
+      "20261011",
+      "20261011",
+    ]);
+    expect(segs.map((s) => s.prioridade)).toEqual([0, 0, 1, 1, 2, 2]);
+  });
+
+  it("usa páginas menores somente no Pregão Eletrônico", () => {
+    const segs = planejarPropostasAbertas(
+      { ufs: ["SP"], modalidades: [4, 6], horizonteDias: 5 },
+      AGORA,
+    );
+
+    expect(segs.find((s) => s.params.codigoModalidadeContratacao === 4)?.params.tamanhoPagina).toBe(
+      50,
+    );
+    expect(segs.find((s) => s.params.codigoModalidadeContratacao === 6)?.params.tamanhoPagina).toBe(
+      20,
+    );
+  });
+});
+
 describe("I10 — assinatura do segmento", () => {
   it("é estável independentemente da ordem digitada", () => {
     const a = planejarPropostasAbertas(

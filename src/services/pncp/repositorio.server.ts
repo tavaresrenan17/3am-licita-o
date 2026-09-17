@@ -187,6 +187,7 @@ export async function criarSincronizacao(
       query,
       proxima_pagina: 1,
       status: "pendente",
+      prioridade: s.prioridade ?? 100,
     };
   });
 
