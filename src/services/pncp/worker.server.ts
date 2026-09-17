@@ -89,6 +89,11 @@ export interface PortaIngestao {
   registrarFalhaSegmento(segmentoId: string, motivo: string, definitiva: boolean): Promise<void>;
   /** Há trabalho não concluído, mesmo que tudo esteja temporariamente em cooldown. */
   haSegmentosPendentes?(jobId: string): Promise<boolean>;
+  /**
+   * Ms até o próximo segmento sair de cooldown. Permite ao worker decidir se
+   * vale esperar dentro do orçamento ou devolver o tick vazio.
+   */
+  proximoCooldown?(jobId: string): Promise<number | null>;
   finalizarJob(
     jobId: string,
     status: "concluido" | "concluido_com_erros" | "parcial" | "falhou",
@@ -146,6 +151,9 @@ export interface ResumoTick {
   segmentosConcluidos: number;
   /** true quando não restam segmentos pendentes: o job terminou. */
   jobConcluido: boolean;
+  /** true quando o tick parou sem progresso porque todos os segmentos estão
+   *  em cooldown após falha transitória. Distingue de "falha real" no frontend. */
+  aguardandoCooldown: boolean;
   erros: string[];
   duracaoMs: number;
   metricasApi: MetricasApiTick;
@@ -176,13 +184,6 @@ const PADRAO = {
   // dados". Por isso o ritmo agora parte de 3 s: após respostas limpas desce
   // gradualmente até 2,5 s; qualquer retry ou falha observada aumenta o intervalo
   // rapidamente, até o teto de 12 s.
-  //
-  // Enquanto o PNCP levava 30–60 s por página isto não aparecia — o tempo de
-  // resposta espaçava as chamadas sozinho. Quando ficou rápido, o worker passou
-  // a emendar páginas e SP (101 páginas) parava sempre na 6ª.
-  //
-  // O que de fato torna a coleta robusta não é acertar este número, é o tick
-  // seguinte retomar do checkpoint: bloqueio vira atraso, nunca perda.
   intervaloPartidaMs: 3_000,
   intervaloMinimoMs: 2_500,
   intervaloMaximoMs: 12_000,
@@ -271,6 +272,7 @@ export async function executarTick(jobId: string, opcoes: OpcoesTick): Promise<R
     naoAdmitidos: 0,
     segmentosConcluidos: 0,
     jobConcluido: false,
+    aguardandoCooldown: false,
     erros: [],
     duracaoMs: 0,
     metricasApi: {
@@ -506,8 +508,29 @@ export async function executarTick(jobId: string, opcoes: OpcoesTick): Promise<R
       const aindaHaTrabalho =
         aguardandoCooldown ||
         (banco.haSegmentosPendentes ? await banco.haSegmentosPendentes(jobId) : false);
-      resumo.jobConcluido = !aindaHaTrabalho;
-      if (aindaHaTrabalho && resumo.erros.length === 0) {
+
+      if (!aindaHaTrabalho) {
+        resumo.jobConcluido = true;
+        break;
+      }
+
+      // Todos os segmentos estão em cooldown. Antes de devolver um tick vazio,
+      // tenta esperar dentro do orçamento para retomar automaticamente.
+      const cooldownMs = banco.proximoCooldown
+        ? await banco.proximoCooldown(jobId)
+        : null;
+
+      if (cooldownMs !== null && cooldownMs > 0 && cooldownMs + reservaMs < restante()) {
+        // O próximo segmento sai de cooldown dentro do orçamento: esperar e
+        // tentar de novo em vez de devolver tick vazio.
+        await dormir(cooldownMs + 500); // +500 ms de margem
+        continue; // volta ao while e tenta pegar segmentos de novo
+      }
+
+      // Cooldown não cabe no orçamento: sinalizar ao frontend que é espera,
+      // não falha definitiva.
+      resumo.aguardandoCooldown = true;
+      if (resumo.erros.length === 0) {
         resumo.erros.push("Segmentos aguardando nova tentativa após falha temporária do PNCP.");
       }
       break;

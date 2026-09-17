@@ -1,11 +1,11 @@
-import { Link, useRouterState } from "@tanstack/react-router";
+import { Link, useRouter, useRouterState } from "@tanstack/react-router";
 import {
   LayoutDashboard,
   RefreshCw,
   Table2,
-  Settings,
   HardHat,
   PanelLeft,
+  ArrowLeft,
   type LucideIcon,
 } from "lucide-react";
 import { useState, type ReactNode } from "react";
@@ -18,31 +18,65 @@ const NAV: { to: string; label: string; icon: LucideIcon }[] = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
   { to: "/sincronizacao", label: "Sincronização PNCP", icon: RefreshCw },
   { to: "/licitacoes", label: "Licitações", icon: Table2 },
-  { to: "/configuracoes", label: "Configurações", icon: Settings },
 ];
 
 export function AppShell({
   titulo,
   descricao,
   acoes,
+  mostrarVoltar,
+  voltarPara,
   children,
 }: {
   titulo: string;
   descricao?: string;
   acoes?: ReactNode;
+  mostrarVoltar?: boolean;
+  voltarPara?: string;
   children: ReactNode;
 }) {
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const router = useRouter();
+
+  // Exibe o botão de voltar automaticamente em qualquer página que não seja a Home (/)
+  const deveMostrarVoltar = mostrarVoltar ?? pathname !== "/";
+
+  const handleVoltar = () => {
+    if (typeof window !== "undefined" && window.history.length > 1) {
+      window.history.back();
+    } else if (voltarPara) {
+      router.navigate({ to: voltarPara });
+    } else {
+      router.navigate({ to: "/" });
+    }
+  };
+
   return (
     <div className="flex min-h-screen bg-background">
       <Sidebar />
 
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-20 flex flex-wrap items-center justify-between gap-3 border-b border-border bg-background/95 px-5 py-3.5 backdrop-blur">
-          <div className="min-w-0">
-            <h1 className="truncate text-base font-semibold tracking-tight">{titulo}</h1>
-            {descricao && (
-              <p className="truncate text-xs text-muted-foreground">{descricao}</p>
+          <div className="flex items-center gap-2.5 min-w-0">
+            {deveMostrarVoltar && (
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="size-8 shrink-0 rounded-md border-border bg-card/60 hover:bg-accent hover:text-foreground text-muted-foreground shadow-xs cursor-pointer"
+                onClick={handleVoltar}
+                title="Voltar para a página anterior"
+                aria-label="Voltar para a página anterior"
+              >
+                <ArrowLeft className="size-4" />
+              </Button>
             )}
+            <div className="min-w-0">
+              <h1 className="truncate text-base font-semibold tracking-tight">{titulo}</h1>
+              {descricao && (
+                <p className="truncate text-xs text-muted-foreground">{descricao}</p>
+              )}
+            </div>
           </div>
           <div className="flex items-center gap-2">{acoes}</div>
         </header>

@@ -162,9 +162,11 @@ export function useSincronizacoes(limite = 20) {
 }
 
 export interface EscopoSincronizacao {
-  ufs?: string[];
-  modalidades?: number[];
-  horizonteDias?: number;
+  ufs?: string[] | undefined;
+  modalidades?: number[] | undefined;
+  horizonteDias?: number | undefined;
+  emEtapas?: boolean | undefined;
+  etapasHorizonteDias?: number[] | undefined;
 }
 
 export interface EscopoIncrementalUI {
@@ -196,13 +198,22 @@ export function useSincronizacaoPNCP() {
   const status = useQuery<ProgressoSyncDTO>({
     queryKey: ["sync-status"],
     queryFn: () => statusSincronizacaoFn({ data: {} }),
-    refetchInterval: rodando ? 1500 : false,
+    refetchInterval: (query) => {
+      const data = query.state.data;
+      if (rodando) return 6000;
+      if (data?.job?.status === "em_andamento") return 3000;
+      return false;
+    },
   });
 
   const cobertura = useQuery<CoberturaIncrementalDTO>({
     queryKey: ["cobertura-incremental"],
     queryFn: () => coberturaIncrementalFn(),
-    refetchInterval: rodando ? 3000 : false,
+    refetchInterval: () => {
+      const s = status.data;
+      if (s?.job?.tipo === "incremental" && s.job.status === "em_andamento") return 10_000;
+      return false;
+    },
   });
 
   const atualizarTelas = useCallback(async () => {
@@ -243,6 +254,9 @@ export function useSincronizacaoPNCP() {
 
         // Teto de segurança: nunca laçar indefinidamente atrás de um conjunto
         // que pode estar mudando na fonte.
+        let ticksCooldownSeguidos = 0;
+        const MAX_COOLDOWN_RETRIES = 5;
+
         for (let volta = 0; volta < 300; volta++) {
           if (cancelado.current) break;
 
@@ -254,9 +268,29 @@ export function useSincronizacaoPNCP() {
             break;
           }
 
-          // Tick sem progresso e com erro é falha transitória: parar e deixar
-          // retomável, em vez de insistir contra a fonte.
-          if (resumo.paginasAplicadas === 0 && resumo.erros.length > 0) {
+          // Tick fez progresso: resetar contador de cooldown e continuar.
+          if (resumo.paginasAplicadas > 0) {
+            ticksCooldownSeguidos = 0;
+            continue;
+          }
+
+          // Tick sem progresso — distinguir cooldown de falha real.
+          if (resumo.aguardandoCooldown) {
+            ticksCooldownSeguidos++;
+            if (ticksCooldownSeguidos >= MAX_COOLDOWN_RETRIES) {
+              motivo = "PNCP instável: aguardando cooldown há muitos ciclos";
+              manterParaRetomada = true;
+              setErro("Fonte temporariamente indisponível. A sincronização será retomada na próxima execução.");
+              break;
+            }
+            // Esperar 10 s e tentar outro tick — o cooldown no banco pode ter
+            // passado e o segmento estará disponível novamente.
+            await new Promise((r) => setTimeout(r, 10_000));
+            continue;
+          }
+
+          // Tick sem progresso e sem cooldown, mas com erros: falha real.
+          if (resumo.erros.length > 0) {
             motivo = `Fonte instável: ${resumo.erros[0] ?? "falha na coleta"}`;
             manterParaRetomada = true;
             setErro(resumo.erros[0] ?? "Falha na coleta");
@@ -340,7 +374,7 @@ export function useColetaDocumentos() {
   const cobertura = useQuery<CoberturaDocumentosDTO>({
     queryKey: ["documentos-cobertura"],
     queryFn: () => coberturaDocumentosFn(),
-    refetchInterval: rodando ? 2000 : false,
+    refetchInterval: rodando ? 6000 : false,
   });
 
   const atualizarTelas = useCallback(async () => {

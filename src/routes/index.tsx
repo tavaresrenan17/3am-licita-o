@@ -199,7 +199,7 @@ function Dashboard() {
                 }
                 descricao={
                   m && m.total > 0
-                    ? `O banco tem ${numero(m.total)} licitações, ${numero(m.abertas)} com proposta aberta, mas nenhuma alcança o score mínimo de aderência à construção civil. Reveja as palavras-chave e o score nas Configurações, ou abra a lista completa.`
+                    ? `O banco tem ${numero(m.total)} licitações, ${numero(m.abertas)} com proposta aberta, mas nenhuma alcança o score mínimo de aderência à construção civil. Reveja os parâmetros na Sincronização, ou abra a lista completa.`
                     : "Execute uma sincronização com o PNCP para trazer licitações do recorte configurado."
                 }
                 acao={

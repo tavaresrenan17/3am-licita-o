@@ -10,7 +10,6 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as ConfiguracoesRouteImport } from './routes/configuracoes'
 import { Route as SincronizacaoRouteImport } from './routes/sincronizacao'
 import { Route as LicitacoesIndexRouteImport } from './routes/licitacoes.index'
 import { Route as LicitacoesIdRouteImport } from './routes/licitacoes.$id'
@@ -18,11 +17,6 @@ import { Route as LicitacoesIdRouteImport } from './routes/licitacoes.$id'
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ConfiguracoesRoute = ConfiguracoesRouteImport.update({
-  id: '/configuracoes',
-  path: '/configuracoes',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SincronizacaoRoute = SincronizacaoRouteImport.update({
@@ -43,14 +37,12 @@ const LicitacoesIdRoute = LicitacoesIdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/configuracoes': typeof ConfiguracoesRoute
   '/sincronizacao': typeof SincronizacaoRoute
   '/licitacoes/$id': typeof LicitacoesIdRoute
   '/licitacoes/': typeof LicitacoesIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/configuracoes': typeof ConfiguracoesRoute
   '/sincronizacao': typeof SincronizacaoRoute
   '/licitacoes/$id': typeof LicitacoesIdRoute
   '/licitacoes': typeof LicitacoesIndexRoute
@@ -58,38 +50,20 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/configuracoes': typeof ConfiguracoesRoute
   '/sincronizacao': typeof SincronizacaoRoute
   '/licitacoes/$id': typeof LicitacoesIdRoute
   '/licitacoes/': typeof LicitacoesIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths:
-    | '/'
-    | '/configuracoes'
-    | '/sincronizacao'
-    | '/licitacoes/$id'
-    | '/licitacoes/'
+  fullPaths: '/' | '/sincronizacao' | '/licitacoes/$id' | '/licitacoes/'
   fileRoutesByTo: FileRoutesByTo
-  to:
-    | '/'
-    | '/configuracoes'
-    | '/sincronizacao'
-    | '/licitacoes/$id'
-    | '/licitacoes'
-  id:
-    | '__root__'
-    | '/'
-    | '/configuracoes'
-    | '/sincronizacao'
-    | '/licitacoes/$id'
-    | '/licitacoes/'
+  to: '/' | '/sincronizacao' | '/licitacoes/$id' | '/licitacoes'
+  id: '__root__' | '/' | '/sincronizacao' | '/licitacoes/$id' | '/licitacoes/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  ConfiguracoesRoute: typeof ConfiguracoesRoute
   SincronizacaoRoute: typeof SincronizacaoRoute
   LicitacoesIdRoute: typeof LicitacoesIdRoute
   LicitacoesIndexRoute: typeof LicitacoesIndexRoute
@@ -102,13 +76,6 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/configuracoes': {
-      id: '/configuracoes'
-      path: '/configuracoes'
-      fullPath: '/configuracoes'
-      preLoaderRoute: typeof ConfiguracoesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/sincronizacao': {
@@ -137,7 +104,6 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  ConfiguracoesRoute: ConfiguracoesRoute,
   SincronizacaoRoute: SincronizacaoRoute,
   LicitacoesIdRoute: LicitacoesIdRoute,
   LicitacoesIndexRoute: LicitacoesIndexRoute,

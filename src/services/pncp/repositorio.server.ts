@@ -295,7 +295,14 @@ export function portaIngestao(): PortaIngestao {
         .eq("id", segmentoId)
         .maybeSingle();
       const tentativas = ((data as { tentativas?: number } | null)?.tentativas ?? 0) + 1;
-      const esperaMs = Math.min(15 * 60_000, 60_000 * 2 ** Math.min(tentativas - 1, 4));
+      // Cooldown progressivo: primeira falha 15 s, segunda 30 s, depois
+      // exponencial (60 s, 2 min, 4 min) até o teto de 15 min. O cooldown
+      // anterior de 60 s para a primeira falha causava ciclo morto no
+      // frontend, que desistia antes do segmento voltar à fila.
+      const esperaMs =
+        tentativas <= 2
+          ? 15_000 * tentativas          // 15 s, 30 s
+          : Math.min(15 * 60_000, 60_000 * 2 ** Math.min(tentativas - 3, 4)); // 60 s, 2 min, ...
 
       const { error } = await db()
         .from("ingestao_segmentos")
@@ -353,6 +360,26 @@ export function portaIngestao(): PortaIngestao {
         })
         .eq("id", jobId);
       erro("Falha ao finalizar sincronização", error);
+    },
+
+    async proximoCooldown(jobId: string): Promise<number | null> {
+      // Encontra o segmento pendente cujo cooldown termina mais cedo.
+      const { data, error } = await db()
+        .from("ingestao_segmentos")
+        .select("proxima_tentativa_em")
+        .eq("sincronizacao_id", jobId)
+        .eq("status", "pendente")
+        .not("proxima_tentativa_em", "is", null)
+        .order("proxima_tentativa_em", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      if (error) return null; // Não propagar: telemetria não deve travar o tick.
+
+      const proximo = (data as { proxima_tentativa_em?: string } | null)?.proxima_tentativa_em;
+      if (!proximo) return null;
+
+      const restanteMs = Date.parse(proximo) - Date.now();
+      return restanteMs > 0 ? restanteMs : 0;
     },
   };
 }

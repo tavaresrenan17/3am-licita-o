@@ -3,10 +3,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowDown,
   ArrowUp,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   MessageSquarePlus,
   Search,
+  SlidersHorizontal,
   Star,
   X,
 } from "lucide-react";
@@ -169,7 +171,7 @@ function ComboFiltro({
 
   return (
     <div ref={containerRef} className="relative space-y-1">
-      <Label className="text-[11px]">{label}</Label>
+      <Label className="text-[11px] font-medium text-muted-foreground">{label}</Label>
       <div className="relative">
         <Input
           value={query}
@@ -179,7 +181,7 @@ function ComboFiltro({
             setAberto(true);
           }}
           onFocus={() => setAberto(true)}
-          className="pr-7"
+          className="h-8 pr-7 text-xs"
         />
         {query && (
           <button
@@ -251,6 +253,7 @@ function LicitacoesSalvas() {
     ...(busca.nao_analisadas ? { nao_analisadas: true } : {}),
   }));
   const [termo, setTermo] = useState("");
+  const [filtrosExpandidos, setFiltrosExpandidos] = useState(false);
   const [ordenarPor, setOrdenarPor] = useState<OrdenacaoCampo>(
     busca.ordenar ?? "data_limite_proposta",
   );
@@ -434,104 +437,138 @@ function LicitacoesSalvas() {
         </>
       }
     >
-      <section className="rounded-xl border border-border bg-card p-4 shadow-sm">
-        <div>
-          <div className="min-w-0 flex-1 space-y-1.5">
-            <Label className="text-xs font-medium">Palavras-chave</Label>
-            <div className="relative">
-              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+      <section className="rounded-lg border border-border bg-card p-3 shadow-sm">
+        <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center">
+          <div className="relative min-w-0 flex-1">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              className="h-8 pl-8 text-xs placeholder:text-muted-foreground"
+              placeholder="Buscar por palavras-chave (ex.: pavimentação, reforma, escola)…"
+              value={termo}
+              onChange={(e) => setTermo(e.target.value)}
+            />
+            {termo && (
+              <button
+                type="button"
+                onClick={() => setTermo("")}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                aria-label="Limpar termo de busca"
+              >
+                <X className="size-3" />
+              </button>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <Button
+              type="button"
+              variant={filtrosExpandidos ? "secondary" : "outline"}
+              size="sm"
+              className="h-8 text-xs"
+              onClick={() => setFiltrosExpandidos((v) => !v)}
+            >
+              <SlidersHorizontal className="mr-1.5 size-3.5" />
+              <span>Filtros</span>
+              {filtrosAtivos > 0 && (
+                <span className="ml-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-primary-foreground">
+                  {filtrosAtivos}
+                </span>
+              )}
+              <ChevronDown
+                className={cn("ml-1 size-3 transition-transform", filtrosExpandidos && "rotate-180")}
+              />
+            </Button>
+          </div>
+        </div>
+
+        {filtrosExpandidos && (
+          <div className="mt-2.5 grid gap-2.5 border-t border-border/70 pt-2.5 sm:grid-cols-2 lg:grid-cols-3">
+            <ComboFiltro
+              label="Modalidade"
+              value={filtros.modalidade}
+              options={(modalidades ?? []).map((m) => m.nome)}
+              onChange={(v) => set("modalidade", v)}
+            />
+            <ComboFiltro
+              label="UF"
+              value={filtros.uf}
+              options={opcoes?.["ufs"] ?? []}
+              onChange={(v) => set("uf", v)}
+            />
+            <ComboFiltro
+              label="Município"
+              value={filtros.municipio}
+              options={opcoes?.["municipios"] ?? []}
+              onChange={(v) => set("municipio", v)}
+            />
+
+            <div className="space-y-1">
+              <Label className="text-[11px] font-medium text-muted-foreground">Data de publicação</Label>
+              <div className="grid grid-cols-2 gap-1.5">
+                <div>
+                  <span className="mb-0.5 block text-[10px] text-muted-foreground">De</span>
+                  <Input
+                    type="date"
+                    aria-label="Publicação de"
+                    value={filtros.publicacao_de}
+                    onChange={(e) => set("publicacao_de", e.target.value)}
+                    className="h-8 text-xs"
+                  />
+                </div>
+                <div>
+                  <span className="mb-0.5 block text-[10px] text-muted-foreground">Até</span>
+                  <Input
+                    type="date"
+                    aria-label="Publicação até"
+                    value={filtros.publicacao_ate}
+                    onChange={(e) => set("publicacao_ate", e.target.value)}
+                    className="h-8 text-xs"
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-[11px] font-medium text-muted-foreground">Valor mínimo</Label>
               <Input
-                className="h-10 pl-9 text-sm"
-                placeholder="Ex.: pavimentação, reforma, escola"
-                value={termo}
-                onChange={(e) => setTermo(e.target.value)}
+                type="number"
+                min="0"
+                placeholder="R$ 0,00"
+                value={filtros.valor_min}
+                onChange={(e) => set("valor_min", e.target.value)}
+                className="h-8 text-xs"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-[11px] font-medium text-muted-foreground">Valor máximo</Label>
+              <Input
+                type="number"
+                min="0"
+                placeholder="Sem limite"
+                value={filtros.valor_max}
+                onChange={(e) => set("valor_max", e.target.value)}
+                className="h-8 text-xs"
               />
             </div>
           </div>
-        </div>
+        )}
 
-        <div className="mt-4 grid gap-3 border-t border-border pt-4 sm:grid-cols-2 lg:grid-cols-3">
-          <ComboFiltro
-            label="Modalidade"
-            value={filtros.modalidade}
-            options={(modalidades ?? []).map((m) => m.nome)}
-            onChange={(v) => set("modalidade", v)}
-          />
-          <ComboFiltro
-            label="UF"
-            value={filtros.uf}
-            options={opcoes?.["ufs"] ?? []}
-            onChange={(v) => set("uf", v)}
-          />
-          <ComboFiltro
-            label="Município"
-            value={filtros.municipio}
-            options={opcoes?.["municipios"] ?? []}
-            onChange={(v) => set("municipio", v)}
-          />
-
-          <div className="space-y-1">
-            <Label className="text-[11px]">Data de publicação</Label>
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <span className="mb-1 block text-[10px] text-muted-foreground">De</span>
-                <Input
-                  type="date"
-                  aria-label="Publicação de"
-                  value={filtros.publicacao_de}
-                  onChange={(e) => set("publicacao_de", e.target.value)}
-                />
-              </div>
-              <div>
-                <span className="mb-1 block text-[10px] text-muted-foreground">Até</span>
-                <Input
-                  type="date"
-                  aria-label="Publicação até"
-                  value={filtros.publicacao_ate}
-                  onChange={(e) => set("publicacao_ate", e.target.value)}
-                />
-              </div>
-            </div>
-          </div>
-          <div className="space-y-1">
-            <Label className="text-[11px]">Valor mínimo</Label>
-            <Input
-              type="number"
-              min="0"
-              placeholder="R$ 0,00"
-              value={filtros.valor_min}
-              onChange={(e) => set("valor_min", e.target.value)}
-            />
-          </div>
-          <div className="space-y-1">
-            <Label className="text-[11px]">Valor máximo</Label>
-            <Input
-              type="number"
-              min="0"
-              placeholder="Sem limite"
-              value={filtros.valor_max}
-              onChange={(e) => set("valor_max", e.target.value)}
-            />
-          </div>
-        </div>
-
-        <div className="mt-4 flex flex-wrap items-center gap-1.5 border-t border-border pt-3">
+        <div className="mt-2.5 flex flex-wrap items-center gap-1.5 border-t border-border/70 pt-2">
           {chipsAtivos.map((chip) => (
             <span
               key={chip.chave}
-              className="inline-flex h-7 items-center gap-1.5 rounded-full border border-border bg-muted/50 px-2.5 text-[11px] font-medium"
+              className="inline-flex h-6 items-center gap-1 rounded-full border border-border bg-muted/60 px-2 text-[10px] font-medium"
             >
               {chip.label}
               {chip.limpar && (
                 <button onClick={chip.limpar} aria-label={`Remover filtro ${chip.label}`}>
-                  <X className="size-3 text-muted-foreground hover:text-foreground" />
+                  <X className="size-2.5 text-muted-foreground hover:text-foreground" />
                 </button>
               )}
             </span>
           ))}
           {filtrosAtivos > 0 && (
-            <Button variant="ghost" size="sm" className="ml-auto h-7" onClick={limparTudo}>
-              <X className="mr-1 size-3.5" /> Limpar filtros
+            <Button variant="ghost" size="sm" className="ml-auto h-6 px-2 text-[11px]" onClick={limparTudo}>
+              <X className="mr-1 size-3" /> Limpar filtros
             </Button>
           )}
         </div>
@@ -560,7 +597,7 @@ function LicitacoesSalvas() {
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[1120px] table-fixed text-xs">
-              <thead className="sticky top-[57px] z-10 bg-secondary text-muted-foreground shadow-[0_1px_0_hsl(var(--border))]">
+              <thead className="bg-secondary text-muted-foreground border-b border-border">
                 <tr className="border-b border-border">
                   {visivel("objeto") && (
                     <th className="h-11 px-4 py-0 text-left font-medium">Oportunidade</th>

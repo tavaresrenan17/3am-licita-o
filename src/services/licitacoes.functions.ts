@@ -67,6 +67,8 @@ const escopoSchema = z.object({
   ufs: z.array(z.string().length(2)).min(1).max(27).default(["SP"]),
   modalidades: z.array(z.number().int().positive()).max(19).default([]),
   horizonteDias: z.number().int().min(1).max(365).default(30),
+  emEtapas: z.boolean().default(false),
+  etapasHorizonteDias: z.array(z.number().int().min(1).max(365)).optional(),
 });
 
 const configSchema = z
@@ -130,12 +132,26 @@ function paraDTO(l: Linha): LicitacaoDTO {
   };
 }
 
+/* ---------------------------------------------------- cache de módulos ----- */
+let _repoPromise: Promise<typeof import("./pncp/repositorio.server")> | null = null;
+const getRepo = () => (_repoPromise ??= import("./pncp/repositorio.server"));
+
+let _workerPromise: Promise<typeof import("./pncp/worker.server")> | null = null;
+const getWorker = () => (_workerPromise ??= import("./pncp/worker.server"));
+
+let _plannerPromise: Promise<typeof import("./pncp/planner")> | null = null;
+const getPlanner = () => (_plannerPromise ??= import("./pncp/planner"));
+
+let _workerDocsPromise: Promise<typeof import("./pncp/worker.documentos.server")> | null = null;
+const getWorkerDocumentos = () =>
+  (_workerDocsPromise ??= import("./pncp/worker.documentos.server"));
+
 /* ------------------------------------------------------------- consultas --- */
 
 export const buscarLicitacoesFn = createServerFn({ method: "POST" })
   .validator((d: unknown) => consultaSchema.parse(d))
   .handler(async ({ data }): Promise<ResultadoBuscaDTO> => {
-    const repo = await import("./pncp/repositorio.server");
+    const repo = await getRepo();
     const cfg = await repo.obterConfiguracoes();
 
     const resultado = await repo.buscarLicitacoes({
@@ -163,7 +179,7 @@ export const buscarLicitacoesFn = createServerFn({ method: "POST" })
 export const obterLicitacaoFn = createServerFn({ method: "POST" })
   .validator((d: unknown) => z.object({ id: z.string().uuid() }).parse(d))
   .handler(async ({ data }): Promise<DetalheDTO | null> => {
-    const repo = await import("./pncp/repositorio.server");
+    const repo = await getRepo();
     const detalhe = await repo.obterLicitacao(data.id);
     if (!detalhe) return null;
 
@@ -199,7 +215,7 @@ export const obterLicitacaoFn = createServerFn({ method: "POST" })
 
 export const metricasFn = createServerFn({ method: "POST" }).handler(
   async (): Promise<MetricasDTO> => {
-    const repo = await import("./pncp/repositorio.server");
+    const repo = await getRepo();
     const cfg = await repo.obterConfiguracoes();
     const m = await repo.metricasDashboard(cfg.score_minimo_recomendado);
     return m as unknown as MetricasDTO;
@@ -207,12 +223,12 @@ export const metricasFn = createServerFn({ method: "POST" }).handler(
 );
 
 export const opcoesFiltrosFn = createServerFn({ method: "POST" }).handler(async () => {
-  const repo = await import("./pncp/repositorio.server");
+  const repo = await getRepo();
   return repo.opcoesFiltros();
 });
 
 export const listarModalidadesFn = createServerFn({ method: "POST" }).handler(async () => {
-  const repo = await import("./pncp/repositorio.server");
+  const repo = await getRepo();
   return repo.listarModalidades();
 });
 
@@ -233,7 +249,7 @@ export const atualizarInternoFn = createServerFn({ method: "POST" })
       .parse(d),
   )
   .handler(async ({ data }) => {
-    const repo = await import("./pncp/repositorio.server");
+    const repo = await getRepo();
     const linha = await repo.atualizarLicitacaoInterna({
       id: data.id,
       statusInterno: data.statusInterno ?? null,
@@ -247,14 +263,14 @@ export const atualizarInternoFn = createServerFn({ method: "POST" })
 /* ------------------------------------------------------- configurações ---- */
 
 export const obterConfiguracoesFn = createServerFn({ method: "POST" }).handler(async () => {
-  const repo = await import("./pncp/repositorio.server");
+  const repo = await getRepo();
   return repo.obterConfiguracoes();
 });
 
 export const salvarConfiguracoesFn = createServerFn({ method: "POST" })
   .validator((d: unknown) => configSchema.parse(d))
   .handler(async ({ data }) => {
-    const repo = await import("./pncp/repositorio.server");
+    const repo = await getRepo();
     return repo.salvarConfiguracoes(data);
   });
 
@@ -285,9 +301,9 @@ function coberturaDe(
 export const iniciarSincronizacaoFn = createServerFn({ method: "POST" })
   .validator((d: unknown) => escopoSchema.partial().parse(d ?? {}))
   .handler(async ({ data }) => {
-    const repo = await import("./pncp/repositorio.server");
+    const repo = await getRepo();
     const { planejarPropostasAbertas, descreverEscopo, etapasProgressivas } =
-      await import("./pncp/planner");
+      await getPlanner();
 
     const emAndamento = await repo.jobEmAndamento();
     if (emAndamento) {
@@ -300,11 +316,19 @@ export const iniciarSincronizacaoFn = createServerFn({ method: "POST" })
       modalidades = (await repo.listarModalidades()).filter((m) => m.ativo).map((m) => m.id);
     }
 
+    const horizonte = data.horizonteDias ?? cfg.horizonte_dias;
+    const etapasHorizonteDias =
+      data.etapasHorizonteDias && data.etapasHorizonteDias.length > 0
+        ? data.etapasHorizonteDias
+        : data.emEtapas
+          ? etapasProgressivas(horizonte)
+          : [horizonte];
+
     const escopo = {
       ufs: data.ufs ?? cfg.ufs_coleta,
       modalidades,
-      horizonteDias: data.horizonteDias ?? cfg.horizonte_dias,
-      etapasHorizonteDias: etapasProgressivas(data.horizonteDias ?? cfg.horizonte_dias),
+      horizonteDias: horizonte,
+      etapasHorizonteDias,
     };
 
     const segmentos = planejarPropostasAbertas(escopo);
@@ -316,8 +340,8 @@ export const iniciarSincronizacaoFn = createServerFn({ method: "POST" })
 export const executarTickFn = createServerFn({ method: "POST" })
   .validator((d: unknown) => z.object({ jobId: z.string().uuid() }).parse(d))
   .handler(async ({ data }) => {
-    const repo = await import("./pncp/repositorio.server");
-    const { executarTick } = await import("./pncp/worker.server");
+    const repo = await getRepo();
+    const { executarTick } = await getWorker();
     const cfg = await repo.obterConfiguracoes();
 
     const resumo = await executarTick(data.jobId, {
@@ -344,7 +368,7 @@ export const executarTickFn = createServerFn({ method: "POST" })
 export const statusSincronizacaoFn = createServerFn({ method: "POST" })
   .validator((d: unknown) => z.object({ jobId: z.string().uuid().optional() }).parse(d ?? {}))
   .handler(async ({ data }): Promise<ProgressoSyncDTO> => {
-    const repo = await import("./pncp/repositorio.server");
+    const repo = await getRepo();
 
     const job = (await repo.jobEmAndamento()) ?? (await repo.listarSincronizacoes(1))[0] ?? null;
     if (!job) {
@@ -375,7 +399,7 @@ export const listarSincronizacoesFn = createServerFn({ method: "POST" })
     z.object({ limite: z.number().int().min(1).max(50).default(20) }).parse(d ?? {}),
   )
   .handler(async ({ data }) => {
-    const repo = await import("./pncp/repositorio.server");
+    const repo = await getRepo();
     return (await repo.listarSincronizacoes(data.limite)) as unknown as SincronizacaoDTO[];
   });
 
@@ -384,7 +408,7 @@ export const interromperSincronizacaoFn = createServerFn({ method: "POST" })
     z.object({ jobId: z.string().uuid(), motivo: z.string().max(300).optional() }).parse(d),
   )
   .handler(async ({ data }) => {
-    const repo = await import("./pncp/repositorio.server");
+    const repo = await getRepo();
     // Interromper não apaga o que já foi gravado: o job fica parcial e pode ser
     // retomado, com o checkpoint de cada segmento preservado.
     //
@@ -400,7 +424,7 @@ export const interromperSincronizacaoFn = createServerFn({ method: "POST" })
 
 export const coberturaDocumentosFn = createServerFn({ method: "POST" }).handler(
   async (): Promise<CoberturaDocumentosDTO> => {
-    const repo = await import("./pncp/repositorio.server");
+    const repo = await getRepo();
     return (await repo.coberturaDocumentos()) as unknown as CoberturaDocumentosDTO;
   },
 );
@@ -415,8 +439,8 @@ export const executarTickDocumentosFn = createServerFn({ method: "POST" })
     z.object({ maxLicitacoes: z.number().int().min(1).max(500).optional() }).parse(d ?? {}),
   )
   .handler(async ({ data }): Promise<ResumoColetaDocumentosDTO> => {
-    const repo = await import("./pncp/repositorio.server");
-    const { executarTickDocumentos } = await import("./pncp/worker.documentos.server");
+    const repo = await getRepo();
+    const { executarTickDocumentos } = await getWorkerDocumentos();
     const cfg = await repo.obterConfiguracoes();
 
     return executarTickDocumentos({
@@ -450,8 +474,8 @@ const escopoIncrementalSchema = z.object({
 export const iniciarIncrementalFn = createServerFn({ method: "POST" })
   .validator((d: unknown) => escopoIncrementalSchema.parse(d ?? {}))
   .handler(async ({ data }) => {
-    const repo = await import("./pncp/repositorio.server");
-    const { planejarIncremental, descreverIncremental } = await import("./pncp/planner");
+    const repo = await getRepo();
+    const { planejarIncremental, descreverIncremental } = await getPlanner();
 
     const cfg = await repo.obterConfiguracoes();
     const ufs = data.ufs ?? cfg.ufs_coleta;
@@ -501,6 +525,6 @@ export const iniciarIncrementalFn = createServerFn({ method: "POST" })
   });
 
 export const coberturaIncrementalFn = createServerFn({ method: "POST" }).handler(async () => {
-  const repo = await import("./pncp/repositorio.server");
+  const repo = await getRepo();
   return (await repo.diagnosticoCobertura()) as unknown as CoberturaIncrementalDTO;
 });

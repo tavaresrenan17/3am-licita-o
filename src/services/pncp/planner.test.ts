@@ -111,7 +111,22 @@ describe("carga progressiva percebida pelo usuário", () => {
     expect(segs.map((s) => s.prioridade)).toEqual([0, 0, 1, 1, 2, 2]);
   });
 
-  it("usa páginas menores somente no Pregão Eletrônico", () => {
+  it("cria apenas 1 segmento por modalidade em período único selecionado", () => {
+    const segs = planejarPropostasAbertas(
+      {
+        ufs: ["SP"],
+        modalidades: [4, 6],
+        horizonteDias: 15,
+        etapasHorizonteDias: [15],
+      },
+      AGORA,
+    );
+
+    expect(segs).toHaveLength(2);
+    expect(segs.every((s) => s.params.dataFinal === "20260926")).toBe(true);
+  });
+
+  it("usa capacidade máxima de página (50) nas modalidades", () => {
     const segs = planejarPropostasAbertas(
       { ufs: ["SP"], modalidades: [4, 6], horizonteDias: 5 },
       AGORA,
@@ -121,7 +136,7 @@ describe("carga progressiva percebida pelo usuário", () => {
       50,
     );
     expect(segs.find((s) => s.params.codigoModalidadeContratacao === 6)?.params.tamanhoPagina).toBe(
-      20,
+      50,
     );
   });
 });
@@ -162,6 +177,36 @@ describe("descreverEscopo", () => {
   it("não chama um horizonte de 30 dias de 'todas as abertas'", () => {
     const texto = descreverEscopo({ ufs: ["SP"], modalidades: [], horizonteDias: 30 });
     expect(texto).toBe("SP · todas as modalidades · propostas encerrando nos próximos 30 dias");
+  });
+
+  it("não exibe 'etapas' quando for período único selecionado", () => {
+    const texto5 = descreverEscopo({
+      ufs: ["SP"],
+      modalidades: [],
+      horizonteDias: 5,
+      etapasHorizonteDias: [5],
+    });
+    expect(texto5).toBe("SP · todas as modalidades · propostas encerrando nos próximos 5 dias");
+
+    const texto30 = descreverEscopo({
+      ufs: ["SP"],
+      modalidades: [],
+      horizonteDias: 30,
+      etapasHorizonteDias: [30],
+    });
+    expect(texto30).toBe("SP · todas as modalidades · propostas encerrando nos próximos 30 dias");
+  });
+
+  it("exibe etapas apenas quando houver múltiplos períodos configurados", () => {
+    const texto = descreverEscopo({
+      ufs: ["SP"],
+      modalidades: [],
+      horizonteDias: 30,
+      etapasHorizonteDias: [5, 15, 30],
+    });
+    expect(texto).toBe(
+      "SP · todas as modalidades · etapas 5/15/30 dias · propostas encerrando nos próximos 30 dias",
+    );
   });
 });
 

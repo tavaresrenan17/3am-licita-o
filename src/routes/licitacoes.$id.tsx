@@ -138,10 +138,20 @@ function DetalheLicitacao() {
       descricao={`${licitacao.orgao} · ${licitacao.municipio ?? "—"}/${licitacao.uf ?? "—"}`}
       acoes={
         <>
-          <Button asChild variant="outline" size="sm">
-            <Link to="/licitacoes">
-              <ArrowLeft className="mr-1 size-3.5" /> Voltar
-            </Link>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="cursor-pointer"
+            onClick={() => {
+              if (typeof window !== "undefined" && window.history.length > 1) {
+                window.history.back();
+              } else {
+                window.location.href = "/licitacoes";
+              }
+            }}
+          >
+            <ArrowLeft className="mr-1 size-3.5" /> Voltar
           </Button>
           <Button
             size="sm"

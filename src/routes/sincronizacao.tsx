@@ -113,6 +113,8 @@ function SincronizacaoPage() {
   const [ufs, setUfs] = useState<string[]>(["SP"]);
   const [mods, setMods] = useState<number[]>([]);
   const [horizonte, setHorizonte] = useState(30);
+  const [personalizado, setPersonalizado] = useState(false);
+  const [emEtapas, setEmEtapas] = useState(false);
   const [agora, setAgora] = useState(Date.now());
 
   useEffect(() => {
@@ -120,6 +122,9 @@ function SincronizacaoPage() {
     setUfs(config.ufs_coleta);
     setMods(config.modalidades_coleta);
     setHorizonte(config.horizonte_dias);
+    if (![5, 15, 30].includes(config.horizonte_dias)) {
+      setPersonalizado(true);
+    }
   }, [config]);
 
   useEffect(() => {
@@ -292,12 +297,27 @@ function SincronizacaoPage() {
               )}
             </div>
 
-            {(erro || job?.mensagem_erro) && (
-              <div className="mt-3 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive">
-                <p className="font-semibold">Erros da última sincronização</p>
-                <p className="mt-1">{erro ?? job?.mensagem_erro}</p>
-              </div>
-            )}
+            {(erro || job?.mensagem_erro) && (() => {
+              const msg = erro ?? job?.mensagem_erro ?? "";
+              const isCooldown = msg.includes("aguardando") || msg.includes("temporariamente") || msg.includes("cooldown");
+              return isCooldown ? (
+                <div className="mt-3 rounded-md border border-warning/40 bg-warning/10 p-3 text-xs text-warning">
+                  <p className="flex items-center gap-1.5 font-semibold">
+                    <Loader2 className="size-3 animate-spin" />
+                    Aguardando cooldown da API
+                  </p>
+                  <p className="mt-1 text-muted-foreground">{msg}</p>
+                  <p className="mt-1 text-[10px] text-muted-foreground">
+                    O sistema tentará novamente automaticamente em alguns segundos.
+                  </p>
+                </div>
+              ) : (
+                <div className="mt-3 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive">
+                  <p className="font-semibold">Erros da última sincronização</p>
+                  <p className="mt-1">{msg}</p>
+                </div>
+              );
+            })()}
 
             <p className="mt-3 flex items-start gap-1.5 text-[11px] text-muted-foreground">
               <Info className="mt-0.5 size-3 shrink-0" />A coleta acontece em etapas curtas
@@ -363,25 +383,28 @@ function SincronizacaoPage() {
             </div>
           </div>
 
-          <div className="rounded-lg border border-border bg-card p-4">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div>
-                <h2 className="flex items-center gap-1.5 text-sm font-semibold">
-                  <History className="size-4 text-primary" /> Atualização do que já está salvo
-                </h2>
-                <p className="mt-0.5 text-[11px] text-muted-foreground">
-                  Busca o que mudou desde a última fronteira, em vez de recarregar o recorte
-                  inteiro. A rota de atualização exige modalidade, então cada UF vira uma partição
-                  por modalidade.
+          <div className="rounded-lg border-2 border-primary/40 bg-gradient-to-br from-card via-card to-primary/5 p-4 shadow-xs relative overflow-hidden">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="max-w-xl">
+                <div className="flex items-center gap-2">
+                  <h2 className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
+                    <History className="size-4 text-primary" /> Sincronização Rápida (Atualização Incremental)
+                  </h2>
+                  <span className="bg-primary/20 text-primary text-[10px] font-bold px-2 py-0.5 rounded-full">
+                    ⚡ Em Segundos
+                  </span>
+                </div>
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  Busca apenas o que mudou na fonte desde a última coleta, sem recarregar o catálogo inteiro. Esta rota oficial consulta apenas as alterações recentes e conclui em poucos segundos.
                 </p>
               </div>
               <Button
                 size="sm"
-                variant="outline"
+                className="cursor-pointer font-medium shadow-xs"
                 onClick={() => iniciarIncremental({})}
                 disabled={rodando}
               >
-                <RefreshCw className="mr-1 size-3.5" /> Buscar mudanças
+                <RefreshCw className="mr-1.5 size-3.5" /> Buscar Mudanças Recentes
               </Button>
             </div>
 
@@ -538,20 +561,83 @@ function SincronizacaoPage() {
           </p>
 
           <div className="mt-4 space-y-4">
-            <div className="space-y-1">
-              <Label className="text-[11px]">Horizonte de encerramento (dias)</Label>
-              <Input
-                type="number"
-                min={1}
-                max={365}
-                value={horizonte}
-                onChange={(e) => setHorizonte(Math.max(1, Math.min(365, Number(e.target.value))))}
-              />
-              <p className="text-[11px] text-muted-foreground">
-                Traz propostas que encerram até {horizonte} dias a partir de hoje. Esse recorte não
-                equivale a “todas as oportunidades abertas”: a fonte filtra por data final de
-                encerramento.
-              </p>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label className="text-[11px] font-medium">Período de encerramento (dias)</Label>
+                <button
+                  type="button"
+                  onClick={() => setPersonalizado((v) => !v)}
+                  className="text-[11px] text-primary hover:underline cursor-pointer"
+                >
+                  {personalizado ? "Usar botões rápidos" : "Personalizar dias"}
+                </button>
+              </div>
+
+              {!personalizado ? (
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { dias: 5, rotulo: "5 dias", tag: "Super rápido", sub: "Urgentes" },
+                    { dias: 15, rotulo: "15 dias", tag: "Rápido", sub: "Próx. 2 semanas" },
+                    { dias: 30, rotulo: "30 dias", tag: "Completo", sub: "Mês inteiro" },
+                  ].map((opcao) => {
+                    const ativo = horizonte === opcao.dias;
+                    return (
+                      <button
+                        key={opcao.dias}
+                        type="button"
+                        onClick={() => setHorizonte(opcao.dias)}
+                        className={`flex flex-col items-center justify-center rounded-lg border p-2.5 text-center transition-all cursor-pointer ${
+                          ativo
+                            ? "border-primary bg-primary/10 text-foreground ring-1 ring-primary shadow-xs"
+                            : "border-border bg-card/60 hover:bg-accent/40 text-muted-foreground"
+                        }`}
+                      >
+                        <span className="text-xs font-bold text-foreground">{opcao.rotulo}</span>
+                        <span className="text-[10px] text-muted-foreground">{opcao.sub}</span>
+                        <span
+                          className={`mt-1.5 text-[9px] font-semibold px-1.5 py-0.5 rounded-full ${
+                            ativo
+                              ? "bg-primary text-primary-foreground"
+                              : "bg-muted text-muted-foreground"
+                          }`}
+                        >
+                          {opcao.tag}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  <Input
+                    type="number"
+                    min={1}
+                    max={365}
+                    value={horizonte}
+                    onChange={(e) =>
+                      setHorizonte(Math.max(1, Math.min(365, Number(e.target.value) || 1)))
+                    }
+                    className="h-8 text-xs"
+                  />
+                  <p className="text-[10px] text-muted-foreground">
+                    Digite qualquer quantidade de dias entre 1 e 365.
+                  </p>
+                </div>
+              )}
+
+              <div className="rounded-md border border-primary/20 bg-primary/5 p-2.5 text-[11px] text-muted-foreground">
+                <p>
+                  ⚡ <strong className="text-foreground">Busca direta em etapa única:</strong> traz diretamente as oportunidades encerrando até <strong className="text-foreground">{horizonte} dias</strong> sem triplicar requisições em 5, 15 e 30 dias. A busca fica até 3x mais rápida!
+                </p>
+              </div>
+
+              <label className="flex items-center gap-2 pt-0.5 text-[11px] text-muted-foreground cursor-pointer select-none">
+                <Checkbox
+                  checked={emEtapas}
+                  onCheckedChange={(v) => setEmEtapas(Boolean(v))}
+                />
+                <span>Dividir busca em etapas cumulativas (5, 15 e {horizonte} dias) — mais demorado</span>
+              </label>
             </div>
 
             <div className="space-y-1.5">
@@ -592,8 +678,16 @@ function SincronizacaoPage() {
             </div>
 
             <Button
-              className="w-full"
-              onClick={() => iniciar({ ufs, modalidades: mods, horizonteDias: horizonte })}
+              className="w-full cursor-pointer"
+              onClick={() =>
+                iniciar({
+                  ufs,
+                  modalidades: mods,
+                  horizonteDias: horizonte,
+                  emEtapas,
+                  etapasHorizonteDias: emEtapas ? undefined : [horizonte],
+                })
+              }
               disabled={rodando}
             >
               {rodando ? (
@@ -601,7 +695,7 @@ function SincronizacaoPage() {
               ) : (
                 <RefreshCw className="mr-1 size-4" />
               )}
-              {rodando ? "Sincronizando…" : "Sincronizar PNCP"}
+              {rodando ? "Sincronizando…" : `Sincronizar PNCP (${horizonte} dias)`}
             </Button>
 
             <p className="text-[11px] text-muted-foreground">

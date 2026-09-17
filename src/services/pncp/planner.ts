@@ -21,7 +21,7 @@ import { FUSO_PNCP, hashEstavel } from "./mapper";
 /** Mudança nesta versão invalida checkpoints de segmentos anteriores. */
 export const VERSAO_PLANEJADOR = 2;
 export const MODALIDADE_PREGAO_ELETRONICO = 6;
-export const TAMANHO_PAGINA_PREGAO = 20;
+export const TAMANHO_PAGINA_PREGAO = 50;
 
 export interface EscopoColeta {
   /** Ao menos uma UF é obrigatória; coleta nacional precisa de uma decisão explícita futura. */
@@ -168,9 +168,10 @@ export function descreverEscopo(escopo: EscopoColeta): string {
   const mods = normalizarModalidades(escopo.modalidades);
   const onde = ufs.join(", ");
   const quais = mods.length > 0 ? `${mods.length} modalidade(s)` : "todas as modalidades";
-  const etapas = escopo.etapasHorizonteDias?.length
-    ? ` · etapas ${etapasProgressivas(escopo.horizonteDias).join("/")} dias`
-    : "";
+  const etapas =
+    escopo.etapasHorizonteDias && escopo.etapasHorizonteDias.length > 1
+      ? ` · etapas ${escopo.etapasHorizonteDias.join("/")} dias`
+      : "";
   return `${onde} · ${quais}${etapas} · propostas encerrando nos próximos ${escopo.horizonteDias} dias`;
 }
 

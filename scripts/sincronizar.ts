@@ -125,14 +125,15 @@ async function main() {
     if (modalidades.length === 0) {
       modalidades = (await repo.listarModalidades()).filter((m) => m.ativo).map((m) => m.id);
     }
+    const horizonte =
+      Number.isInteger(horizonteArg) && horizonteArg > 0 ? horizonteArg : cfg.horizonte_dias;
     const escopo = {
       ufs: ufArg ? [ufArg.toUpperCase()] : cfg.ufs_coleta,
       modalidades,
-      horizonteDias:
-        Number.isInteger(horizonteArg) && horizonteArg > 0 ? horizonteArg : cfg.horizonte_dias,
-      etapasHorizonteDias: planner.etapasProgressivas(
-        Number.isInteger(horizonteArg) && horizonteArg > 0 ? horizonteArg : cfg.horizonte_dias,
-      ),
+      horizonteDias: horizonte,
+      etapasHorizonteDias: args.includes("--etapas")
+        ? planner.etapasProgressivas(horizonte)
+        : [horizonte],
     };
     const segmentos = planner.planejarPropostasAbertas(escopo);
     log(`Planejado: ${segmentos.length} segmento(s) — ${planner.descreverEscopo(escopo)}`);

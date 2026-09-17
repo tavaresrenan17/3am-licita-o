@@ -161,6 +161,7 @@ export interface MetricasDTO {
 
 export interface SincronizacaoDTO {
   id: string;
+  tipo?: "descoberta" | "incremental" | string | null;
   status: "em_andamento" | "concluido" | "concluido_com_erros" | "parcial" | "falhou";
   descricao_escopo: string;
   segmentos_planejados: number;
