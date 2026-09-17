@@ -109,6 +109,10 @@ export interface MetricasApiTick extends FalhasTentativasPNCP {
   esperaLimitadorMs: number;
   /** Intervalo vigente ao terminar o tick. */
   intervaloFinalMs: number;
+  /** Maior número de requisições simultâneas observado no tick. */
+  concorrenciaMaxObservada: number;
+  /** Limite de concorrência vigente ao terminar o tick. */
+  concorrenciaFinal: number;
 }
 
 export interface OpcoesTick {
@@ -121,6 +125,8 @@ export interface OpcoesTick {
   intervaloPartidaMs?: number;
   /** Desative para benchmarks que precisam de ritmo rigorosamente fixo. */
   ritmoAdaptativo?: boolean;
+  /** Máximo de segmentos independentes em voo. Páginas do mesmo segmento não concorrem. */
+  concorrenciaMax?: number;
   /** Orçamento do tick; o padrão deixa folga sob o limite do runtime. */
   orcamentoMs?: number;
   /** Tempo mínimo que precisa sobrar para tentar mais uma página. */
@@ -179,6 +185,8 @@ const PADRAO = {
   intervaloMinimoMs: 2_500,
   intervaloMaximoMs: 12_000,
   sucessosParaAcelerar: 2,
+  concorrenciaMax: 2,
+  sucessosParaRestaurarConcorrencia: 6,
 };
 
 interface Mapeamento {
@@ -236,12 +244,16 @@ export async function executarTick(jobId: string, opcoes: OpcoesTick): Promise<R
     reservaMs = PADRAO.reservaMs,
     maxPaginasPorTick = PADRAO.maxPaginasPorTick,
     intervaloPartidaMs = PADRAO.intervaloPartidaMs,
+    concorrenciaMax = PADRAO.concorrenciaMax,
   } = opcoes;
   // Um intervalo fornecido pelo chamador permanece fixo por padrão, deixando
   // benchmarks e diagnósticos reproduzíveis.
   const ritmoAdaptativo = opcoes.ritmoAdaptativo ?? opcoes.intervaloPartidaMs === undefined;
   let intervaloAtualMs = intervaloPartidaMs;
   let sucessosLimposSeguidos = 0;
+  const concorrenciaConfigurada = Math.max(1, Math.min(2, Math.trunc(concorrenciaMax)));
+  let concorrenciaAtual = concorrenciaConfigurada;
+  let sucessosParaRestaurarConcorrencia = 0;
 
   const inicio = agora();
   const resumo: ResumoTick = {
@@ -269,6 +281,8 @@ export async function executarTick(jobId: string, opcoes: OpcoesTick): Promise<R
       reiniciarFalhasConsecutivas: false,
       esperaLimitadorMs: 0,
       intervaloFinalMs: intervaloAtualMs,
+      concorrenciaMaxObservada: 0,
+      concorrenciaFinal: concorrenciaAtual,
     },
   };
 
@@ -282,41 +296,52 @@ export async function executarTick(jobId: string, opcoes: OpcoesTick): Promise<R
 
   const restante = () => orcamentoMs - (agora() - inicio);
 
-  // Primeira página parte na hora; as seguintes usam o intervalo vigente.
+  // A fila serializa somente o instante de partida. As respostas podem ficar em
+  // voo juntas, mas nunca criamos uma rajada contra o PNCP.
   let ultimaPartida: number | null = null;
-
-  while (resumo.paginasAplicadas < maxPaginasPorTick && restante() > reservaMs) {
-    const segmento = await banco.proximoSegmento(jobId);
-
-    if (!segmento) {
-      resumo.jobConcluido = true;
-      break;
-    }
-
-    // A posse sai em qualquer caminho — inclusive `continue` e `break`. Sem
-    // isto a própria iteração seguinte não acharia o segmento (ele estaria
-    // travado por nós mesmos) e o job seria declarado concluído após uma
-    // página só.
+  let filaPartidas = Promise.resolve();
+  const aguardarPartida = async (): Promise<boolean> => {
+    let liberar!: () => void;
+    const anterior = filaPartidas;
+    filaPartidas = new Promise<void>((resolve) => {
+      liberar = resolve;
+    });
+    await anterior;
     try {
-      const params: ParametrosConsulta = { ...segmento.query, pagina: segmento.proximaPagina };
-
-      // Espaça o início das páginas. Esperar aqui, e não depois da resposta, faz
-      // o intervalo valer entre PARTIDAS: se a página anterior já demorou mais que
-      // isso, não se espera nada e a coleta não fica artificialmente lenta.
       const espera = ultimaPartida === null ? 0 : ultimaPartida + intervaloAtualMs - agora();
       if (espera > 0) {
-        // Dormir além do que sobra do tick desperdiçaria o orçamento inteiro numa
-        // pausa; melhor encerrar retomável e deixar a próxima volta continuar.
-        if (espera >= restante()) break;
+        if (espera >= restante()) return false;
         await dormir(espera);
         resumo.metricasApi.esperaLimitadorMs += espera;
       }
       ultimaPartida = agora();
+      return true;
+    } finally {
+      liberar();
+    }
+  };
+
+  type ResultadoProcessamento = "ok" | "definitiva" | "parar";
+  let requisicoesEmVoo = 0;
+
+  const processarPagina = async (segmento: SegmentoPersistido): Promise<ResultadoProcessamento> => {
+    try {
+      const params: ParametrosConsulta = { ...segmento.query, pagina: segmento.proximaPagina };
+      if (!(await aguardarPartida())) return "parar";
 
       let resposta;
       const inicioRequisicao = agora();
       try {
-        resposta = await buscar(segmento.endpoint, params, { orcamentoMs: restante() });
+        requisicoesEmVoo++;
+        resumo.metricasApi.concorrenciaMaxObservada = Math.max(
+          resumo.metricasApi.concorrenciaMaxObservada,
+          requisicoesEmVoo,
+        );
+        try {
+          resposta = await buscar(segmento.endpoint, params, { orcamentoMs: restante() });
+        } finally {
+          requisicoesEmVoo--;
+        }
         resumo.metricasApi.requisicoes++;
         resumo.metricasApi.sucessos++;
         resumo.metricasApi.tentativas += resposta.tentativas;
@@ -329,25 +354,37 @@ export async function executarTick(jobId: string, opcoes: OpcoesTick): Promise<R
         resumo.metricasApi.reiniciarFalhasConsecutivas = true;
         somarFalhas(resposta.falhas);
 
-        if (ritmoAdaptativo) {
-          const falhasDaPagina = resposta.falhas
-            ? resposta.falhas.timeouts +
-              resposta.falhas.erros429 +
-              resposta.falhas.erros5xx +
-              resposta.falhas.outras
-            : 0;
-          if (resposta.tentativas > 1 || falhasDaPagina > 0) {
-            sucessosLimposSeguidos = 0;
+        const falhasDaPagina = resposta.falhas
+          ? resposta.falhas.timeouts +
+            resposta.falhas.erros429 +
+            resposta.falhas.erros5xx +
+            resposta.falhas.outras
+          : 0;
+        if (resposta.tentativas > 1 || falhasDaPagina > 0) {
+          sucessosLimposSeguidos = 0;
+          sucessosParaRestaurarConcorrencia = 0;
+          concorrenciaAtual = 1;
+          resumo.metricasApi.concorrenciaFinal = concorrenciaAtual;
+          if (ritmoAdaptativo) {
             intervaloAtualMs = Math.min(
               PADRAO.intervaloMaximoMs,
               Math.max(intervaloAtualMs + 1_000, Math.ceil(intervaloAtualMs * 1.5)),
             );
-          } else {
-            sucessosLimposSeguidos++;
-            if (sucessosLimposSeguidos >= PADRAO.sucessosParaAcelerar) {
-              intervaloAtualMs = Math.max(PADRAO.intervaloMinimoMs, intervaloAtualMs - 250);
-              sucessosLimposSeguidos = 0;
-            }
+          }
+        } else {
+          sucessosLimposSeguidos++;
+          sucessosParaRestaurarConcorrencia++;
+          if (ritmoAdaptativo && sucessosLimposSeguidos >= PADRAO.sucessosParaAcelerar) {
+            intervaloAtualMs = Math.max(PADRAO.intervaloMinimoMs, intervaloAtualMs - 250);
+            sucessosLimposSeguidos = 0;
+          }
+          if (
+            concorrenciaAtual < concorrenciaConfigurada &&
+            sucessosParaRestaurarConcorrencia >= PADRAO.sucessosParaRestaurarConcorrencia
+          ) {
+            concorrenciaAtual = concorrenciaConfigurada;
+            resumo.metricasApi.concorrenciaFinal = concorrenciaAtual;
+            sucessosParaRestaurarConcorrencia = 0;
           }
         }
         resumo.metricasApi.intervaloFinalMs = intervaloAtualMs;
@@ -363,6 +400,9 @@ export async function executarTick(jobId: string, opcoes: OpcoesTick): Promise<R
         resumo.metricasApi.falhasConsecutivas += tentativas;
         if (erro instanceof FalhaTransitoriaPNCP) somarFalhas(erro.falhas);
         else resumo.metricasApi.outras++;
+        concorrenciaAtual = 1;
+        resumo.metricasApi.concorrenciaFinal = concorrenciaAtual;
+        sucessosParaRestaurarConcorrencia = 0;
         if (ritmoAdaptativo) {
           intervaloAtualMs = Math.min(
             PADRAO.intervaloMaximoMs,
@@ -372,17 +412,14 @@ export async function executarTick(jobId: string, opcoes: OpcoesTick): Promise<R
         }
 
         if (erro instanceof ErroContratoPNCP || erro instanceof RespostaInvalidaPNCP) {
-          // Repetir a mesma requisição inválida não adianta: encerra o segmento e
-          // segue para os outros, sem contaminar o restante da coleta.
           await banco.registrarFalhaSegmento(segmento.id, motivo, true);
           resumo.erros.push(`${segmento.id}: ${motivo}`);
-          continue;
+          return "definitiva";
         }
 
-        // Transitório: preserva o checkpoint e deixa para o próximo tick.
         await banco.registrarFalhaSegmento(segmento.id, motivo, false);
         resumo.erros.push(`${segmento.id}: ${motivo}`);
-        break;
+        return "parar";
       }
 
       const fetchedAt = new Date(agora()).toISOString();
@@ -401,9 +438,6 @@ export async function executarTick(jobId: string, opcoes: OpcoesTick): Promise<R
           try {
             await banco.salvarPayloads(segmento.endpoint, payloads);
           } catch (erro) {
-            // O payload bruto é auditoria, não o dado que a tela mostra. Falhar
-            // aqui não pode descartar uma página já baixada da fonte: registra-se
-            // o problema e a gravação do catálogo segue.
             const motivo = erro instanceof Error ? erro.message : String(erro);
             resumo.erros.push(`${segmento.id}: payload bruto não guardado — ${motivo}`);
           }
@@ -415,8 +449,6 @@ export async function executarTick(jobId: string, opcoes: OpcoesTick): Promise<R
           totalPaginas: resposta.envelope?.totalPaginas ?? null,
           totalRegistros: resposta.envelope?.totalRegistros ?? null,
           linhas,
-          // Descoberta traz só proposta aberta por definição da rota; atualização
-          // traz tudo que mudou, e aí a política precisa agir.
           admissao: segmento.endpoint === "atualizacao" ? "abertas" : "todas",
         });
 
@@ -429,16 +461,34 @@ export async function executarTick(jobId: string, opcoes: OpcoesTick): Promise<R
           resumo.naoAdmitidos += merge.naoAdmitidos;
         }
         if (merge.segmentoConcluido) resumo.segmentosConcluidos++;
+        return "ok";
       } catch (erro) {
-        // Falha ao gravar: o checkpoint não avançou, então a página será relida.
         const motivo = erro instanceof Error ? erro.message : String(erro);
         await banco.registrarFalhaSegmento(segmento.id, motivo, false);
         resumo.erros.push(`${segmento.id}: ${motivo}`);
-        break;
+        return "parar";
       }
     } finally {
       await banco.liberarSegmento(segmento);
     }
+  };
+
+  while (resumo.paginasAplicadas < maxPaginasPorTick && restante() > reservaMs) {
+    const vagas = Math.min(concorrenciaAtual, maxPaginasPorTick - resumo.paginasAplicadas);
+    const segmentos: SegmentoPersistido[] = [];
+    for (let i = 0; i < vagas; i++) {
+      const segmento = await banco.proximoSegmento(jobId);
+      if (!segmento) break;
+      segmentos.push(segmento);
+    }
+
+    if (segmentos.length === 0) {
+      resumo.jobConcluido = true;
+      break;
+    }
+
+    const resultados = await Promise.all(segmentos.map(processarPagina));
+    if (resultados.includes("parar")) break;
   }
 
   if (resumo.metricasApi.requisicoes > 0 && banco.registrarMetricasApi) {

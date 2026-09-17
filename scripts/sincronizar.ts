@@ -171,6 +171,7 @@ async function main() {
             ? ` · média ${Math.round(resumo.metricasApi.latenciaTotalMs / resumo.metricasApi.requisicoes)} ms`
             : "") +
           ` · ritmo ${resumo.metricasApi.intervaloFinalMs} ms` +
+          ` · concorrência ${resumo.metricasApi.concorrenciaMaxObservada}/${resumo.metricasApi.concorrenciaFinal}` +
           (resumo.metricasApi.esperaLimitadorMs > 0
             ? ` · espera ${Math.round(resumo.metricasApi.esperaLimitadorMs / 1000)} s`
             : "") +
