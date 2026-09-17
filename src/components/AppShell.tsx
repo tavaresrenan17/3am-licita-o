@@ -17,7 +17,7 @@ import { Button } from "@/components/ui/button";
 const NAV: { to: string; label: string; icon: LucideIcon }[] = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
   { to: "/sincronizacao", label: "Sincronização PNCP", icon: RefreshCw },
-  { to: "/licitacoes", label: "Licitações Salvas", icon: Table2 },
+  { to: "/licitacoes", label: "Licitações", icon: Table2 },
   { to: "/configuracoes", label: "Configurações", icon: Settings },
 ];
 

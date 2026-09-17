@@ -5,9 +5,10 @@ import {
   ArrowUp,
   ChevronLeft,
   ChevronRight,
-  Filter,
-  Info,
   MessageSquarePlus,
+  Search,
+  SlidersHorizontal,
+  Star,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -79,13 +80,13 @@ export const Route = createFileRoute("/licitacoes/")({
   validateSearch: buscaSchema,
   head: () => ({
     meta: [
-      { title: "Licitações Salvas | 3AM Licitação" },
+      { title: "Licitações | 3AM Licitação" },
       {
         name: "description",
         content:
           "Pesquise, filtre e classifique as licitações de construção civil já salvas no banco da 3AM.",
       },
-      { property: "og:title", content: "Licitações Salvas | 3AM Licitação" },
+      { property: "og:title", content: "Licitações | 3AM Licitação" },
       {
         property: "og:description",
         content: "Análise e priorização de oportunidades salvas no banco.",
@@ -260,6 +261,7 @@ function LicitacoesSalvas() {
   const [pagina, setPagina] = useState(1);
   const [obsAberta, setObsAberta] = useState<string | null>(null);
   const [obsTexto, setObsTexto] = useState("");
+  const [filtrosAbertos, setFiltrosAbertos] = useState(false);
 
   // Digitar não dispara uma consulta por tecla.
   useEffect(() => {
@@ -342,6 +344,8 @@ function LicitacoesSalvas() {
   const filtrosAtivos = Object.entries(filtros).filter(([chave, v]) => {
     // `apenas_abertas` é uma regra fixa do catálogo, não uma escolha do usuário.
     if (chave === "apenas_abertas") return false;
+    // SP é o escopo inicial do produto e só conta quando o usuário troca a UF.
+    if (chave === "uf" && v === UF_INICIAL) return false;
     return typeof v === "boolean" ? v : v !== "";
   }).length;
 
@@ -352,6 +356,74 @@ function LicitacoesSalvas() {
     setTermo("");
     setPagina(1);
   };
+
+  const chipsAtivos: { chave: string; label: string; limpar?: () => void }[] = [
+    { chave: "uf-base", label: filtros.uf || UF_INICIAL },
+    { chave: "abertas", label: "Em aberto" },
+  ];
+  if (filtros.palavra_chave)
+    chipsAtivos.push({
+      chave: "palavra_chave",
+      label: `Busca: ${filtros.palavra_chave}`,
+      limpar: () => {
+        setTermo("");
+        set("palavra_chave", "");
+      },
+    });
+  if (filtros.limite_ate)
+    chipsAtivos.push({
+      chave: "limite_ate",
+      label: `Prazo até ${dataBR(filtros.limite_ate)}`,
+      limpar: () => set("limite_ate", ""),
+    });
+  if (filtros.municipio)
+    chipsAtivos.push({
+      chave: "municipio",
+      label: filtros.municipio,
+      limpar: () => set("municipio", ""),
+    });
+  if (filtros.modalidade)
+    chipsAtivos.push({
+      chave: "modalidade",
+      label: filtros.modalidade,
+      limpar: () => set("modalidade", ""),
+    });
+  if (filtros.status_interno)
+    chipsAtivos.push({
+      chave: "status_interno",
+      label: STATUS_INTERNO_LABEL[filtros.status_interno as StatusInterno],
+      limpar: () => set("status_interno", ""),
+    });
+  if (filtros.prioridade)
+    chipsAtivos.push({
+      chave: "prioridade",
+      label: filtros.prioridade === "sim" ? "Prioritárias" : "Sem prioridade",
+      limpar: () => set("prioridade", ""),
+    });
+  if (filtros.categoria)
+    chipsAtivos.push({
+      chave: "categoria",
+      label: filtros.categoria,
+      limpar: () => set("categoria", ""),
+    });
+  if (filtros.orgao)
+    chipsAtivos.push({
+      chave: "orgao",
+      label: filtros.orgao,
+      limpar: () => set("orgao", ""),
+    });
+  if (filtros.nao_analisadas)
+    chipsAtivos.push({
+      chave: "nao_analisadas",
+      label: "Não analisadas",
+      limpar: () => set("nao_analisadas", false),
+    });
+  if (filtros.recomendadas)
+    chipsAtivos.push({
+      chave: "recomendadas",
+      label: "Recomendadas",
+      limpar: () => set("recomendadas", false),
+    });
 
   const SortHead = ({ campo, label }: { campo: OrdenacaoCampo; label: string }) => (
     <button
@@ -366,8 +438,8 @@ function LicitacoesSalvas() {
 
   return (
     <AppShell
-      titulo="Licitações Salvas"
-      descricao="Consulta somente ao banco de dados da aplicação — nenhuma requisição ao PNCP."
+      titulo="Licitações"
+      descricao="Encontre e priorize oportunidades abertas no catálogo."
       acoes={
         <>
           <span className="num text-xs text-muted-foreground">
@@ -382,123 +454,37 @@ function LicitacoesSalvas() {
         </>
       }
     >
-      <section className="rounded-lg border border-border bg-card p-3.5">
-        <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-          <Filter className="size-3.5" /> Filtros aplicados no banco, sobre todo o catálogo
+      <section className="rounded-xl border border-border bg-card p-4 shadow-sm">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
+          <div className="min-w-0 flex-1 space-y-1.5">
+            <Label className="text-xs font-medium">Buscar licitação</Label>
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                className="h-10 pl-9 text-sm"
+                placeholder="Busque pelo objeto, órgão ou palavra-chave"
+                value={termo}
+                onChange={(e) => setTermo(e.target.value)}
+              />
+            </div>
+          </div>
+          <Button
+            variant={filtrosAbertos ? "secondary" : "outline"}
+            className="h-10 shrink-0"
+            onClick={() => setFiltrosAbertos((v) => !v)}
+          >
+            <SlidersHorizontal className="mr-2 size-4" />
+            Filtros avançados
+            {filtrosAtivos > 0 && (
+              <span className="ml-2 rounded-full bg-primary px-1.5 py-0.5 text-[10px] text-primary-foreground">
+                {filtrosAtivos}
+              </span>
+            )}
+          </Button>
         </div>
 
-        <div className="mt-3 grid gap-2.5 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
-          <div className="space-y-1 sm:col-span-2">
-            <Label className="text-[11px]">Palavra-chave no objeto ou órgão</Label>
-            <Input
-              placeholder="ex.: pavimentação, escola"
-              value={termo}
-              onChange={(e) => setTermo(e.target.value)}
-            />
-          </div>
-
-          <ComboFiltro
-            label="UF"
-            value={filtros.uf}
-            options={opcoes?.["ufs"] ?? []}
-            onChange={(v) => set("uf", v)}
-          />
-          <ComboFiltro
-            label="Município"
-            value={filtros.municipio}
-            options={opcoes?.["municipios"] ?? []}
-            onChange={(v) => set("municipio", v)}
-          />
-          <ComboFiltro
-            label="Órgão"
-            value={filtros.orgao}
-            options={opcoes?.["orgaos"] ?? []}
-            onChange={(v) => set("orgao", v)}
-          />
-          <ComboFiltro
-            label="Modalidade"
-            value={filtros.modalidade}
-            options={(modalidades ?? []).map((m) => m.nome)}
-            onChange={(v) => set("modalidade", v)}
-          />
-          <ComboFiltro
-            label="Categoria"
-            value={filtros.categoria}
-            options={opcoes?.["categorias"] ?? CATEGORIAS}
-            onChange={(v) => set("categoria", v)}
-          />
-          <ComboFiltro
-            label="Status interno"
-            value={filtros.status_interno}
-            options={Object.keys(STATUS_INTERNO_LABEL) as StatusInterno[]}
-            renderOption={(k) => STATUS_INTERNO_LABEL[k as StatusInterno]}
-            onChange={(v) => set("status_interno", v)}
-          />
-          <ComboFiltro
-            label="Prioridade"
-            value={filtros.prioridade}
-            options={["sim", "nao"]}
-            renderOption={(v) => (v === "sim" ? "Somente prioritárias" : "Sem prioridade")}
-            onChange={(v) => set("prioridade", v)}
-          />
-
-          <div className="space-y-1">
-            <Label className="text-[11px]">Valor mínimo</Label>
-            <Input
-              type="number"
-              placeholder="0"
-              value={filtros.valor_min}
-              onChange={(e) => set("valor_min", e.target.value)}
-            />
-          </div>
-          <div className="space-y-1">
-            <Label className="text-[11px]">Valor máximo</Label>
-            <Input
-              type="number"
-              placeholder="sem limite"
-              value={filtros.valor_max}
-              onChange={(e) => set("valor_max", e.target.value)}
-            />
-          </div>
-          <div className="space-y-1">
-            <Label className="text-[11px]">Publicação de</Label>
-            <Input
-              type="date"
-              value={filtros.publicacao_de}
-              onChange={(e) => set("publicacao_de", e.target.value)}
-            />
-          </div>
-          <div className="space-y-1">
-            <Label className="text-[11px]">Publicação até</Label>
-            <Input
-              type="date"
-              value={filtros.publicacao_ate}
-              onChange={(e) => set("publicacao_ate", e.target.value)}
-            />
-          </div>
-          <div className="space-y-1">
-            <Label className="text-[11px]">Limite proposta de</Label>
-            <Input
-              type="date"
-              value={filtros.limite_de}
-              onChange={(e) => set("limite_de", e.target.value)}
-            />
-          </div>
-          <div className="space-y-1">
-            <Label className="text-[11px]">Limite proposta até</Label>
-            <Input
-              type="date"
-              value={filtros.limite_ate}
-              onChange={(e) => set("limite_ate", e.target.value)}
-            />
-          </div>
-        </div>
-
-        {/* Atalhos de urgência. O prazo é o que organiza o trabalho de quem monta
-            proposta, e digitar a data toda vez para a pergunta mais frequente é
-            atrito. A regra de proposta aberta já é obrigatória no servidor. */}
         <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-border pt-3">
-          <span className="text-[11px] text-muted-foreground">Encerrando em:</span>
+          <span className="text-xs font-medium text-muted-foreground">Prazo:</span>
           {[5, 15, 30].map((dias) => {
             const ate = diaBR(dias);
             const ativo = filtros.apenas_abertas && filtros.limite_ate === ate;
@@ -507,7 +493,7 @@ function LicitacoesSalvas() {
                 key={dias}
                 size="sm"
                 variant={ativo ? "default" : "outline"}
-                className="h-7 px-2.5 text-xs"
+                className="h-8 rounded-full px-3 text-xs"
                 onClick={() => {
                   // Clicar no atalho ativo remove somente o prazo rápido. A regra
                   // de mostrar apenas oportunidades abertas permanece ativa.
@@ -524,48 +510,142 @@ function LicitacoesSalvas() {
               </Button>
             );
           })}
-          <span className="text-[11px] text-muted-foreground">
-            somente propostas abertas com data limite disponível
+          <span className="ml-auto text-[11px] text-muted-foreground">
+            Somente propostas abertas com prazo disponível
           </span>
         </div>
 
-        <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-border pt-3">
-          {(
-            [
-              ["nao_analisadas", "Apenas não analisadas"],
-              ["recomendadas", `Apenas recomendadas (score ≥ ${scoreMinimo})`],
-            ] as const
-          ).map(([campo, label]) => (
-            <label key={campo} className="flex items-center gap-2 text-xs">
-              <Checkbox checked={filtros[campo]} onCheckedChange={(v) => set(campo, Boolean(v))} />
-              {label}
-            </label>
-          ))}
-
-          {/* Documentos entram na próxima etapa. Marcar agora não encontraria
-              nada, e "não coletado" não é o mesmo que "não tem". */}
-          {(
-            [
-              ["com_edital", "Com edital"],
-              ["com_projeto", "Com projeto"],
-              ["com_orcamento", "Com orçamento"],
-            ] as const
-          ).map(([campo, label]) => (
-            <label
-              key={campo}
-              className="flex cursor-not-allowed items-center gap-2 text-xs text-muted-foreground"
-              title="Os documentos das licitações ainda não são coletados."
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {chipsAtivos.map((chip) => (
+            <span
+              key={chip.chave}
+              className="inline-flex h-7 items-center gap-1.5 rounded-full border border-border bg-muted/50 px-2.5 text-[11px] font-medium"
             >
-              <Checkbox checked={false} disabled />
-              {label}
-            </label>
+              {chip.chave === "prioridade" && <Star className="size-3 fill-current text-primary" />}
+              {chip.label}
+              {chip.limpar && (
+                <button onClick={chip.limpar} aria-label={`Remover filtro ${chip.label}`}>
+                  <X className="size-3 text-muted-foreground hover:text-foreground" />
+                </button>
+              )}
+            </span>
           ))}
-
-          <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
-            <Info className="size-3" /> filtros por documento ficam disponíveis quando a coleta de
-            arquivos entrar no ar
-          </span>
         </div>
+
+        {filtrosAbertos && (
+          <div className="mt-4 border-t border-border pt-4">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
+              <ComboFiltro
+                label="UF"
+                value={filtros.uf}
+                options={opcoes?.["ufs"] ?? []}
+                onChange={(v) => set("uf", v)}
+              />
+              <ComboFiltro
+                label="Município"
+                value={filtros.municipio}
+                options={opcoes?.["municipios"] ?? []}
+                onChange={(v) => set("municipio", v)}
+              />
+              <ComboFiltro
+                label="Órgão"
+                value={filtros.orgao}
+                options={opcoes?.["orgaos"] ?? []}
+                onChange={(v) => set("orgao", v)}
+              />
+              <ComboFiltro
+                label="Modalidade"
+                value={filtros.modalidade}
+                options={(modalidades ?? []).map((m) => m.nome)}
+                onChange={(v) => set("modalidade", v)}
+              />
+              <ComboFiltro
+                label="Categoria"
+                value={filtros.categoria}
+                options={opcoes?.["categorias"] ?? CATEGORIAS}
+                onChange={(v) => set("categoria", v)}
+              />
+              <ComboFiltro
+                label="Status interno"
+                value={filtros.status_interno}
+                options={Object.keys(STATUS_INTERNO_LABEL) as StatusInterno[]}
+                renderOption={(k) => STATUS_INTERNO_LABEL[k as StatusInterno]}
+                onChange={(v) => set("status_interno", v)}
+              />
+              <ComboFiltro
+                label="Prioridade"
+                value={filtros.prioridade}
+                options={["sim", "nao"]}
+                renderOption={(v) => (v === "sim" ? "Somente prioritárias" : "Sem prioridade")}
+                onChange={(v) => set("prioridade", v)}
+              />
+              <div className="space-y-1">
+                <Label className="text-[11px]">Valor mínimo</Label>
+                <Input
+                  type="number"
+                  placeholder="0"
+                  value={filtros.valor_min}
+                  onChange={(e) => set("valor_min", e.target.value)}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-[11px]">Valor máximo</Label>
+                <Input
+                  type="number"
+                  placeholder="sem limite"
+                  value={filtros.valor_max}
+                  onChange={(e) => set("valor_max", e.target.value)}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-[11px]">Publicação de</Label>
+                <Input
+                  type="date"
+                  value={filtros.publicacao_de}
+                  onChange={(e) => set("publicacao_de", e.target.value)}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-[11px]">Publicação até</Label>
+                <Input
+                  type="date"
+                  value={filtros.publicacao_ate}
+                  onChange={(e) => set("publicacao_ate", e.target.value)}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-[11px]">Limite de</Label>
+                <Input
+                  type="date"
+                  value={filtros.limite_de}
+                  onChange={(e) => set("limite_de", e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="mt-4 flex flex-wrap items-center gap-5 border-t border-border pt-3">
+              <label className="flex items-center gap-2 text-xs">
+                <Checkbox
+                  checked={filtros.nao_analisadas}
+                  onCheckedChange={(v) => set("nao_analisadas", Boolean(v))}
+                />
+                Apenas não analisadas
+              </label>
+              <label className="flex items-center gap-2 text-xs">
+                <Checkbox
+                  checked={filtros.recomendadas}
+                  onCheckedChange={(v) => set("recomendadas", Boolean(v))}
+                />
+                Recomendadas (score ≥ {scoreMinimo})
+              </label>
+              {filtrosAtivos > 0 && (
+                <Button variant="ghost" size="sm" className="ml-auto h-8" onClick={limparTudo}>
+                  <X className="mr-1 size-3.5" />
+                  Limpar filtros
+                </Button>
+              )}
+            </div>
+          </div>
+        )}
       </section>
 
       <section className="mt-3 overflow-hidden rounded-lg border border-border bg-card">
@@ -590,33 +670,20 @@ function LicitacoesSalvas() {
           />
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[1500px] table-fixed text-xs">
-              <thead className="bg-secondary/70 text-muted-foreground">
+            <table className="w-full min-w-[1120px] table-fixed text-xs">
+              <thead className="sticky top-[57px] z-10 bg-secondary text-muted-foreground shadow-[0_1px_0_hsl(var(--border))]">
                 <tr className="border-b border-border">
-                  {visivel("orgao") && (
-                    <th className="h-10 w-[160px] px-3 py-0 text-left font-medium">Órgão</th>
-                  )}
-                  {visivel("local") && (
-                    <th className="h-10 w-[130px] px-3 py-0 text-left font-medium">
-                      Município / UF
-                    </th>
-                  )}
                   {visivel("objeto") && (
-                    <th className="h-10 px-3 py-0 text-left font-medium">Objeto</th>
+                    <th className="h-11 px-4 py-0 text-left font-medium">Oportunidade</th>
                   )}
                   {visivel("valor") && (
                     <th className="h-10 w-[124px] px-3 py-0 text-right font-medium">
                       <SortHead campo="valor_estimado" label="Valor" />
                     </th>
                   )}
-                  {visivel("publicacao") && (
-                    <th className="h-10 w-[96px] px-3 py-0 text-left font-medium">
-                      <SortHead campo="data_publicacao" label="Publicação" />
-                    </th>
-                  )}
                   {visivel("limite") && (
-                    <th className="h-10 w-[104px] px-3 py-0 text-left font-medium">
-                      <SortHead campo="data_limite_proposta" label="Limite" />
+                    <th className="h-11 w-[132px] px-3 py-0 text-left font-medium">
+                      <SortHead campo="data_limite_proposta" label="Prazo" />
                     </th>
                   )}
                   {visivel("modalidade") && (
@@ -644,61 +711,71 @@ function LicitacoesSalvas() {
                   const dias = l.data_limite_proposta
                     ? diasRestantes(l.data_limite_proposta)
                     : null;
+                  const objeto =
+                    l.objeto && l.objeto.trim().toLowerCase() !== "null"
+                      ? l.objeto
+                      : "Objeto não informado";
                   return (
                     <tr
                       key={l.id}
-                      className="h-12 cursor-pointer border-b border-border/60 align-middle transition-colors last:border-0 hover:bg-accent/40"
+                      className="cursor-pointer border-b border-border/60 align-middle transition-colors last:border-0 hover:bg-accent/40"
                       onClick={() => navigate({ to: "/licitacoes/$id", params: { id: l.id } })}
                     >
-                      {visivel("orgao") && (
-                        <td className="h-12 px-3 py-0">
-                          <span className="block truncate" title={l.orgao}>
-                            {l.orgao}
-                          </span>
-                        </td>
-                      )}
-                      {visivel("local") && (
-                        <td
-                          className="h-12 truncate px-3 py-0 text-muted-foreground"
-                          title={`${l.municipio ?? "—"} / ${l.uf ?? "—"}`}
-                        >
-                          {l.municipio ?? "—"} / {l.uf ?? "—"}
-                        </td>
-                      )}
                       {visivel("objeto") && (
-                        <td className="h-12 px-3 py-0">
-                          <span className="block truncate" title={l.objeto}>
-                            {l.objeto}
-                          </span>
+                        <td className="px-4 py-3">
+                          <div className="flex items-start gap-2">
+                            {l.prioridade && (
+                              <Star className="mt-0.5 size-3.5 shrink-0 fill-primary text-primary" />
+                            )}
+                            <div className="min-w-0">
+                              <span
+                                className="line-clamp-2 text-[13px] font-medium leading-snug"
+                                title={objeto}
+                              >
+                                {objeto}
+                              </span>
+                              <span
+                                className="mt-1 block truncate text-[11px] text-muted-foreground"
+                                title={`${l.orgao} · ${l.municipio ?? "—"} / ${l.uf ?? "—"}`}
+                              >
+                                {l.orgao} · {l.municipio ?? "—"} / {l.uf ?? "—"}
+                              </span>
+                            </div>
+                          </div>
                         </td>
                       )}
                       {visivel("valor") && (
                         <td
                           className={cn(
-                            "num h-12 whitespace-nowrap px-3 py-0 text-right font-medium",
+                            "num whitespace-nowrap px-3 py-3 text-right font-semibold",
                             l.valor_estimado === null && "text-[11px] text-muted-foreground",
                           )}
                         >
                           {brl(l.valor_estimado)}
                         </td>
                       )}
-                      {visivel("publicacao") && (
-                        <td className="num h-12 whitespace-nowrap px-3 py-0 text-muted-foreground">
-                          {dataBR(l.data_publicacao)}
-                        </td>
-                      )}
                       {visivel("limite") && (
-                        <td className="num h-12 whitespace-nowrap px-3 py-0">
-                          {dataBR(l.data_limite_proposta)}
+                        <td className="num whitespace-nowrap px-3 py-3">
+                          <span className="font-medium">{dataBR(l.data_limite_proposta)}</span>
                           <span
                             className={cn(
-                              "block text-[10px] leading-tight",
-                              dias !== null && dias >= 0 && dias <= 7
-                                ? "text-warning"
-                                : "text-muted-foreground",
+                              "mt-1 block w-fit rounded-full px-2 py-0.5 text-[10px] font-semibold leading-tight",
+                              dias !== null && dias >= 0 && dias <= 2
+                                ? "bg-destructive/15 text-destructive"
+                                : dias !== null && dias <= 5
+                                  ? "bg-warning/15 text-warning"
+                                  : dias !== null && dias <= 15
+                                    ? "bg-primary/10 text-primary"
+                                    : "bg-muted text-muted-foreground",
                             )}
                           >
-                            {dias === null ? "sem prazo" : dias < 0 ? "encerrada" : `${dias}d`}
+                            {dias === null
+                              ? "Sem prazo"
+                              : dias < 0
+                                ? "Encerrada"
+                                : dias === 0
+                                  ? "Encerra hoje"
+                                  : `Encerra em ${dias}d`}
                           </span>
                         </td>
                       )}
