@@ -61,7 +61,12 @@ async function main() {
   // trabalho — multiplicam o tempo dos dois e ainda martelam o Supabase com
   // reservas concorrentes.
   const dono = `${process.env["COMPUTERNAME"] ?? "local"}:${process.pid}`;
-  if (!(await repo.adquirirLeaseEmbedding(dono))) {
+  // 15 min, e nao 5: um tick pode levar 5 editais x 40 chunks x ~2,5 s = ~8 min
+  // quando o Ollama esta degradado. Lease mais curto que o pior tick vence no
+  // meio do trabalho e deixa outro processo entrar -- exatamente o que ele
+  // existe para impedir.
+  const DURACAO_LEASE = "15 minutes";
+  if (!(await repo.adquirirLeaseEmbedding(dono, DURACAO_LEASE))) {
     console.error("Já existe um job de embeddings rodando (lease em uso).");
     console.error("Espere ele terminar — rodar dois ao mesmo tempo deixa os dois mais lentos.");
     process.exit(1);
@@ -79,73 +84,94 @@ async function main() {
     void soltarLease().then(() => process.exit(130));
   });
 
-  const banco = repo.portaEmbeddingsSupabase(embedder.modelo);
-  const inicio = Date.now();
-  let feitos = 0;
-  // O lease vale 5 minutos e a carga passa disso: renovar a cada volta mantém
-  // a posse sem transformar uma queda do processo em fila travada para sempre.
-  let ultimaRenovacao = Date.now();
+  // O corte "recomendada" e configuravel na tela. Ler o valor real evita que a
+  // prioridade da fila discorde em silencio do que a interface chama de
+  // recomendada no dia em que a equipe ajustar o numero.
+  const cfgRepo = await import("../src/services/pncp/repositorio.server");
+  const cfg = await cfgRepo.obterConfiguracoes();
 
-  // `filaVazia` é propriedade da FILA, não de sucesso: `executarTickEmbeddings`
-  // engole toda falha em `resumo.erros` e devolve normal. Com o provedor fora do
-  // ar, cada volta reserva o mesmo lote, falha inteira e devolve zero vetores —
-  // o laço nunca sairia, martelando o Supabase com reservas idênticas.
-  // Três ticks seguidos sem UM vetor gravado é isso acontecendo. Abortamos e
-  // devolvemos a decisão ao operador: nada de backoff nem retry aqui, porque o
-  // script é retomável e rodar de novo continua de onde parou.
-  const MAX_TICKS_SEM_PROGRESSO = 3;
-  let ticksSemProgresso = 0;
+  // try/finally: QUALQUER saida — excecao dentro do tick, falha ao ler a
+  // cobertura, erro de rede na renovacao — precisa devolver a trava. Sem isso o
+  // proximo job espera o prazo inteiro por causa de um erro que ja terminou.
+  try {
+    const banco = repo.portaEmbeddingsSupabase(embedder.modelo, cfg.score_minimo_recomendado);
+    const inicio = Date.now();
+    let feitos = 0;
+    // Renovar a cada 2 min mantem a posse com folga sobre o lease de 15 min, sem
+    // transformar uma queda do processo em fila travada para sempre.
+    let ultimaRenovacao = Date.now();
 
-  while (feitos < limiteTotal) {
-    if (Date.now() - ultimaRenovacao > 120_000) {
-      await repo.adquirirLeaseEmbedding(dono);
-      ultimaRenovacao = Date.now();
+    // `filaVazia` é propriedade da FILA, não de sucesso: `executarTickEmbeddings`
+    // engole toda falha em `resumo.erros` e devolve normal. Com o provedor fora do
+    // ar, cada volta reserva o mesmo lote, falha inteira e devolve zero vetores —
+    // o laço nunca sairia, martelando o Supabase com reservas idênticas.
+    // Três ticks seguidos sem UM vetor gravado é isso acontecendo. Abortamos e
+    // devolvemos a decisão ao operador: nada de backoff nem retry aqui, porque o
+    // script é retomável e rodar de novo continua de onde parou.
+    const MAX_TICKS_SEM_PROGRESSO = 3;
+    let ticksSemProgresso = 0;
+
+    while (feitos < limiteTotal) {
+      if (Date.now() - ultimaRenovacao > 120_000) {
+        // Se a renovacao for RECUSADA, o lease venceu e outro processo tomou.
+        // Continuar seria rodar sem posse -- os dois jobs simultaneos que a
+        // trava existe para evitar, agora sem ninguem perceber.
+        if (!(await repo.adquirirLeaseEmbedding(dono, DURACAO_LEASE))) {
+          console.error("Perdi o lease: outro job de embeddings assumiu a fila. Encerrando.");
+          console.error("A fila e retomavel; rode de novo quando o outro terminar.");
+          return;
+        }
+        ultimaRenovacao = Date.now();
+      }
+
+      const resumo = await executarTickEmbeddings({ banco, embedder });
+      if (resumo.filaVazia) {
+        console.log("Fila vazia.");
+        break;
+      }
+      // Documento fechado como `sem_texto` conta como progresso: não virou vetor,
+      // mas saiu da fila e não volta. Sem isso, um lote inteiro de PDFs
+      // escaneados pareceria um provedor travado.
+      const progresso = resumo.licitacoes + resumo.chunks + resumo.semTexto;
+      feitos += resumo.licitacoes + resumo.chunks;
+      console.log(
+        `+${resumo.licitacoes} licitações, +${resumo.documentos} documentos (${resumo.chunks} chunks)` +
+          `${resumo.semTexto > 0 ? `, ${resumo.semTexto} sem texto aproveitável` : ""} — ${numeroBR(feitos)} vetores`,
+      );
+      for (const e of resumo.erros.slice(0, 3)) console.log(`   ! ${e}`);
+
+      ticksSemProgresso = progresso === 0 ? ticksSemProgresso + 1 : 0;
+      if (ticksSemProgresso >= MAX_TICKS_SEM_PROGRESSO) {
+        console.error(
+          `\n${MAX_TICKS_SEM_PROGRESSO} ticks seguidos sem gravar nenhum vetor, com fila não vazia. ` +
+            `Último tick: ${resumo.erros.length} erro(s).`,
+        );
+        if (resumo.erros[0]) console.error(`Primeiro erro: ${resumo.erros[0]}`);
+        console.error(
+          "Interrompendo. O provedor de embedding provavelmente caiu — confira `ollama serve` " +
+            "e rode de novo: a fila é retomável e continua de onde parou.",
+        );
+        // Soltar a trava antes de sair, senão o próximo job espera o prazo
+        // inteiro por causa de uma falha que já terminou.
+        await soltarLease();
+        process.exit(1);
+      }
     }
 
-    const resumo = await executarTickEmbeddings({ banco, embedder });
-    if (resumo.filaVazia) {
-      console.log("Fila vazia.");
-      break;
-    }
-    // Documento fechado como `sem_texto` conta como progresso: não virou vetor,
-    // mas saiu da fila e não volta. Sem isso, um lote inteiro de PDFs
-    // escaneados pareceria um provedor travado.
-    const progresso = resumo.licitacoes + resumo.chunks + resumo.semTexto;
-    feitos += resumo.licitacoes + resumo.chunks;
+    await soltarLease();
+
+    const depois = await repo.coberturaEmbeddings();
+    const cobertura =
+      (depois["licitacoes_com_embedding"] ?? 0) /
+      Math.max(depois["licitacoes_pesquisaveis"] ?? 1, 1);
     console.log(
-      `+${resumo.licitacoes} licitações, +${resumo.documentos} documentos (${resumo.chunks} chunks)` +
-        `${resumo.semTexto > 0 ? `, ${resumo.semTexto} sem texto aproveitável` : ""} — ${numeroBR(feitos)} vetores`,
+      `\nConcluído em ${Math.round((Date.now() - inicio) / 1000)}s. ` +
+        `Cobertura de licitações: ${(cobertura * 100).toFixed(2)}% ` +
+        `(a ADR-001 exige ≥ 99% antes de ligar o híbrido).`,
     );
-    for (const e of resumo.erros.slice(0, 3)) console.log(`   ! ${e}`);
-
-    ticksSemProgresso = progresso === 0 ? ticksSemProgresso + 1 : 0;
-    if (ticksSemProgresso >= MAX_TICKS_SEM_PROGRESSO) {
-      console.error(
-        `\n${MAX_TICKS_SEM_PROGRESSO} ticks seguidos sem gravar nenhum vetor, com fila não vazia. ` +
-          `Último tick: ${resumo.erros.length} erro(s).`,
-      );
-      if (resumo.erros[0]) console.error(`Primeiro erro: ${resumo.erros[0]}`);
-      console.error(
-        "Interrompendo. O provedor de embedding provavelmente caiu — confira `ollama serve` " +
-          "e rode de novo: a fila é retomável e continua de onde parou.",
-      );
-      // Soltar a trava antes de sair, senão o próximo job espera o prazo
-      // inteiro por causa de uma falha que já terminou.
-      await soltarLease();
-      process.exit(1);
-    }
+  } finally {
+    await soltarLease();
   }
-
-  await soltarLease();
-
-  const depois = await repo.coberturaEmbeddings();
-  const cobertura =
-    (depois["licitacoes_com_embedding"] ?? 0) / Math.max(depois["licitacoes_pesquisaveis"] ?? 1, 1);
-  console.log(
-    `\nConcluído em ${Math.round((Date.now() - inicio) / 1000)}s. ` +
-      `Cobertura de licitações: ${(cobertura * 100).toFixed(2)}% ` +
-      `(a ADR-001 exige ≥ 99% antes de ligar o híbrido).`,
-  );
 }
 
 main().catch((e) => {

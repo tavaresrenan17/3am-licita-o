@@ -123,8 +123,24 @@ export async function executarTickEmbeddings(
     duracaoMs: 0,
   };
 
-  const licitacoes = await banco.reservarLicitacoes(cfg.loteLicitacoes);
-  const documentos = await banco.reservarDocumentos(cfg.loteDocumentos);
+  // A reserva também pode falhar por rede, e não só o trabalho em si. Isto
+  // aconteceu de verdade em 18/09/2026: um `TypeError: fetch failed` no meio de
+  // uma carga de 8.370 licitações matou o processo com 6.970 feitas, porque a
+  // exceção escapava daqui. Agora ela vira erro no resumo, o tick devolve zero
+  // progresso, e quem decide desistir é o contador de ticks sem progresso de
+  // quem chamou — que é onde essa decisão pertence.
+  let licitacoes: LicitacaoParaEmbedding[] = [];
+  let documentos: DocumentoParaEmbedding[] = [];
+  try {
+    licitacoes = await banco.reservarLicitacoes(cfg.loteLicitacoes);
+    documentos = await banco.reservarDocumentos(cfg.loteDocumentos);
+  } catch (erro) {
+    resumo.erros.push(`reserva: ${erro instanceof Error ? erro.message : String(erro)}`);
+    resumo.duracaoMs = agora() - inicio;
+    // Não é fila vazia: é fila desconhecida. Marcar `filaVazia` aqui faria o CLI
+    // encerrar anunciando "Fila vazia." sobre uma carga incompleta.
+    return resumo;
+  }
 
   if (licitacoes.length === 0 && documentos.length === 0) {
     resumo.filaVazia = true;

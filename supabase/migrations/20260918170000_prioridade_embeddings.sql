@@ -66,16 +66,24 @@ security definer
 set search_path = pg_catalog, public, pg_temp
 as $$
 declare
-  v_ok boolean;
+  -- `row_count` é INTEIRO. Declarar isto como boolean faz o PL/pgSQL aceitar a
+  -- atribuição por conversão de I/O e depois explodir em `boolean > integer`,
+  -- que não existe — e só na PRIMEIRA CHAMADA, porque o corpo só é analisado
+  -- então. A migração diria "Success" e a fila ficaria travada.
+  v_linhas integer;
 begin
   -- Renova se já for meu, toma se estiver vago ou vencido, recusa caso contrário.
+  -- `expira_em is null` precisa ser explícito: um UPDATE manual de emergência
+  -- que deixe `dono` preenchido e `expira_em` nulo faria a cláusula inteira
+  -- virar NULL, e o lease travaria para sempre — justo a recuperação por prazo
+  -- que é a razão deste desenho existir.
   update public.embedding_lease
      set dono = p_dono, expira_em = now() + p_duracao
    where id = 1
-     and (dono is null or dono = p_dono or expira_em < now());
+     and (dono is null or dono = p_dono or expira_em is null or expira_em < now());
 
-  get diagnostics v_ok = row_count;
-  return v_ok > 0;
+  get diagnostics v_linhas = row_count;
+  return v_linhas > 0;
 end;
 $$;
 
@@ -148,21 +156,31 @@ language sql
 security definer
 set search_path = pg_catalog, public, pg_temp
 as $$
-  select a.documento_id, a.licitacao_id, a.texto, md5(a.texto)
-    from public.documentos_arquivo a
-    join public.licitacoes l on l.id = a.licitacao_id
-   where a.estado = 'extraido'
-     and a.texto is not null
-     and not exists (
-           select 1 from public.documento_chunks c
-            where c.documento_id = a.documento_id
-              and c.origem_hash = md5(a.texto)
-              and c.modelo = p_modelo
-     )
-   order by public.prioridade_embedding(l.*, p_score_minimo),
-            l.acessada_em desc nulls last,
-            a.atualizado_em asc
-   limit greatest(p_limite, 0);
+  -- A ordenação por função de prioridade impede o index scan ordenado que o
+  -- `documentos_arquivo_fila_idx` dava antes, então o planner varre e ordena.
+  -- Escolher só os ids primeiro mantém o `texto` do edital FORA do sort: sem
+  -- isso, cada chamada detoasta o texto completo de todos os documentos
+  -- extraídos só para descartar quase todos no LIMIT.
+  with candidatos as (
+    select a.documento_id, a.licitacao_id
+      from public.documentos_arquivo a
+      join public.licitacoes l on l.id = a.licitacao_id
+     where a.estado = 'extraido'
+       and a.texto is not null
+       and not exists (
+             select 1 from public.documento_chunks c
+              where c.documento_id = a.documento_id
+                and c.origem_hash = md5(a.texto)
+                and c.modelo = p_modelo
+       )
+     order by public.prioridade_embedding(l.*, p_score_minimo),
+              l.acessada_em desc nulls last,
+              a.atualizado_em asc
+     limit greatest(p_limite, 0)
+  )
+  select c.documento_id, c.licitacao_id, a.texto, md5(a.texto)
+    from candidatos c
+    join public.documentos_arquivo a on a.documento_id = c.documento_id;
 $$;
 
 revoke all on function public.marcar_licitacao_acessada(uuid) from public, anon, authenticated;

@@ -131,6 +131,29 @@ describe("executarTickEmbeddings", () => {
     expect(gravadasLic.map((g) => g.id)).toEqual(["l2"]);
   });
 
+  it("falha de rede na reserva nao derruba o processo nem finge fila vazia", async () => {
+    // Aconteceu de verdade: um `TypeError: fetch failed` na reserva matou uma
+    // carga de 8.370 licitacoes com 6.970 feitas.
+    const banco: PortaEmbeddings = {
+      async reservarLicitacoes() {
+        throw new Error("TypeError: fetch failed");
+      },
+      async reservarDocumentos() {
+        return [];
+      },
+      async gravarLicitacao() {},
+      async gravarChunks() {},
+      async marcarSemTexto() {},
+    };
+    const resumo = await executarTickEmbeddings({ banco, embedder: new EmbedderFalso() });
+    expect(resumo.erros).toHaveLength(1);
+    expect(resumo.erros[0]).toContain("reserva");
+    // Crucial: NAO e fila vazia. Dizer que esta vazia encerraria a carga
+    // anunciando sucesso sobre um catalogo pela metade.
+    expect(resumo.filaVazia).toBe(false);
+    expect(resumo.licitacoes).toBe(0);
+  });
+
   it("fila vazia é sinalizada", async () => {
     const { banco } = bancoFalso();
     const resumo = await executarTickEmbeddings({ banco, embedder: new EmbedderFalso() });
