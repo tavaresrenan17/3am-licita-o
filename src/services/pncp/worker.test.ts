@@ -150,6 +150,132 @@ const segmento = (id: string): SegmentoPersistido => ({
 });
 
 describe("I01 — paginação completa de um segmento", () => {
+  it("mede separadamente transformação, payload, merge e administração do banco", async () => {
+    const r = relogio();
+    const { banco } = bancoFalso([segmento("s1")]);
+    const originalProximo = banco.proximoSegmento.bind(banco);
+    const originalLiberar = banco.liberarSegmento.bind(banco);
+    const originalMerge = banco.mergePagina.bind(banco);
+
+    banco.proximoSegmento = vi.fn(async (jobId: string) => {
+      r.avancar(2);
+      return originalProximo(jobId);
+    });
+    banco.liberarSegmento = vi.fn(async (segmentoPersistido: SegmentoPersistido) => {
+      r.avancar(3);
+      return originalLiberar(segmentoPersistido);
+    });
+    banco.salvarPayloads = vi.fn(async () => {
+      r.avancar(7);
+    });
+    banco.mergePagina = vi.fn(async (entrada: EntradaMerge) => {
+      r.avancar(11);
+      return originalMerge(entrada);
+    });
+
+    const item = contratacao(1);
+    let objeto = item.objetoCompra;
+    Object.defineProperty(item, "objetoCompra", {
+      get() {
+        r.avancar(5);
+        return objeto;
+      },
+      set(valor) {
+        objeto = valor;
+      },
+      enumerable: true,
+    });
+    const buscar = vi.fn(async () => {
+      r.avancar(20);
+      return pagina([item], 1);
+    });
+
+    const resultado = await executarTick("job-1", {
+      banco,
+      cfg,
+      buscar,
+      agora: r.agora,
+      dormir: r.dormir,
+    });
+
+    expect(resultado.metricasPipeline).toMatchObject({
+      transformacaoMs: 5,
+      salvarPayloadMs: 7,
+      mergeMs: 11,
+    });
+    expect(resultado.metricasPipeline.administracaoDbMs).toBeGreaterThanOrEqual(5);
+    expect(resultado.metricasApi.latenciaTotalMs).toBe(10);
+  });
+
+  it("persiste deltas a cada cinco páginas e o restante no epílogo", async () => {
+    const { banco } = bancoFalso([segmento("s1")]);
+    const registros: Parameters<NonNullable<PortaIngestao["registrarMetricasApi"]>>[] = [];
+    banco.registrarMetricasApi = vi.fn(async (jobId, api, pipeline, eventoId) => {
+      registros.push([jobId, api, pipeline, eventoId]);
+    });
+    const buscar = vi.fn(async () => pagina([contratacao(1)], 6));
+
+    await executarTick("job-1", {
+      banco,
+      cfg,
+      buscar,
+      intervaloPartidaMs: 0,
+      ...relogio(),
+    });
+
+    expect(registros).toHaveLength(2);
+    expect(registros.map(([, api]) => api.requisicoes)).toEqual([5, 1]);
+    expect(registros[0]![3]).not.toBe(registros[1]![3]);
+  });
+
+  it("repete o mesmo delta e evento quando o flush intermediário falha", async () => {
+    const { banco } = bancoFalso([segmento("s1")]);
+    const registros: Parameters<NonNullable<PortaIngestao["registrarMetricasApi"]>>[] = [];
+    banco.registrarMetricasApi = vi.fn(async (jobId, api, pipeline, eventoId) => {
+      registros.push([jobId, api, pipeline, eventoId]);
+      if (registros.length === 1) throw new Error("telemetria indisponível");
+    });
+    const buscar = vi.fn(async () => pagina([contratacao(1)], 6));
+
+    const resultado = await executarTick("job-1", {
+      banco,
+      cfg,
+      buscar,
+      intervaloPartidaMs: 0,
+      ...relogio(),
+    });
+
+    expect(resultado.paginasAplicadas).toBe(6);
+    expect(registros).toHaveLength(3);
+    expect(registros[0]![1].requisicoes).toBe(5);
+    expect(registros[1]![1].requisicoes).toBe(5);
+    expect(registros[0]![3]).toBe(registros[1]![3]);
+    expect(registros[2]![1].requisicoes).toBe(1);
+    expect(registros[2]![3]).not.toBe(registros[1]![3]);
+  });
+
+  it("persiste um tick somente administrativo mesmo sem chamar o PNCP", async () => {
+    const r = relogio();
+    const { banco } = bancoFalso([]);
+    const originalProximo = banco.proximoSegmento.bind(banco);
+    banco.proximoSegmento = vi.fn(async (jobId: string) => {
+      r.avancar(4);
+      return originalProximo(jobId);
+    });
+    banco.registrarMetricasApi = vi.fn(async () => {});
+
+    const resultado = await executarTick("job-1", {
+      banco,
+      cfg,
+      agora: r.agora,
+      dormir: r.dormir,
+    });
+
+    expect(resultado.metricasApi.requisicoes).toBe(0);
+    expect(banco.registrarMetricasApi).toHaveBeenCalledOnce();
+    expect(vi.mocked(banco.registrarMetricasApi).mock.calls[0]![2].administracaoDbMs).toBe(4);
+  });
+
   it("percorre as páginas na ordem, aplica cada uma e conclui o segmento", async () => {
     const { banco, merges, status } = bancoFalso([segmento("s1")]);
     const buscar = vi
@@ -433,13 +559,8 @@ describe("política de admissão por endpoint", () => {
 
 describe("ritmo contra o limitador do PNCP", () => {
   it("aquece com uma vaga e depois mantém duas janelas independentes em voo", async () => {
-    const { banco, merges } = bancoFalso([
-      segmento("s1"),
-      segmento("s2"),
-      segmento("s3"),
-      segmento("s4"),
-      segmento("s5"),
-    ]);
+    const ids = Array.from({ length: 12 }, (_, indice) => `s${indice + 1}`);
+    const { banco, merges } = bancoFalso(ids.map(segmento));
     const r = relogio();
     const partidas: number[] = [];
     const resolver: Array<() => void> = [];
@@ -450,7 +571,7 @@ describe("ritmo contra o limitador do PNCP", () => {
         new Promise<ResultadoPagina>((resolve) => {
           const numero = ++chamada;
           partidas.push(r.agora());
-          if (numero <= 3) resolve(pagina([contratacao(numero)], 1));
+          if (numero <= 10) resolve(pagina([contratacao(numero)], 1));
           else resolver.push(() => resolve(pagina([contratacao(numero)], 1)));
         }),
     );
@@ -465,15 +586,13 @@ describe("ritmo contra o limitador do PNCP", () => {
       dormir: r.dormir,
     });
 
-    await vi.waitFor(() => expect(buscar).toHaveBeenCalledTimes(5));
-    expect(partidas).toHaveLength(5);
+    await vi.waitFor(() => expect(buscar).toHaveBeenCalledTimes(12));
+    expect(partidas).toHaveLength(12);
     expect(r.dormir).toHaveBeenCalledWith(1_500);
     resolver.forEach((concluir) => concluir());
 
     const resumo = await execucao;
-    expect(new Set(merges.map((m) => m.segmentoId))).toEqual(
-      new Set(["s1", "s2", "s3", "s4", "s5"]),
-    );
+    expect(new Set(merges.map((m) => m.segmentoId))).toEqual(new Set(ids));
     expect(resumo.metricasApi.concorrenciaMaxObservada).toBe(2);
   });
 
@@ -491,13 +610,15 @@ describe("ritmo contra o limitador do PNCP", () => {
       banco,
       cfg,
       buscar,
+      intervaloPartidaMs: 3_000,
+      ritmoAdaptativo: true,
       agora: r.agora,
       dormir: r.dormir,
     });
 
-    expect(partidas).toEqual([0, 3_000, 5_750, 8_500, 11_000, 13_500]);
+    expect(partidas).toEqual([0, 3_000, 6_000, 8_750, 11_500, 14_250]);
     expect(resumo.metricasApi.intervaloFinalMs).toBe(2_500);
-    expect(resumo.metricasApi.esperaLimitadorMs).toBe(13_500);
+    expect(resumo.metricasApi.esperaLimitadorMs).toBe(14_250);
   });
 
   it("desacelera depois de uma página que precisou repetir", async () => {
@@ -521,6 +642,8 @@ describe("ritmo contra o limitador do PNCP", () => {
       banco,
       cfg,
       buscar,
+      intervaloPartidaMs: 3_000,
+      ritmoAdaptativo: true,
       agora: r.agora,
       dormir: r.dormir,
     });

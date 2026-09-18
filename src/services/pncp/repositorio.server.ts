@@ -26,6 +26,7 @@ import type {
 import type {
   EntradaMerge,
   MetricasApiTick,
+  MetricasPipelineTick,
   PayloadBruto,
   PortaIngestao,
   ResultadoMerge,
@@ -301,7 +302,7 @@ export function portaIngestao(): PortaIngestao {
       // frontend, que desistia antes do segmento voltar à fila.
       const esperaMs =
         tentativas <= 2
-          ? 15_000 * tentativas          // 15 s, 30 s
+          ? 15_000 * tentativas // 15 s, 30 s
           : Math.min(15 * 60_000, 60_000 * 2 ** Math.min(tentativas - 3, 4)); // 60 s, 2 min, ...
 
       const { error } = await db()
@@ -329,8 +330,13 @@ export function portaIngestao(): PortaIngestao {
       return (count ?? 0) > 0;
     },
 
-    async registrarMetricasApi(jobId: string, metricas: MetricasApiTick): Promise<void> {
-      const { error } = await db().rpc("pncp_registrar_metricas_api", {
+    async registrarMetricasApi(
+      jobId: string,
+      metricas: MetricasApiTick,
+      pipeline: MetricasPipelineTick,
+      eventoId?: string,
+    ): Promise<void> {
+      const parametrosApi = {
         p_sincronizacao_id: jobId,
         p_requisicoes: metricas.requisicoes,
         p_sucessos: metricas.sucessos,
@@ -343,10 +349,23 @@ export function portaIngestao(): PortaIngestao {
         p_latencia_max_ms: metricas.latenciaMaxMs,
         p_falhas_consecutivas: metricas.falhasConsecutivas,
         p_reiniciar_consecutivas: metricas.reiniciarFalhasConsecutivas,
+      };
+      const { error } = await db().rpc("pncp_registrar_metricas_pipeline", {
+        ...parametrosApi,
+        p_evento_id: eventoId ?? globalThis.crypto.randomUUID(),
+        p_transformacao_ms: pipeline.transformacaoMs,
+        p_salvar_payload_ms: pipeline.salvarPayloadMs,
+        p_merge_ms: pipeline.mergeMs,
+        p_administracao_db_ms: pipeline.administracaoDbMs,
       });
       // Compatibilidade durante o rollout: a coleta continua funcionando até a
-      // migração do monitor ser aplicada no projeto remoto.
-      if (error?.code === "PGRST202" || error?.code === "42883") return;
+      // migração nova ser aplicada. Nesse período, preserva as métricas antigas.
+      if (error?.code === "PGRST202" || error?.code === "42883") {
+        const { error: errorLegado } = await db().rpc("pncp_registrar_metricas_api", parametrosApi);
+        if (errorLegado?.code === "PGRST202" || errorLegado?.code === "42883") return;
+        erro("Falha ao registrar saúde da API do PNCP", errorLegado);
+        return;
+      }
       erro("Falha ao registrar saúde da API do PNCP", error);
     },
 

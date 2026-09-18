@@ -99,7 +99,12 @@ export interface PortaIngestao {
     status: "concluido" | "concluido_com_erros" | "parcial" | "falhou",
     mensagem?: string | null,
   ): Promise<void>;
-  registrarMetricasApi?(jobId: string, metricas: MetricasApiTick): Promise<void>;
+  registrarMetricasApi?(
+    jobId: string,
+    metricas: MetricasApiTick,
+    pipeline: MetricasPipelineTick,
+    eventoId?: string,
+  ): Promise<void>;
 }
 
 export interface MetricasApiTick extends FalhasTentativasPNCP {
@@ -120,6 +125,19 @@ export interface MetricasApiTick extends FalhasTentativasPNCP {
   concorrenciaMaxObservada: number;
   /** Limite de concorrência vigente ao terminar o tick. */
   concorrenciaFinal: number;
+}
+
+/**
+ * Tempos acumulados das operações do worker fora da espera controlada e da API.
+ * Com concorrência, operações podem se sobrepor; por isso a soma pode superar
+ * a duração de parede do tick.
+ */
+export interface MetricasPipelineTick {
+  transformacaoMs: number;
+  salvarPayloadMs: number;
+  mergeMs: number;
+  /** Reserva/liberação de segmento, consultas de cooldown e registro de falhas. */
+  administracaoDbMs: number;
 }
 
 export interface OpcoesTick {
@@ -157,6 +175,7 @@ export interface ResumoTick {
   erros: string[];
   duracaoMs: number;
   metricasApi: MetricasApiTick;
+  metricasPipeline: MetricasPipelineTick;
 }
 
 const dormirPadrao = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
@@ -294,6 +313,23 @@ export async function executarTick(jobId: string, opcoes: OpcoesTick): Promise<R
       concorrenciaMaxObservada: 0,
       concorrenciaFinal: concorrenciaAtual,
     },
+    metricasPipeline: {
+      transformacaoMs: 0,
+      salvarPayloadMs: 0,
+      mergeMs: 0,
+      administracaoDbMs: 0,
+    },
+  };
+  let operacoesAdministrativas = 0;
+
+  const medirAdministracaoDb = async <T>(operacao: () => Promise<T>): Promise<T> => {
+    const comeco = agora();
+    operacoesAdministrativas++;
+    try {
+      return await operacao();
+    } finally {
+      resumo.metricasPipeline.administracaoDbMs += Math.max(0, agora() - comeco);
+    }
   };
 
   const somarFalhas = (falhas?: FalhasTentativasPNCP) => {
@@ -302,6 +338,115 @@ export async function executarTick(jobId: string, opcoes: OpcoesTick): Promise<R
     resumo.metricasApi.erros429 += falhas.erros429;
     resumo.metricasApi.erros5xx += falhas.erros5xx;
     resumo.metricasApi.outras += falhas.outras;
+  };
+
+  const metricasPersistidas = {
+    requisicoes: 0,
+    sucessos: 0,
+    tentativas: 0,
+    timeouts: 0,
+    erros429: 0,
+    erros5xx: 0,
+    outras: 0,
+    latenciaTotalMs: 0,
+    esperaLimitadorMs: 0,
+    transformacaoMs: 0,
+    salvarPayloadMs: 0,
+    mergeMs: 0,
+    administracaoDbMs: 0,
+    operacoesAdministrativas: 0,
+  };
+  let paginasPersistidas = 0;
+  type SnapshotMetricas = typeof metricasPersistidas;
+  let loteMetricasPendente: {
+    eventoId: string;
+    api: MetricasApiTick;
+    pipeline: MetricasPipelineTick;
+    alvo: SnapshotMetricas;
+    paginasAlvo: number;
+  } | null = null;
+
+  const snapshotAtual = (): SnapshotMetricas => ({
+    requisicoes: resumo.metricasApi.requisicoes,
+    sucessos: resumo.metricasApi.sucessos,
+    tentativas: resumo.metricasApi.tentativas,
+    timeouts: resumo.metricasApi.timeouts,
+    erros429: resumo.metricasApi.erros429,
+    erros5xx: resumo.metricasApi.erros5xx,
+    outras: resumo.metricasApi.outras,
+    latenciaTotalMs: resumo.metricasApi.latenciaTotalMs,
+    esperaLimitadorMs: resumo.metricasApi.esperaLimitadorMs,
+    transformacaoMs: resumo.metricasPipeline.transformacaoMs,
+    salvarPayloadMs: resumo.metricasPipeline.salvarPayloadMs,
+    mergeMs: resumo.metricasPipeline.mergeMs,
+    administracaoDbMs: resumo.metricasPipeline.administracaoDbMs,
+    operacoesAdministrativas,
+  });
+
+  const flushMetricas = async (): Promise<boolean> => {
+    if (!banco.registrarMetricasApi) return false;
+    if (!loteMetricasPendente) {
+      const alvo = snapshotAtual();
+      const api: MetricasApiTick = {
+        requisicoes: alvo.requisicoes - metricasPersistidas.requisicoes,
+        sucessos: alvo.sucessos - metricasPersistidas.sucessos,
+        tentativas: alvo.tentativas - metricasPersistidas.tentativas,
+        timeouts: alvo.timeouts - metricasPersistidas.timeouts,
+        erros429: alvo.erros429 - metricasPersistidas.erros429,
+        erros5xx: alvo.erros5xx - metricasPersistidas.erros5xx,
+        outras: alvo.outras - metricasPersistidas.outras,
+        latenciaTotalMs: alvo.latenciaTotalMs - metricasPersistidas.latenciaTotalMs,
+        latenciaMaxMs: resumo.metricasApi.latenciaMaxMs,
+        falhasConsecutivas: resumo.metricasApi.falhasConsecutivas,
+        reiniciarFalhasConsecutivas: resumo.metricasApi.reiniciarFalhasConsecutivas,
+        esperaLimitadorMs: alvo.esperaLimitadorMs - metricasPersistidas.esperaLimitadorMs,
+        intervaloFinalMs: resumo.metricasApi.intervaloFinalMs,
+        concorrenciaMaxObservada: resumo.metricasApi.concorrenciaMaxObservada,
+        concorrenciaFinal: resumo.metricasApi.concorrenciaFinal,
+      };
+      const pipeline: MetricasPipelineTick = {
+        transformacaoMs: alvo.transformacaoMs - metricasPersistidas.transformacaoMs,
+        salvarPayloadMs: alvo.salvarPayloadMs - metricasPersistidas.salvarPayloadMs,
+        mergeMs: alvo.mergeMs - metricasPersistidas.mergeMs,
+        administracaoDbMs: alvo.administracaoDbMs - metricasPersistidas.administracaoDbMs,
+      };
+      const possuiDelta =
+        api.requisicoes > 0 ||
+        api.tentativas > 0 ||
+        api.esperaLimitadorMs > 0 ||
+        alvo.operacoesAdministrativas > metricasPersistidas.operacoesAdministrativas ||
+        Object.values(pipeline).some((valor) => valor > 0);
+      if (!possuiDelta) return false;
+      loteMetricasPendente = {
+        eventoId: globalThis.crypto.randomUUID(),
+        api,
+        pipeline,
+        alvo,
+        paginasAlvo: resumo.paginasAplicadas,
+      };
+    }
+
+    const lote = loteMetricasPendente;
+    await banco.registrarMetricasApi(jobId, lote.api, lote.pipeline, lote.eventoId);
+    Object.assign(metricasPersistidas, lote.alvo);
+    paginasPersistidas = lote.paginasAlvo;
+    loteMetricasPendente = null;
+    return true;
+  };
+
+  const tentarFlushMetricas = async (esgotar = false) => {
+    try {
+      while (await flushMetricas()) {
+        if (!esgotar) break;
+      }
+    } catch (erro) {
+      // Telemetria nunca participa do checkpoint. O mesmo evento será tentado
+      // novamente no epílogo; com a migração nova, a RPC é idempotente.
+      console.warn(
+        "Não foi possível registrar a saúde da API do PNCP:",
+        erro instanceof Error ? erro.message : erro,
+      );
+    }
   };
 
   const restante = () => orcamentoMs - (agora() - inicio);
@@ -426,12 +571,12 @@ export async function executarTick(jobId: string, opcoes: OpcoesTick): Promise<R
         }
 
         if (erro instanceof ErroContratoPNCP || erro instanceof RespostaInvalidaPNCP) {
-          await banco.registrarFalhaSegmento(segmento.id, motivo, true);
+          await medirAdministracaoDb(() => banco.registrarFalhaSegmento(segmento.id, motivo, true));
           resumo.erros.push(`${segmento.id}: ${motivo}`);
           return "definitiva";
         }
 
-        await banco.registrarFalhaSegmento(segmento.id, motivo, false);
+        await medirAdministracaoDb(() => banco.registrarFalhaSegmento(segmento.id, motivo, false));
         falhosNesteTick.add(segmento.id);
         resumo.erros.push(`${segmento.id}: ${motivo}`);
         // A falha pertence a este segmento. Ele entra em cooldown no banco e
@@ -441,10 +586,12 @@ export async function executarTick(jobId: string, opcoes: OpcoesTick): Promise<R
 
       const fetchedAt = new Date(agora()).toISOString();
       const itens = resposta.envelope?.data ?? [];
+      const inicioTransformacao = agora();
       const { linhas, payloads, rejeitados } =
         resposta.status === 204
           ? { linhas: [], payloads: [], rejeitados: [] }
           : mapearLote(itens, cfg, segmento.endpoint === "proposta", fetchedAt);
+      resumo.metricasPipeline.transformacaoMs += Math.max(0, agora() - inicioTransformacao);
 
       if (rejeitados.length > 0) {
         resumo.erros.push(...rejeitados.map((r) => `${segmento.id}: ${r}`));
@@ -453,21 +600,33 @@ export async function executarTick(jobId: string, opcoes: OpcoesTick): Promise<R
       try {
         if (payloads.length > 0) {
           try {
-            await banco.salvarPayloads(segmento.endpoint, payloads);
+            const inicioPayload = agora();
+            try {
+              await banco.salvarPayloads(segmento.endpoint, payloads);
+            } finally {
+              resumo.metricasPipeline.salvarPayloadMs += Math.max(0, agora() - inicioPayload);
+            }
           } catch (erro) {
             const motivo = erro instanceof Error ? erro.message : String(erro);
             resumo.erros.push(`${segmento.id}: payload bruto não guardado — ${motivo}`);
           }
         }
 
-        const merge = await banco.mergePagina({
-          segmentoId: segmento.id,
-          pagina: segmento.proximaPagina,
-          totalPaginas: resposta.envelope?.totalPaginas ?? null,
-          totalRegistros: resposta.envelope?.totalRegistros ?? null,
-          linhas,
-          admissao: segmento.endpoint === "atualizacao" ? "abertas" : "todas",
-        });
+        const inicioMerge = agora();
+        const merge = await (async () => {
+          try {
+            return await banco.mergePagina({
+              segmentoId: segmento.id,
+              pagina: segmento.proximaPagina,
+              totalPaginas: resposta.envelope?.totalPaginas ?? null,
+              totalRegistros: resposta.envelope?.totalRegistros ?? null,
+              linhas,
+              admissao: segmento.endpoint === "atualizacao" ? "abertas" : "todas",
+            });
+          } finally {
+            resumo.metricasPipeline.mergeMs += Math.max(0, agora() - inicioMerge);
+          }
+        })();
 
         if (merge.aplicado) {
           resumo.paginasAplicadas++;
@@ -481,12 +640,12 @@ export async function executarTick(jobId: string, opcoes: OpcoesTick): Promise<R
         return "ok";
       } catch (erro) {
         const motivo = erro instanceof Error ? erro.message : String(erro);
-        await banco.registrarFalhaSegmento(segmento.id, motivo, false);
+        await medirAdministracaoDb(() => banco.registrarFalhaSegmento(segmento.id, motivo, false));
         resumo.erros.push(`${segmento.id}: ${motivo}`);
         return "parar";
       }
     } finally {
-      await banco.liberarSegmento(segmento);
+      await medirAdministracaoDb(() => banco.liberarSegmento(segmento));
     }
   };
 
@@ -494,12 +653,12 @@ export async function executarTick(jobId: string, opcoes: OpcoesTick): Promise<R
     const vagas = Math.min(concorrenciaAtual, maxPaginasPorTick - resumo.paginasAplicadas);
     const segmentos: SegmentoPersistido[] = [];
     for (let i = 0; i < vagas; i++) {
-      const segmento = await banco.proximoSegmento(jobId);
+      const segmento = await medirAdministracaoDb(() => banco.proximoSegmento(jobId));
       if (!segmento) break;
       // Proteção adicional para portas sem cooldown (e durante rollout da
       // migração): a mesma falha não pode consumir todas as vagas do tick.
       if (falhosNesteTick.has(segmento.id)) {
-        await banco.liberarSegmento(segmento);
+        await medirAdministracaoDb(() => banco.liberarSegmento(segmento));
         aguardandoCooldown = true;
         break;
       }
@@ -509,7 +668,9 @@ export async function executarTick(jobId: string, opcoes: OpcoesTick): Promise<R
     if (segmentos.length === 0) {
       const aindaHaTrabalho =
         aguardandoCooldown ||
-        (banco.haSegmentosPendentes ? await banco.haSegmentosPendentes(jobId) : false);
+        (banco.haSegmentosPendentes
+          ? await medirAdministracaoDb(() => banco.haSegmentosPendentes!(jobId))
+          : false);
 
       if (!aindaHaTrabalho) {
         resumo.jobConcluido = true;
@@ -519,7 +680,7 @@ export async function executarTick(jobId: string, opcoes: OpcoesTick): Promise<R
       // Todos os segmentos estão em cooldown. Antes de devolver um tick vazio,
       // tenta esperar dentro do orçamento para retomar automaticamente.
       const cooldownMs = banco.proximoCooldown
-        ? await banco.proximoCooldown(jobId)
+        ? await medirAdministracaoDb(() => banco.proximoCooldown!(jobId))
         : null;
 
       if (cooldownMs !== null && cooldownMs > 0 && cooldownMs + reservaMs < restante()) {
@@ -539,21 +700,13 @@ export async function executarTick(jobId: string, opcoes: OpcoesTick): Promise<R
     }
 
     const resultados = await Promise.all(segmentos.map(processarPagina));
+    if (resumo.paginasAplicadas - paginasPersistidas >= 5) {
+      await tentarFlushMetricas();
+    }
     if (resultados.includes("parar")) break;
   }
 
-  if (resumo.metricasApi.requisicoes > 0 && banco.registrarMetricasApi) {
-    try {
-      await banco.registrarMetricasApi(jobId, resumo.metricasApi);
-    } catch (erro) {
-      // Telemetria não participa do checkpoint. Uma falha ao gravá-la não pode
-      // reabrir uma página já aplicada nem impedir a conclusão do catálogo.
-      console.warn(
-        "Não foi possível registrar a saúde da API do PNCP:",
-        erro instanceof Error ? erro.message : erro,
-      );
-    }
-  }
+  await tentarFlushMetricas(true);
 
   if (resumo.jobConcluido) {
     await banco.finalizarJob(
