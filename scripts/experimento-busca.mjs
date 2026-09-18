@@ -66,7 +66,26 @@ const relatorio = {
   falhas: [],
 };
 
-relatorio.cobertura = await rpc("cobertura_embeddings", {});
+// Falhar aqui quase sempre significa uma coisa so: o esquema ainda nao foi
+// colado no SQL Editor. Dizer isso e mais util que um stack trace.
+try {
+  relatorio.cobertura = await rpc("cobertura_embeddings", {});
+} catch (e) {
+  console.error("Nao consegui ler a cobertura de embeddings:", String(e.message).slice(0, 160));
+  for (const linha of [
+    "",
+    "O esquema da busca semantica provavelmente ainda nao foi aplicado.",
+    "Cole no SQL Editor do projeto, nesta ordem:",
+    "  1. supabase/APLICAR-BUSCA-SEMANTICA.sql",
+    "  2. supabase/APLICAR-FILA-EMBEDDINGS.sql",
+    "  3. supabase/APLICAR-BUSCA-HIBRIDA.sql (depois da carga inicial de embeddings)",
+    "Depois rode: npm run verificar:busca",
+  ]) {
+    console.error(linha);
+  }
+  process.exit(1);
+}
+
 const pesquisaveis = relatorio.cobertura.licitacoes_pesquisaveis ?? 0;
 const comEmbedding = relatorio.cobertura.licitacoes_com_embedding ?? 0;
 const taxa = pesquisaveis > 0 ? comEmbedding / pesquisaveis : 0;
