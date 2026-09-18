@@ -1,20 +1,22 @@
 /**
  * Verificação do catálogo PNCP no Supabase.
  *
- * Roda contra o projeto real usando a service role, cria dados de teste com
- * prefixo próprio e apaga tudo no final. Cobre os critérios que não dá para
- * provar em teste de unidade:
+ * Por padrão roda somente leituras contra o projeto real. O modo de escrita,
+ * habilitado explicitamente com --write, cria dados com prefixo próprio e os
+ * apaga no final. Cobre os critérios que não dá para provar em teste de unidade:
  *
  *   I08 — reprocessar a mesma página não duplica linhas nem contadores
  *   I09 — resposta antiga não sobrescreve cabeçalho mais novo
  *   ---- campos internos da equipe sobrevivem à sincronização
  *   S02 — a chave publicável do navegador não lê nem escreve nada
  *
- * Uso: node scripts/verificar-banco.mjs
+ * Uso seguro: node scripts/verificar-banco.mjs
+ * Integração destrutiva e isolada: node scripts/verificar-banco.mjs --write
  */
 import { readFileSync } from "node:fs";
 
 const PREFIXO = "TESTE-VERIFICACAO";
+const MODO_ESCRITA = process.argv.includes("--write");
 
 function lerEnv() {
   const texto = readFileSync(new URL("../.env", import.meta.url), "utf8");
@@ -30,6 +32,10 @@ const env = lerEnv();
 const URL_BASE = env.SUPABASE_URL;
 const SERVICE = env.SUPABASE_SERVICE_ROLE_KEY;
 const PUBLICAVEL = env.SUPABASE_PUBLISHABLE_KEY;
+const TIMEOUT_HTTP_MS = Number.parseInt(
+  process.env.VERIFICAR_BANCO_TIMEOUT_MS ?? env.VERIFICAR_BANCO_TIMEOUT_MS ?? "15000",
+  10,
+);
 
 if (!URL_BASE || !SERVICE) {
   console.error(
@@ -39,23 +45,48 @@ if (!URL_BASE || !SERVICE) {
   process.exit(1);
 }
 
+if (!Number.isFinite(TIMEOUT_HTTP_MS) || TIMEOUT_HTTP_MS < 1000) {
+  console.error("VERIFICAR_BANCO_TIMEOUT_MS deve ser um inteiro maior ou igual a 1000.");
+  process.exit(1);
+}
+
 const resultados = [];
 const registrar = (nome, ok, detalhe = "") => {
   resultados.push({ nome, ok, detalhe });
   console.log(`${ok ? "  OK  " : " FALHA"} │ ${nome}${detalhe ? ` — ${detalhe}` : ""}`);
 };
+const avisar = (nome, detalhe) => {
+  resultados.push({ nome, ok: null, detalhe });
+  console.log(` AVISO │ ${nome}${detalhe ? ` — ${detalhe}` : ""}`);
+};
 
 async function api(caminho, { metodo = "GET", corpo, chave = SERVICE, prefer } = {}) {
-  const resposta = await fetch(`${URL_BASE}/rest/v1/${caminho}`, {
-    method: metodo,
-    headers: {
-      apikey: chave,
-      Authorization: `Bearer ${chave}`,
-      "Content-Type": "application/json",
-      ...(prefer ? { Prefer: prefer } : {}),
-    },
-    ...(corpo ? { body: JSON.stringify(corpo) } : {}),
-  });
+  let resposta;
+  try {
+    resposta = await fetch(`${URL_BASE}/rest/v1/${caminho}`, {
+      method: metodo,
+      headers: {
+        apikey: chave,
+        Authorization: `Bearer ${chave}`,
+        "Content-Type": "application/json",
+        ...(prefer ? { Prefer: prefer } : {}),
+      },
+      ...(corpo ? { body: JSON.stringify(corpo) } : {}),
+      signal: AbortSignal.timeout(TIMEOUT_HTTP_MS),
+    });
+  } catch (erro) {
+    const timeout = erro?.name === "TimeoutError" || erro?.name === "AbortError";
+    return {
+      status: 0,
+      ok: false,
+      dados: {
+        code: timeout ? "HTTP_TIMEOUT" : "HTTP_NETWORK_ERROR",
+        message: timeout
+          ? `Supabase não respondeu em ${TIMEOUT_HTTP_MS} ms (${metodo} ${caminho})`
+          : `Falha de rede em ${metodo} ${caminho}: ${erro?.message ?? String(erro)}`,
+      },
+    };
+  }
 
   const texto = await resposta.text();
   let dados = null;
@@ -103,7 +134,9 @@ async function limpar(jobId) {
 }
 
 async function main() {
-  console.log(`\nVerificando ${URL_BASE}\n`);
+  console.log(
+    `\nVerificando ${URL_BASE} (${MODO_ESCRITA ? "modo de escrita" : "somente leitura"})\n`,
+  );
 
   // 1. Estrutura criada pela migração
   for (const tabela of [
@@ -150,7 +183,125 @@ async function main() {
     `${Array.isArray(cfg.dados) ? cfg.dados.length : 0} linha(s)`,
   );
 
-  // 2. Job e segmento de teste
+  // 2. Contrato da busca e filtros públicos. Primeiro reproduzimos exatamente a
+  // chamada do repositório: seis argumentos nomeados, deixando p_agora usar o
+  // default. Uma função antiga com p_embedding opcional torna essa chamada
+  // ambígua no PostgREST.
+  const agora = new Date().toISOString();
+  const argsRepositorio = {
+    p_filtros: {},
+    p_ordenar: "data_encerramento_proposta",
+    p_direcao: "asc",
+    p_limite: 5,
+    p_deslocamento: 0,
+    p_score_minimo: 60,
+  };
+  const buscaRepositorio = await rpc("buscar_licitacoes", argsRepositorio);
+  registrar(
+    "buscar_licitacoes resolve a chamada real de 6 argumentos",
+    buscaRepositorio.ok &&
+      Array.isArray(buscaRepositorio.dados?.itens) &&
+      Number.isInteger(buscaRepositorio.dados?.total),
+    buscaRepositorio.ok
+      ? `${buscaRepositorio.dados.itens.length}/${buscaRepositorio.dados.total} linha(s)`
+      : `HTTP ${buscaRepositorio.status}: ${JSON.stringify(buscaRepositorio.dados)}`,
+  );
+
+  // A chamada completa também protege o contrato versionado contra mudanças de
+  // nomes ou tipos dos sete parâmetros.
+  const buscaCompleta = await rpc("buscar_licitacoes", {
+    ...argsRepositorio,
+    p_agora: agora,
+  });
+  registrar(
+    "buscar_licitacoes aceita o contrato completo de 7 parâmetros",
+    buscaCompleta.ok &&
+      Array.isArray(buscaCompleta.dados?.itens) &&
+      Number.isInteger(buscaCompleta.dados?.total),
+    buscaCompleta.ok
+      ? `${buscaCompleta.dados.itens.length}/${buscaCompleta.dados.total} linha(s)`
+      : `HTTP ${buscaCompleta.status}: ${JSON.stringify(buscaCompleta.dados)}`,
+  );
+
+  const hojeSp = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+  const abertasSp = await rpc("buscar_licitacoes", {
+    p_filtros: { uf: "SP", apenas_abertas: true, limite_de: hojeSp },
+    p_ordenar: "data_encerramento_proposta",
+    p_direcao: "asc",
+    p_limite: 25,
+    p_deslocamento: 0,
+    p_agora: agora,
+    p_score_minimo: 60,
+  });
+  const itensAbertos = abertasSp.dados?.itens;
+  registrar(
+    "filtros UF + abertas + prazo retornam somente SP com data limite",
+    abertasSp.ok &&
+      Array.isArray(itensAbertos) &&
+      itensAbertos.every(
+        (item) => item.uf === "SP" && item.aberta === true && item.data_encerramento_proposta,
+      ),
+    abertasSp.ok
+      ? `${itensAbertos?.length ?? 0} amostra(s)`
+      : `HTTP ${abertasSp.status}: ${JSON.stringify(abertasSp.dados)}`,
+  );
+
+  const amostra = itensAbertos?.find((item) => item.municipio && item.modalidade_nome);
+  if (amostra) {
+    const filtrada = await rpc("buscar_licitacoes", {
+      p_filtros: {
+        uf: "SP",
+        municipio: amostra.municipio,
+        modalidade: amostra.modalidade_nome,
+        apenas_abertas: true,
+        limite_de: hojeSp,
+      },
+      p_ordenar: "data_encerramento_proposta",
+      p_direcao: "asc",
+      p_limite: 25,
+      p_deslocamento: 0,
+      p_agora: agora,
+      p_score_minimo: 60,
+    });
+    registrar(
+      "filtros município e modalidade preservam o recorte solicitado",
+      filtrada.ok &&
+        Array.isArray(filtrada.dados?.itens) &&
+        filtrada.dados.itens.every(
+          (item) =>
+            item.municipio === amostra.municipio &&
+            item.modalidade_nome === amostra.modalidade_nome,
+        ),
+      filtrada.ok ? `${filtrada.dados.itens.length} amostra(s)` : `HTTP ${filtrada.status}`,
+    );
+  } else {
+    avisar("filtros município e modalidade", "sem amostra aberta em SP; teste não aplicável");
+  }
+
+  if (!MODO_ESCRITA) return encerrar(null, { limparDados: false });
+
+  // 3. Job e segmento de teste. Não disputa a trava global com uma coleta real.
+  const ativa = await api(
+    "sincronizacoes?select=id,descricao_escopo&status=eq.em_andamento&limit=1",
+  );
+  if (!ativa.ok) {
+    registrar("consultar sincronização ativa", false, `HTTP ${ativa.status}`);
+    return encerrar(null, { limparDados: false });
+  }
+  if (ativa.dados.length > 0) {
+    registrar(
+      "modo de escrita não interfere em sincronização ativa",
+      true,
+      `ignorado; job ${ativa.dados[0].id} está em andamento`,
+    );
+    return encerrar(null, { limparDados: false });
+  }
+
   await limpar(null);
   const job = await api("sincronizacoes", {
     metodo: "POST",
@@ -185,7 +336,10 @@ async function main() {
   const segmentoId = seg.dados[0].id;
 
   const lote = [
-    linha("A", { objeto: "Construção de escola municipal", atualizacao: "2026-09-10T07:01:00.000Z" }),
+    linha("A", {
+      objeto: "Construção de escola municipal",
+      atualizacao: "2026-09-10T07:01:00.000Z",
+    }),
     linha("B", { objeto: "Pavimentação de vias urbanas", atualizacao: "2026-09-10T07:02:00.000Z" }),
   ];
 
@@ -200,7 +354,9 @@ async function main() {
   registrar(
     "merge da página 1 grava as duas linhas",
     merge1.ok && merge1.dados?.novos === 2,
-    merge1.ok ? `novos=${merge1.dados.novos}` : `HTTP ${merge1.status}: ${JSON.stringify(merge1.dados)}`,
+    merge1.ok
+      ? `novos=${merge1.dados.novos}`
+      : `HTTP ${merge1.status}: ${JSON.stringify(merge1.dados)}`,
   );
 
   const merge1b = await rpc("pncp_merge_page", {
@@ -233,9 +389,7 @@ async function main() {
   );
 
   // 4. Campos internos da equipe
-  const alvo = await api(
-    `licitacoes?select=id&numero_controle_pncp=eq.${PREFIXO}-A`,
-  );
+  const alvo = await api(`licitacoes?select=id&numero_controle_pncp=eq.${PREFIXO}-A`);
   const idA = alvo.dados?.[0]?.id;
   await rpc("atualizar_licitacao_interna", {
     p_id: idA,
@@ -306,11 +460,7 @@ async function main() {
       chave: PUBLICAVEL,
       corpo: { numero_controle_pncp: `${PREFIXO}-INVASOR`, source_hash: "x" },
     });
-    registrar(
-      "S02: chave publicável não grava no catálogo",
-      !escrita.ok,
-      `HTTP ${escrita.status}`,
-    );
+    registrar("S02: chave publicável não grava no catálogo", !escrita.ok, `HTTP ${escrita.status}`);
 
     const rpcPublica = await rpc("buscar_licitacoes", { p_filtros: {} }, PUBLICAVEL);
     registrar(
@@ -325,12 +475,20 @@ async function main() {
   await encerrar(jobId);
 }
 
-async function encerrar(jobId) {
-  await limpar(jobId);
-  const falhas = resultados.filter((r) => !r.ok);
+async function encerrar(jobId, { limparDados = true } = {}) {
+  if (limparDados) await limpar(jobId);
+  const falhas = resultados.filter((r) => r.ok === false);
+  const avisos = resultados.filter((r) => r.ok === null);
+  const aprovadas = resultados.filter((r) => r.ok === true);
   console.log(
-    `\n${resultados.length - falhas.length}/${resultados.length} verificações passaram.\n`,
+    `\n${aprovadas.length} aprovada(s), ${avisos.length} aviso(s), ${falhas.length} falha(s).\n`,
   );
+  if (avisos.length > 0) {
+    console.log("Avisos inconclusivos:");
+    for (const aviso of avisos) {
+      console.log(`  - ${aviso.nome}${aviso.detalhe ? `: ${aviso.detalhe}` : ""}`);
+    }
+  }
   if (falhas.length > 0) {
     console.log("Falhas:");
     for (const f of falhas) console.log(`  - ${f.nome}${f.detalhe ? `: ${f.detalhe}` : ""}`);
@@ -340,6 +498,6 @@ async function encerrar(jobId) {
 
 main().catch(async (e) => {
   console.error("Erro na verificação:", e);
-  await limpar(null);
+  if (MODO_ESCRITA) await limpar(null);
   process.exit(1);
 });
