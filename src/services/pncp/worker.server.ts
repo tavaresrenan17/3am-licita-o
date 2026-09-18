@@ -184,13 +184,15 @@ const PADRAO = {
   // dados". Por isso o ritmo agora parte de 3 s: após respostas limpas desce
   // gradualmente até 2,5 s; qualquer retry ou falha observada aumenta o intervalo
   // rapidamente, até o teto de 12 s.
-  intervaloPartidaMs: 3_000,
+  intervaloPartidaMs: 3_500,
   intervaloMinimoMs: 2_500,
-  intervaloMaximoMs: 12_000,
-  sucessosParaAcelerar: 2,
-  concorrenciaMax: 2,
-  sucessosParaAquecerConcorrencia: 3,
-  sucessosParaRestaurarConcorrencia: 6,
+  intervaloMaximoMs: 15_000,
+  sucessosParaAcelerar: 3,
+  // Concorrência estrita em 1: os testes em tempo real comprovaram que qualquer
+  // concorrência simultânea contra o PNCP satura o HikariPool federal e dispara falhas 500.
+  concorrenciaMax: 1,
+  sucessosParaAquecerConcorrencia: 10,
+  sucessosParaRestaurarConcorrencia: 10,
 };
 
 interface Mapeamento {

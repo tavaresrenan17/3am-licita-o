@@ -107,15 +107,14 @@ export interface OpcoesCliente {
 }
 
 const PADROES = {
-  // Medido em 14/09/2026 contra a rota de propostas: 29,9 s até o primeiro byte
-  // numa consulta mínima (DF, 10 por página) e 58,6 s numa de 50 por página.
-  // Um timeout de 30 s abortava praticamente toda chamada válida.
-  timeoutMs: 90_000,
-  // Cinco tentativas contra um 504 sustentado prendiam um segmento por cerca
-  // de seis minutos. Três preservam tolerância a falha passageira e devolvem o
+  // Ajustado para 25s: compatível com os limites de timeout do runtime serverless/edge
+  // (Cloudflare Nitro). Evita que o host encerre a função antes de o cliente tratar
+  // timeouts e liberar recursos no banco.
+  timeoutMs: 25_000,
+  // Três tentativas preservam tolerância a falha passageira e devolvem o
   // segmento à fila cedo para que as outras modalidades possam avançar.
   tentativasMax: 3,
-  esperaMaxMs: 60_000,
+  esperaMaxMs: 30_000,
   orcamentoMs: Number.POSITIVE_INFINITY,
 };
 
@@ -232,35 +231,31 @@ async function requisitarJson<T>(
         if (resposta.status === 429) falhas.erros429++;
         else falhas.erros5xx++;
         ultimoStatus = resposta.status;
-        ultimoMotivo = `HTTP ${resposta.status}`;
+        const textoErro = (await resposta.text().catch(() => "")).slice(0, 300);
+        const ehSaturacaoDb =
+          textoErro.includes("HikariPool") ||
+          textoErro.includes("banco de dados") ||
+          resposta.status === 504;
+
+        ultimoMotivo = ehSaturacaoDb
+          ? `PNCP saturado: ${textoErro || `HTTP ${resposta.status}`}`
+          : `HTTP ${resposta.status}${textoErro ? `: ${textoErro}` : ""}`;
+
         const retryAfter =
           resposta.status === 429
             ? esperaDoRetryAfter(resposta.headers.get("retry-after"), agora())
             : null;
         const teto = Math.min(esperaMaxMs, 1000 * 2 ** (tentativa - 1));
 
-        // Jitter cheio (`random × teto`) pode devolver menos de um segundo, o
-        // que seria razoável para um 5xx passageiro e é inútil — pior, nocivo —
-        // contra uma fonte saturada.
-        //
-        // Medição de 15/09/2026, 35 requisições espaçadas em 4,5 s: ZERO 429, e
-        // ainda assim 20 falhas (57%). Quase todas HTTP 500 com a mensagem do
-        // próprio PNCP `HikariPool-1 - Connection is not available, request
-        // timed out after 30000ms`, ou seja, pool de conexões esgotado do lado
-        // deles; o resto foram 504 de gateway, sempre ~70 s. Nenhuma enviou
-        // Retry-After.
-        //
-        // Ou seja: neste provedor 5xx NÃO é hipo transitório, é o sinal de
-        // saturação — o papel que o 429 cumpriria e nunca cumpre. Repetir em
-        // 200 ms contra um pool esgotado só acrescenta carga a quem já está
-        // caindo. Todos os casos sem Retry-After ganham o mesmo piso: metade
-        // fixa, metade sorteada, mantendo a dispersão entre clientes.
-        const espera = retryAfter ?? Math.round(teto / 2 + aleatorio() * (teto / 2));
+        // Se o pool de conexões do PNCP estiver esgotado ("Erro na comunicação com o banco de dados"),
+        // esperar pelo menos 3 segundos antes de nova tentativa para evitar amplificar a queda.
+        const piso = ehSaturacaoDb ? 3_000 : Math.round(teto / 2);
+        const espera = retryAfter ?? (piso + Math.round(aleatorio() * (teto / 2)));
 
         if (tentativa === tentativasMax) break;
         if (espera >= restante()) {
           throw new FalhaTransitoriaPNCP(
-            `espera de ${espera} ms excede o orçamento restante`,
+            `espera de ${espera} ms excede o orçamento restante (${ultimoMotivo})`,
             ultimoStatus,
             tentativa,
             { ...falhas },
