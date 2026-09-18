@@ -26,13 +26,20 @@ describe("detectarTipo", () => {
   });
 
   it("cai para o nome catalogado quando não há content-disposition", () => {
-    const t = detectarTipo({ contentDisposition: null, primeirosBytes: PDF, nomeCatalogado: "Minuta.PDF" });
+    const t = detectarTipo({
+      contentDisposition: null,
+      primeirosBytes: PDF,
+      nomeCatalogado: "Minuta.PDF",
+    });
     expect(t.extensao).toBe("pdf");
     expect(t.suportado).toBe(true);
   });
 
   it("sem nenhum sinal confiável, não inventa tipo", () => {
-    const t = detectarTipo({ contentDisposition: null, primeirosBytes: new Uint8Array([1, 2, 3, 4]) });
+    const t = detectarTipo({
+      contentDisposition: null,
+      primeirosBytes: new Uint8Array([1, 2, 3, 4]),
+    });
     expect(t.mime).toBeNull();
     expect(t.suportado).toBe(false);
   });

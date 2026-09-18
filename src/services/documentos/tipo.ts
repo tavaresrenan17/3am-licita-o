@@ -59,7 +59,7 @@ export function detectarTipo(sinais: SinaisTipo): TipoArquivo {
   );
 
   const extensaoDoNome = nomeArquivo?.includes(".")
-    ? (nomeArquivo.split(".").pop()!.toLowerCase() || null)
+    ? nomeArquivo.split(".").pop()!.toLowerCase() || null
     : null;
 
   const mime = porAssinatura?.mime ?? null;

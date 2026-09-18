@@ -4,7 +4,11 @@ import { baixarArquivo } from "./download.server";
 const PDF = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x37, 0x0a, 0x25]);
 
 /** Resposta falsa que entrega o corpo em pedaços, como a rede faz. */
-function respostaFalsa(pedacos: Uint8Array[], cabecalhos: Record<string, string> = {}, status = 200) {
+function respostaFalsa(
+  pedacos: Uint8Array[],
+  cabecalhos: Record<string, string> = {},
+  status = 200,
+) {
   return new Response(
     new ReadableStream({
       start(c) {

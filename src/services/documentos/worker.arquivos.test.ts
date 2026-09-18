@@ -1,7 +1,19 @@
 import { describe, expect, it } from "vitest";
-import { executarTickArquivos, type GravacaoArquivo, type PortaArquivos } from "./worker.arquivos.server";
+import {
+  executarTickArquivos,
+  type GravacaoArquivo,
+  type PortaArquivos,
+} from "./worker.arquivos.server";
 
-function bancoFalso(fila: Array<{ documentoId: string; licitacaoId: string; url: string; nome: string; tipoDocumento: string }>) {
+function bancoFalso(
+  fila: Array<{
+    documentoId: string;
+    licitacaoId: string;
+    url: string;
+    nome: string;
+    tipoDocumento: string;
+  }>,
+) {
   const gravado: GravacaoArquivo[] = [];
   const banco: PortaArquivos = {
     async reservar(limite) {
@@ -35,7 +47,13 @@ describe("executarTickArquivos", () => {
         tamanho: 1,
         tipo: { nomeArquivo: "a.pdf", extensao: "pdf", mime: "application/pdf", suportado: true },
       }),
-      extrair: async () => ({ texto: "objeto do edital", paginas: 2, chars: 800, densidade: 400, estado: "extraido" }),
+      extrair: async () => ({
+        texto: "objeto do edital",
+        paginas: 2,
+        chars: 800,
+        densidade: 400,
+        estado: "extraido",
+      }),
     });
     expect(resumo.extraidos).toBe(1);
     expect(gravado[0]!.estado).toBe("extraido");
@@ -96,7 +114,13 @@ describe("executarTickArquivos", () => {
           tipo: { nomeArquivo: "a.pdf", extensao: "pdf", mime: "application/pdf", suportado: true },
         };
       },
-      extrair: async () => ({ texto: "t", paginas: 1, chars: 300, densidade: 300, estado: "extraido" }),
+      extrair: async () => ({
+        texto: "t",
+        paginas: 1,
+        chars: 300,
+        densidade: 300,
+        estado: "extraido",
+      }),
     });
     expect(resumo.processados).toBe(2);
     expect(resumo.extraidos).toBe(1);
@@ -115,7 +139,13 @@ describe("executarTickArquivos", () => {
         tamanho: 1,
         tipo: { nomeArquivo: "a.pdf", extensao: "pdf", mime: "application/pdf", suportado: true },
       }),
-      extrair: async () => ({ texto: "x", paginas: 40, chars: 1, densidade: 0.025, estado: "sem_texto" }),
+      extrair: async () => ({
+        texto: "x",
+        paginas: 40,
+        chars: 1,
+        densidade: 0.025,
+        estado: "sem_texto",
+      }),
     });
     expect(resumo.semTexto).toBe(1);
     expect(gravado[0]!.estado).toBe("sem_texto");

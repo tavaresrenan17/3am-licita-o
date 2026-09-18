@@ -47,7 +47,10 @@ export interface PortaArquivos {
 
 export interface OpcoesTickArquivos {
   banco: PortaArquivos;
-  baixar?: (url: string, opcoes?: { maxBytes?: number; nomeCatalogado?: string | null }) => Promise<ResultadoDownload>;
+  baixar?: (
+    url: string,
+    opcoes?: { maxBytes?: number; nomeCatalogado?: string | null },
+  ) => Promise<ResultadoDownload>;
   extrair?: (bytes: Uint8Array) => Promise<TextoExtraido>;
   agora?: () => number;
   dormir?: (ms: number) => Promise<void>;
@@ -143,7 +146,9 @@ export async function executarTickArquivos(
       if (!download.tipo.suportado) {
         // Visível e contabilizado: a v1 só lê PDF, e saber quanto do acervo é
         // ZIP/DOC é o que vai decidir se vale ampliar.
-        resumo.erros.push(`${item.documentoId}: formato_nao_suportado ${download.tipo.mime ?? "?"}`);
+        resumo.erros.push(
+          `${item.documentoId}: formato_nao_suportado ${download.tipo.mime ?? "?"}`,
+        );
         await cfg.banco.gravar({
           documentoId: item.documentoId,
           estado: "erro",
