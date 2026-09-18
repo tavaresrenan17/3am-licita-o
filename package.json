@@ -16,7 +16,8 @@
     "verificar:banco": "node scripts/verificar-banco.mjs",
     "coletar:documentos": "tsx scripts/coletar-documentos.ts",
     "sincronizar": "tsx scripts/sincronizar.ts",
-    "recalcular:score": "tsx scripts/recalcular-score.ts"
+    "recalcular:score": "tsx scripts/recalcular-score.ts",
+    "verificar:busca": "node scripts/verificar-busca-semantica.mjs"
   },
   "overrides": {
     "rolldown": "1.2.1"
