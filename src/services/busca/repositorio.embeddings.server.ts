@@ -23,12 +23,39 @@ function db(): SupabaseClient {
   return cliente;
 }
 
-export function portaEmbeddingsSupabase(modelo: string): PortaEmbeddings {
+/**
+ * Trava de exclusão mútua da fila de embeddings.
+ *
+ * O Ollama é uma pista só: medido em 18/09/2026, uma chamada de 123 ms com o
+ * serviço ocioso passou a levar de 817 ms a 8.765 ms enquanto outro job
+ * rodava. Dois jobs não dividem o trabalho, multiplicam o tempo dos dois.
+ *
+ * O lease tem dono e prazo, então um processo morto não deixa a fila travada.
+ */
+export async function adquirirLeaseEmbedding(
+  dono: string,
+  duracao = "5 minutes",
+): Promise<boolean> {
+  const { data, error } = await db().rpc("adquirir_lease_embedding", {
+    p_dono: dono,
+    p_duracao: duracao,
+  });
+  if (error) throw new Error(`adquirir_lease_embedding: ${error.message}`);
+  return data === true;
+}
+
+export async function liberarLeaseEmbedding(dono: string): Promise<void> {
+  const { error } = await db().rpc("liberar_lease_embedding", { p_dono: dono });
+  if (error) throw new Error(`liberar_lease_embedding: ${error.message}`);
+}
+
+export function portaEmbeddingsSupabase(modelo: string, scoreMinimo = 60): PortaEmbeddings {
   return {
     async reservarLicitacoes(limite: number): Promise<LicitacaoParaEmbedding[]> {
       const { data, error } = await db().rpc("reservar_licitacoes_para_embedding", {
         p_limite: limite,
         p_modelo: modelo,
+        p_score_minimo: scoreMinimo,
       });
       if (error) throw new Error(`reservar_licitacoes_para_embedding: ${error.message}`);
       return (data ?? []).map((l: Record<string, unknown>) => ({
@@ -42,6 +69,7 @@ export function portaEmbeddingsSupabase(modelo: string): PortaEmbeddings {
       const { data, error } = await db().rpc("reservar_documentos_para_embedding", {
         p_limite: limite,
         p_modelo: modelo,
+        p_score_minimo: scoreMinimo,
       });
       if (error) throw new Error(`reservar_documentos_para_embedding: ${error.message}`);
       return (data ?? []).map((d: Record<string, unknown>) => ({

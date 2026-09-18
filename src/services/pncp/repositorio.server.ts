@@ -701,6 +701,19 @@ export async function listarModalidades() {
 }
 
 export async function obterLicitacao(id: string) {
+  // Abrir a licitação é o sinal mais barato de interesse que existe, e ele
+  // manda na prioridade da fila de embeddings: o que a equipe está olhando é
+  // vetorizado antes do fundo do catálogo.
+  //
+  // Dispare-e-esqueça de propósito. Este registro é uma dica de prioridade, não
+  // um dado do produto: se falhar, a tela não pode nem atrasar nem quebrar por
+  // causa disso.
+  // `rpc()` devolve um thenable, não uma Promise completa — daí o
+  // `Promise.resolve` antes do catch.
+  void Promise.resolve(db().rpc("marcar_licitacao_acessada", { p_licitacao_id: id })).catch(
+    () => undefined,
+  );
+
   const [licitacao, documentos, historico, estado] = await Promise.all([
     // `aberta` e `situacao_temporal` são colunas computadas: quem decide é o
     // banco, a mesma função que os filtros usam. A tela não recalcula (D02).

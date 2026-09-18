@@ -55,9 +55,36 @@ async function main() {
       `${numeroBR(antes["chunks"] ?? 0)} chunks.\n`,
   );
 
+  // Trava antes de qualquer trabalho. O Ollama é uma pista só: medido em
+  // 18/09/2026, uma chamada de 123 ms com o serviço ocioso levou de 817 ms a
+  // 8.765 ms enquanto outro job rodava. Dois processos aqui não dividem o
+  // trabalho — multiplicam o tempo dos dois e ainda martelam o Supabase com
+  // reservas concorrentes.
+  const dono = `${process.env["COMPUTERNAME"] ?? "local"}:${process.pid}`;
+  if (!(await repo.adquirirLeaseEmbedding(dono))) {
+    console.error("Já existe um job de embeddings rodando (lease em uso).");
+    console.error("Espere ele terminar — rodar dois ao mesmo tempo deixa os dois mais lentos.");
+    process.exit(1);
+  }
+
+  let leaseAtivo = true;
+  const soltarLease = async () => {
+    if (!leaseAtivo) return;
+    leaseAtivo = false;
+    await repo.liberarLeaseEmbedding(dono).catch(() => {});
+  };
+  // Ctrl+C precisa devolver a trava; sem isso o próximo job espera o prazo
+  // inteiro por causa de uma interrupção manual.
+  process.on("SIGINT", () => {
+    void soltarLease().then(() => process.exit(130));
+  });
+
   const banco = repo.portaEmbeddingsSupabase(embedder.modelo);
   const inicio = Date.now();
   let feitos = 0;
+  // O lease vale 5 minutos e a carga passa disso: renovar a cada volta mantém
+  // a posse sem transformar uma queda do processo em fila travada para sempre.
+  let ultimaRenovacao = Date.now();
 
   // `filaVazia` é propriedade da FILA, não de sucesso: `executarTickEmbeddings`
   // engole toda falha em `resumo.erros` e devolve normal. Com o provedor fora do
@@ -70,6 +97,11 @@ async function main() {
   let ticksSemProgresso = 0;
 
   while (feitos < limiteTotal) {
+    if (Date.now() - ultimaRenovacao > 120_000) {
+      await repo.adquirirLeaseEmbedding(dono);
+      ultimaRenovacao = Date.now();
+    }
+
     const resumo = await executarTickEmbeddings({ banco, embedder });
     if (resumo.filaVazia) {
       console.log("Fila vazia.");
@@ -97,9 +129,14 @@ async function main() {
         "Interrompendo. O provedor de embedding provavelmente caiu — confira `ollama serve` " +
           "e rode de novo: a fila é retomável e continua de onde parou.",
       );
+      // Soltar a trava antes de sair, senão o próximo job espera o prazo
+      // inteiro por causa de uma falha que já terminou.
+      await soltarLease();
       process.exit(1);
     }
   }
+
+  await soltarLease();
 
   const depois = await repo.coberturaEmbeddings();
   const cobertura =
