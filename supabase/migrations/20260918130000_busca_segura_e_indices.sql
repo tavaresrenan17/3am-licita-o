@@ -27,9 +27,6 @@ $cleanup$;
 -- para outros comandos quando o arquivo é executado no SQL Editor.
 set lock_timeout = '5s';
 
--- O índice antigo usa modalidade_id, mas o filtro público recebe modalidade_nome.
-drop index if exists public.licitacoes_uf_modalidade_encerramento_idx;
-
 -- Recortes mais usados na tela. Não usamos now() em predicados de índices, pois
 -- o instante é mutável; data de encerramento não nula elimina linhas sem prazo.
 create index if not exists licitacoes_uf_municipio_encerramento_idx
