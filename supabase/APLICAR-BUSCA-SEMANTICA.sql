@@ -164,7 +164,7 @@ begin
     select al.id, al.licitacao_id, 'baixando', now() from alvos al
     on conflict (documento_id) do update
       set estado = 'baixando', atualizado_em = now(), erro = null,
-          tentativas = public.documentos_arquivo.tentativas + 1
+          tentativas = a.tentativas + 1
     returning a.documento_id
   )
   select al.id, al.licitacao_id, al.url, al.nome, al.tipo_documento
