@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   executarTickArquivos,
   type GravacaoArquivo,
@@ -157,5 +157,58 @@ describe("executarTickArquivos", () => {
     const resumo = await executarTickArquivos({ banco, intervaloPartidaMs: 0 });
     expect(resumo.filaVazia).toBe(true);
     expect(resumo.processados).toBe(0);
+  });
+
+  it("mantém ao menos intervaloPartidaMs entre partidas mesmo com concorrência 2", async () => {
+    // Regressão do achado 1 (revisão): com 2 trabalhadores, o primeiro item de
+    // cada um não expõe a corrida (o item pioneiro sempre atualiza
+    // `proximaPartida` de forma síncrona, antes de qualquer await). A corrida
+    // só aparece quando um trabalhador termina rápido e "ultrapassa" o outro,
+    // que ainda está dormindo — por isso são precisos 3 itens (2 de
+    // concorrência + 1 de ultrapassagem), não 2. Confirmado empiricamente:
+    // com temporizadores reais e a versão antiga do código, dois `baixar`
+    // disparavam no mesmíssimo milissegundo.
+    vi.useFakeTimers();
+    try {
+      const { banco } = bancoFalso([item("1"), item("2"), item("3")]);
+      const partidas: number[] = [];
+      const resumoPromise = executarTickArquivos({
+        banco,
+        concorrencia: 2,
+        intervaloPartidaMs: 500,
+        baixar: async () => {
+          partidas.push(Date.now());
+          return {
+            ok: true,
+            bytes: new Uint8Array([1]),
+            sha256: "abc",
+            tamanho: 1,
+            tipo: {
+              nomeArquivo: "a.pdf",
+              extensao: "pdf",
+              mime: "application/pdf",
+              suportado: true,
+            },
+          };
+        },
+        extrair: async () => ({
+          texto: "t",
+          paginas: 1,
+          chars: 300,
+          densidade: 300,
+          estado: "extraido",
+        }),
+      });
+      await vi.runAllTimersAsync();
+      const resumo = await resumoPromise;
+
+      expect(resumo.processados).toBe(3);
+      expect(partidas).toHaveLength(3);
+      for (let i = 1; i < partidas.length; i++) {
+        expect(partidas[i]! - partidas[i - 1]!).toBeGreaterThanOrEqual(500);
+      }
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

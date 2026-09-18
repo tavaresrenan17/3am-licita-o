@@ -13,9 +13,13 @@
  * Pressão sobre a fonte: 2 simultâneas e 2 partidas por segundo para toda a
  * integração (arquivo 03 §8). Download é muito mais pesado que metadado — um
  * arquivo medido levou 15,2 s —, então a concorrência fica em 2 e o worker de
- * arquivos não roda junto com o de cabeçalhos.
+ * arquivos não roda junto com o de cabeçalhos NEM com o de documentos
+ * (`worker.documentos.server.ts`): os dois reivindicam a mesma cota de 2
+ * simultâneas/2 partidas por segundo da integração inteira, e se ambos
+ * correrem ao mesmo tempo a carga real dobra. Quem agenda os ticks precisa
+ * serializar os dois.
  */
-import { baixarArquivo, type ResultadoDownload } from "./download.server";
+import { baixarArquivo, MAX_BYTES_PADRAO, type ResultadoDownload } from "./download.server";
 import { extrairTextoPdf, type TextoExtraido } from "./texto";
 
 export interface ArquivoReservado {
@@ -82,7 +86,9 @@ const PADRAO = {
   maxArquivosPorTick: 100,
   concorrencia: 2,
   intervaloPartidaMs: 500,
-  maxBytes: Number(process.env["DOCS_MAX_BYTES"] ?? 26_214_400),
+  // `download.server.ts` já exporta o teto padrão; duplicar o número aqui só
+  // criaria uma segunda fonte de verdade que pode dessincronizar.
+  maxBytes: Number(process.env["DOCS_MAX_BYTES"] ?? MAX_BYTES_PADRAO),
 };
 
 const dormirPadrao = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
@@ -107,13 +113,9 @@ export async function executarTickArquivos(
     duracaoMs: 0,
   };
 
-  const reservados = await cfg.banco.reservar(Math.min(cfg.loteReserva, cfg.maxArquivosPorTick));
-  if (reservados.length === 0) {
-    resumo.filaVazia = true;
-    resumo.duracaoMs = agora() - inicio;
-    return resumo;
-  }
-
+  // Partilhado entre TODOS os lotes do tick: é o limite global de partidas,
+  // não um limite por lote. Reiniciar a cada reserva deixaria passar partidas
+  // extras exatamente na fronteira entre um lote e o próximo.
   let proximaPartida = 0;
 
   async function processar(item: ArquivoReservado): Promise<void> {
@@ -189,20 +191,47 @@ export async function executarTickArquivos(
     }
   }
 
-  const pendentes = [...reservados];
-  async function trabalhador(): Promise<void> {
-    while (pendentes.length > 0) {
-      if (agora() - inicio > cfg.orcamentoMs - cfg.reservaMs) return;
-      const item = pendentes.shift();
-      if (!item) return;
-      const espera = proximaPartida - agora();
-      if (espera > 0) await dormir(espera);
-      proximaPartida = agora() + cfg.intervaloPartidaMs;
-      await processar(item);
-    }
-  }
+  // `filaVazia` descreve a PRIMEIRA reserva do tick: só ela diz que não havia
+  // nada pendente. Uma reserva vazia mais adiante só significa que a fila
+  // secou no meio do tick — os lotes anteriores já processaram algo, e isso
+  // não é o mesmo estado.
+  let primeiraReserva = true;
 
-  await Promise.all(Array.from({ length: cfg.concorrencia }, () => trabalhador()));
+  while (resumo.processados < cfg.maxArquivosPorTick) {
+    if (agora() - inicio > cfg.orcamentoMs - cfg.reservaMs) break;
+
+    const espaco = cfg.maxArquivosPorTick - resumo.processados;
+    const reservados = await cfg.banco.reservar(Math.min(cfg.loteReserva, espaco));
+
+    if (reservados.length === 0) {
+      if (primeiraReserva) resumo.filaVazia = true;
+      break;
+    }
+    primeiraReserva = false;
+
+    const pendentes = [...reservados];
+    const trabalhador = async (): Promise<void> => {
+      while (pendentes.length > 0) {
+        if (agora() - inicio > cfg.orcamentoMs - cfg.reservaMs) return;
+        const item = pendentes.shift();
+        if (!item) return;
+        // A vaga de partida é calculada E reivindicada ANTES de qualquer
+        // await. Se a escrita de `proximaPartida` esperasse o `dormir`
+        // terminar, o intervalo entre leitura e escrita seria um ponto de
+        // fuga: enquanto este trabalhador dorme, outro leria o mesmo
+        // `proximaPartida` obsoleto, dormiria o mesmo tempo e os dois
+        // disparariam `processar` juntos — furando o teto de 2 partidas por
+        // segundo contra o PNCP. `Math.max(..., agora())` evita que o
+        // agendamento arraste no passado depois de um item lento.
+        const espera = proximaPartida - agora();
+        proximaPartida = Math.max(proximaPartida, agora()) + cfg.intervaloPartidaMs;
+        if (espera > 0) await dormir(espera);
+        await processar(item);
+      }
+    };
+
+    await Promise.all(Array.from({ length: cfg.concorrencia }, () => trabalhador()));
+  }
 
   resumo.duracaoMs = agora() - inicio;
   return resumo;
