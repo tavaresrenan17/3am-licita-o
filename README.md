@@ -1,5 +1,9 @@
 # Bid Navigator
 
+## Arquitetura de busca
+
+A busca de produção permanece lexical (`tsvector` e trigramas) com filtros relacionais. A decisão, as evidências e o protocolo que uma futura busca semântica precisa cumprir estão em [`docs/architecture/adr-001-busca-vetorial.md`](docs/architecture/adr-001-busca-vetorial.md).
+
 ## Benchmark do pipeline PNCP
 
 O benchmark mede separadamente a API do PNCP e a RPC de busca do Supabase. Ele é somente leitura, executa aquecimento antes das amostras e produz estatísticas p50, p95 e p99 em JSON.
