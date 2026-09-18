@@ -11,6 +11,8 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "test": "vitest run",
+    "test:benchmark": "node --test scripts/benchmark-pipeline.test.mjs",
+    "benchmark:pipeline": "node scripts/benchmark-pipeline.mjs",
     "verificar:banco": "node scripts/verificar-banco.mjs",
     "coletar:documentos": "tsx scripts/coletar-documentos.ts",
     "sincronizar": "tsx scripts/sincronizar.ts",

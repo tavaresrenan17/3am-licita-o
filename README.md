@@ -1,5 +1,17 @@
 # Bid Navigator
 
+## Benchmark do pipeline PNCP
+
+O benchmark mede separadamente a API do PNCP e a RPC de busca do Supabase. Ele é somente leitura, executa aquecimento antes das amostras e produz estatísticas p50, p95 e p99 em JSON.
+
+Na base remota atual, que ainda contém a assinatura vetorial legada da RPC e restringe a busca à chave de serviço, execute:
+
+```bash
+npm run benchmark:pipeline -- --usar-service-role --rpc-legada-vetorial
+```
+
+As flags tornam explícito o uso temporário da assinatura antiga e da chave privilegiada. O valor da chave nunca é incluído no relatório. Consulte todas as opções com `npm run benchmark:pipeline -- --ajuda`.
+
 ## Sincronização automática do PNCP
 
 O workflow [`.github/workflows/sincronizacao-pncp.yml`](.github/workflows/sincronizacao-pncp.yml)
