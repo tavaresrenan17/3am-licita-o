@@ -805,6 +805,11 @@ export async function buscarLicitacoesComSemantica(p: ConsultaLicitacoesParams) 
     deslocamento: p.deslocamento,
     rpc: {
       async hibrida(args) {
+        // `p_ordenar` fixo em "relevancia" é intencional, não descuido: num modo
+        // ranqueado por RRF, ordenar por data ou valor jogaria fora o ranking
+        // que é a razão de existir do híbrido. A consequência conhecida é que a
+        // ordenação escolhida na tela fica visualmente ativa sem efeito enquanto
+        // a flag estiver ligada — dívida registrada, não bug a corrigir aqui.
         const { data, error } = await db().rpc("buscar_licitacoes_hibrida", {
           ...comuns(args),
           p_ordenar: "relevancia",
@@ -824,12 +829,14 @@ export async function buscarLicitacoesComSemantica(p: ConsultaLicitacoesParams) 
     },
   });
 
-  // A função híbrida não devolve `consultado_em`; o campo existe no contrato da
-  // tela, então marcamos o instante da resposta em vez de omiti-lo.
+  // `consultado_em` vem do banco sempre que a resposta passou pela
+  // `buscar_licitacoes` — inclusive quando quem respondeu foi o ramo lexical
+  // DENTRO da função híbrida, que repassa o objeto dela inteiro. Só o ramo
+  // híbrido de verdade não tem o campo; aí, e só aí, o relógio local entra.
   return {
     itens: saida.itens as Record<string, unknown>[],
     total: saida.total,
-    consultado_em: new Date().toISOString(),
+    consultado_em: saida.consultadoEm ?? new Date().toISOString(),
     modo: saida.modo,
     degradou: saida.degradou,
   };

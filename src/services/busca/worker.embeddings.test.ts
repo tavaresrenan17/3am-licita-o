@@ -4,6 +4,7 @@ import {
   executarTickEmbeddings,
   type DocumentoParaEmbedding,
   type LicitacaoParaEmbedding,
+  type OpcoesTickEmbeddings,
   type PortaEmbeddings,
 } from "./worker.embeddings.server";
 
@@ -16,6 +17,7 @@ function bancoFalso(
     documentoId: string;
     chunks: Array<{ ordem: number; texto: string; literal: string }>;
   }> = [];
+  const marcadosSemTexto: string[] = [];
   const banco: PortaEmbeddings = {
     async reservarLicitacoes(limite) {
       return licitacoes.splice(0, limite);
@@ -29,8 +31,11 @@ function bancoFalso(
     async gravarChunks(documentoId, _licitacaoId, chunks) {
       gravadosChunks.push({ documentoId, chunks });
     },
+    async marcarSemTexto(documentoId) {
+      marcadosSemTexto.push(documentoId);
+    },
   };
-  return { banco, gravadasLic, gravadosChunks };
+  return { banco, gravadasLic, gravadosChunks, marcadosSemTexto };
 }
 
 describe("executarTickEmbeddings", () => {
@@ -73,6 +78,41 @@ describe("executarTickEmbeddings", () => {
     const resumo = await executarTickEmbeddings({ banco, embedder: new EmbedderFalso() });
     expect(gravadosChunks).toHaveLength(0);
     expect(resumo.erros).toHaveLength(0);
+  });
+
+  // Sem a marca, `reservar_documentos_para_embedding` devolve o mesmo documento
+  // em todo tick — para sempre, consumindo um dos poucos slots da reserva.
+  it("documento sem texto aproveitável é fechado como sem_texto e sai da fila", async () => {
+    const { banco, marcadosSemTexto } = bancoFalso(
+      [],
+      [{ documentoId: "d1", licitacaoId: "l1", texto: "   ", origemHash: "h" }],
+    );
+    const resumo = await executarTickEmbeddings({ banco, embedder: new EmbedderFalso() });
+    expect(marcadosSemTexto).toEqual(["d1"]);
+    expect(resumo.semTexto).toBe(1);
+  });
+
+  // Um `undefined` explícito não pode derrubar o default: com spread ele
+  // sobrescreveria o lote e o `i += undefined` do laço viraria NaN, fazendo o
+  // tick terminar sem gravar nada e sem reclamar. `exactOptionalPropertyTypes`
+  // barra isso em TypeScript, então o teste força o caso pela porta que sobra:
+  // um chamador dinâmico, ou um objeto de configuração parcial espalhado.
+  it("opção explicitamente undefined cai no default em vez de virar NaN", async () => {
+    const { banco, gravadasLic } = bancoFalso([
+      { licitacaoId: "l1", texto: "pavimentação", origemHash: "h1" },
+      { licitacaoId: "l2", texto: "merenda", origemHash: "h2" },
+    ]);
+    const opcoes = {
+      banco,
+      embedder: new EmbedderFalso(),
+      loteEmbedding: undefined,
+      loteLicitacoes: undefined,
+      maxChunksDoc: undefined,
+    } as unknown as OpcoesTickEmbeddings;
+
+    const resumo = await executarTickEmbeddings(opcoes);
+    expect(resumo.licitacoes).toBe(2);
+    expect(gravadasLic.map((g) => g.id)).toEqual(["l1", "l2"]);
   });
 
   it("falha do provedor num lote não derruba os outros", async () => {

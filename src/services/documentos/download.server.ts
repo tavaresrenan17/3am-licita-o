@@ -14,13 +14,6 @@ import { detectarTipo, type TipoArquivo } from "./tipo";
 
 export const MAX_BYTES_PADRAO = 26_214_400; // 25 MB
 
-export class ArquivoGrandeDemais extends Error {
-  constructor(readonly tamanho: number) {
-    super(`arquivo excede o teto de bytes (${tamanho})`);
-    this.name = "ArquivoGrandeDemais";
-  }
-}
-
 export interface OpcoesDownload {
   maxBytes?: number;
   fetchImpl?: typeof fetch;

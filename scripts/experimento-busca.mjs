@@ -59,6 +59,11 @@ const consultas = JSON.parse(
 const relatorio = {
   gerado_em: new Date().toISOString(),
   modelo: MODELO,
+  // Qual caminho foi REALMENTE exercitado. Com hibrido_ativo = false (o padrao),
+  // buscar_licitacoes_hibrida devolve o resultado lexical e diz modo: 'lexical'.
+  // Guardar esse campo sem olhar para ele foi o que permitiu, antes desta
+  // correcao, um relatorio afirmar gates cumpridos medindo o caminho errado.
+  modo_observado: null,
   cobertura: null,
   consultas: [],
   latencia_ms: {},
@@ -115,6 +120,7 @@ for (const consulta of consultas.consultas) {
     });
 
     registro.modo = hibrido.modo;
+    relatorio.modo_observado ??= hibrido.modo ?? "desconhecido";
     registro.hibrido = (hibrido.itens ?? []).map((i) => i.id);
     registro.lexical = (lexical.itens ?? []).map((i) => i.id);
     registro.total_elegiveis = hibrido.total ?? 0;
@@ -133,6 +139,12 @@ relatorio.latencia_ms = {
   p50: percentil(latencias, 50),
   p95: percentil(latencias, 95),
   p99: percentil(latencias, 99),
+  // Uma execucao por consulta. Com 12 amostras, "p99" e apenas o maior valor
+  // observado — nao ha resolucao para um percentil 99. A ADR-001 pede >= 100
+  // execucoes; enquanto o harness fizer uma volta so, o rotulo honesto e este.
+  aviso:
+    `amostra de ${latencias.length} execucoes (uma por consulta); a ADR-001 pede >= 100. ` +
+    "Com esta amostra, p99 e o maximo observado, nao um percentil.",
 };
 relatorio.gates.latencia = {
   p95: relatorio.latencia_ms.p95,
@@ -159,6 +171,22 @@ relatorio.gates.relevancia = {
       : `NAO CUMPRIDO: ${julgadas} consultas julgadas; a ADR-001 exige no minimo 100, com dois avaliadores.`,
 };
 
+// A mesma disciplina que a ADR impoe aos julgamentos de relevancia vale para a
+// medicao: um gate so pode ser pontuado contra o caminho que esta sendo
+// julgado. Se a RPC respondeu 'lexical', nada aqui mediu o hibrido — nem a
+// latencia, nem a completude sob filtros — e o relatorio recusa a pontuacao em
+// vez de registrar um "cumprido" que veio do caminho errado. Os valores medidos
+// continuam no JSON; o que o override retira e o veredito.
+const NAO_MEDIDO =
+  "NAO MEDIDO: a flag hibrido_ativo esta desligada; estas latencias sao do caminho lexical";
+
+if (relatorio.modo_observado !== "hibrido") {
+  for (const gate of Object.values(relatorio.gates)) {
+    gate.cumprido = false;
+    gate.observacao = gate.observacao ? `${NAO_MEDIDO}. ${gate.observacao}` : NAO_MEDIDO;
+  }
+}
+
 relatorio.gates.pode_ligar_hibrido = Object.entries(relatorio.gates)
   .filter(([k]) => k !== "pode_ligar_hibrido")
   .every(([, g]) => g.cumprido === true);
@@ -170,8 +198,20 @@ const destino = new URL(
 );
 writeFileSync(destino, JSON.stringify(relatorio, null, 2), "utf8");
 
+if (relatorio.modo_observado !== "hibrido") {
+  console.log("");
+  console.log("==========================================================================");
+  console.log(`  ${NAO_MEDIDO.toUpperCase()}.`);
+  console.log(`  A RPC respondeu modo='${relatorio.modo_observado}'. NENHUM gate foi`);
+  console.log("  pontuado: os numeros abaixo sao do caminho lexical, nao do hibrido.");
+  console.log("  Ligue configuracao_busca.hibrido_ativo antes de medir de novo.");
+  console.log("==========================================================================");
+  console.log("");
+}
+
 console.log(`Cobertura de embeddings: ${(taxa * 100).toFixed(2)}% (gate: >= 99%)`);
 console.log(`Latencia p95: ${relatorio.latencia_ms.p95} ms | p99: ${relatorio.latencia_ms.p99} ms`);
+console.log(`Latencia: ${relatorio.latencia_ms.aviso}`);
 console.log(`Consultas com falha: ${relatorio.falhas.length}`);
 console.log(`Gate de relevancia: ${relatorio.gates.relevancia.observacao}`);
 console.log(`\nPode ligar o hibrido? ${relatorio.gates.pode_ligar_hibrido ? "SIM" : "NAO"}`);

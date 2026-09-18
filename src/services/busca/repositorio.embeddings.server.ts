@@ -74,6 +74,17 @@ export function portaEmbeddingsSupabase(modelo: string): PortaEmbeddings {
       });
       if (error) throw new Error(`gravar_chunks_documento: ${error.message}`);
     },
+
+    async marcarSemTexto(documentoId) {
+      // `sem_texto` já é um dos estados aceitos pelo check de
+      // `documentos_arquivo`, então fechar o documento aqui não exige mudança de
+      // esquema — e tira ele tanto da fila de embeddings quanto da de download.
+      const { error } = await db().rpc("gravar_arquivo", {
+        p_documento_id: documentoId,
+        p_estado: "sem_texto",
+      });
+      if (error) throw new Error(`gravar_arquivo(sem_texto): ${error.message}`);
+    },
   };
 }
 

@@ -20,7 +20,7 @@ export interface TextoExtraido {
 }
 
 export function normalizarTexto(bruto: string): string {
-  // O Postgres recusa   em colunas text, e PDFs trazem isso.
+  // O Postgres recusa o caractere nulo (0x00) em colunas text, e PDFs trazem isso.
   return bruto.replace(/\0/g, "").replace(/\s+/g, " ").trim();
 }
 

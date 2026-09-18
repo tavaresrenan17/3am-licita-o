@@ -59,17 +59,46 @@ async function main() {
   const inicio = Date.now();
   let feitos = 0;
 
+  // `filaVazia` é propriedade da FILA, não de sucesso: `executarTickEmbeddings`
+  // engole toda falha em `resumo.erros` e devolve normal. Com o provedor fora do
+  // ar, cada volta reserva o mesmo lote, falha inteira e devolve zero vetores —
+  // o laço nunca sairia, martelando o Supabase com reservas idênticas.
+  // Três ticks seguidos sem UM vetor gravado é isso acontecendo. Abortamos e
+  // devolvemos a decisão ao operador: nada de backoff nem retry aqui, porque o
+  // script é retomável e rodar de novo continua de onde parou.
+  const MAX_TICKS_SEM_PROGRESSO = 3;
+  let ticksSemProgresso = 0;
+
   while (feitos < limiteTotal) {
     const resumo = await executarTickEmbeddings({ banco, embedder });
     if (resumo.filaVazia) {
       console.log("Fila vazia.");
       break;
     }
+    // Documento fechado como `sem_texto` conta como progresso: não virou vetor,
+    // mas saiu da fila e não volta. Sem isso, um lote inteiro de PDFs
+    // escaneados pareceria um provedor travado.
+    const progresso = resumo.licitacoes + resumo.chunks + resumo.semTexto;
     feitos += resumo.licitacoes + resumo.chunks;
     console.log(
-      `+${resumo.licitacoes} licitações, +${resumo.documentos} documentos (${resumo.chunks} chunks) — ${numeroBR(feitos)} vetores`,
+      `+${resumo.licitacoes} licitações, +${resumo.documentos} documentos (${resumo.chunks} chunks)` +
+        `${resumo.semTexto > 0 ? `, ${resumo.semTexto} sem texto aproveitável` : ""} — ${numeroBR(feitos)} vetores`,
     );
     for (const e of resumo.erros.slice(0, 3)) console.log(`   ! ${e}`);
+
+    ticksSemProgresso = progresso === 0 ? ticksSemProgresso + 1 : 0;
+    if (ticksSemProgresso >= MAX_TICKS_SEM_PROGRESSO) {
+      console.error(
+        `\n${MAX_TICKS_SEM_PROGRESSO} ticks seguidos sem gravar nenhum vetor, com fila não vazia. ` +
+          `Último tick: ${resumo.erros.length} erro(s).`,
+      );
+      if (resumo.erros[0]) console.error(`Primeiro erro: ${resumo.erros[0]}`);
+      console.error(
+        "Interrompendo. O provedor de embedding provavelmente caiu — confira `ollama serve` " +
+          "e rode de novo: a fila é retomável e continua de onde parou.",
+      );
+      process.exit(1);
+    }
   }
 
   const depois = await repo.coberturaEmbeddings();

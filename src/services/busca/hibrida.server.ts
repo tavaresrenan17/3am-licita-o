@@ -28,16 +28,29 @@ export interface SaidaBusca {
   itens: unknown[];
   total: number;
   modo: "hibrido" | "lexical";
+  /**
+   * Instante que o BANCO carimbou, quando ele carimbou. `buscar_licitacoes`
+   * devolve `consultado_em`, e o ramo lexical da função híbrida o preserva —
+   * descartá-lo aqui obrigaria quem chama a inventar um relógio local no lugar
+   * do relógio da consulta. Ausente só no ramo híbrido de verdade.
+   */
+  consultadoEm?: string;
   /** true quando caiu para o lexical por falha, e não por configuração. */
   degradou: boolean;
 }
 
 function normalizar(bruto: unknown, degradou: boolean): SaidaBusca {
-  const r = (bruto ?? {}) as { itens?: unknown[]; total?: number; modo?: string };
+  const r = (bruto ?? {}) as {
+    itens?: unknown[];
+    total?: number;
+    modo?: string;
+    consultado_em?: string;
+  };
   return {
     itens: r.itens ?? [],
     total: r.total ?? 0,
     modo: r.modo === "hibrido" ? "hibrido" : "lexical",
+    ...(typeof r.consultado_em === "string" ? { consultadoEm: r.consultado_em } : {}),
     degradou,
   };
 }
