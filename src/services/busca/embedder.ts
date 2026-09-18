@@ -91,7 +91,8 @@ export class EmbedderFalso implements Embedder {
     return textos.map((texto) => {
       const v = new Float32Array(this.dimensoes);
       let semente = 0;
-      for (let i = 0; i < texto.length; i++) semente = (semente * 31 + texto.charCodeAt(i)) % 2147483647;
+      for (let i = 0; i < texto.length; i++)
+        semente = (semente * 31 + texto.charCodeAt(i)) % 2147483647;
       for (let i = 0; i < this.dimensoes; i++) {
         semente = (semente * 1103515245 + 12345) % 2147483647;
         v[i] = semente / 2147483647;

@@ -53,8 +53,14 @@ describe("fundirRRF", () => {
   });
 
   it("a ordem é determinística no empate", () => {
-    const a = fundirRRF([{ peso: 1, ids: ["b", "a"] }, { peso: 1, ids: ["a", "b"] }]);
-    const b = fundirRRF([{ peso: 1, ids: ["b", "a"] }, { peso: 1, ids: ["a", "b"] }]);
+    const a = fundirRRF([
+      { peso: 1, ids: ["b", "a"] },
+      { peso: 1, ids: ["a", "b"] },
+    ]);
+    const b = fundirRRF([
+      { peso: 1, ids: ["b", "a"] },
+      { peso: 1, ids: ["a", "b"] },
+    ]);
     expect(a.map((x) => x.id)).toEqual(b.map((x) => x.id));
   });
 });

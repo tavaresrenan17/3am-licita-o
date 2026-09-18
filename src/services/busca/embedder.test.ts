@@ -2,7 +2,10 @@ import { describe, expect, it } from "vitest";
 import { DIMENSOES, EmbedderFalso, ErroDimensao, OllamaEmbedder, paraLiteralPg } from "./embedder";
 
 function respostaJson(corpo: unknown, status = 200) {
-  return new Response(JSON.stringify(corpo), { status, headers: { "content-type": "application/json" } });
+  return new Response(JSON.stringify(corpo), {
+    status,
+    headers: { "content-type": "application/json" },
+  });
 }
 
 const vetor = (n: number) => Array.from({ length: n }, (_, i) => i / n);

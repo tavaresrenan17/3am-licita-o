@@ -29,7 +29,11 @@ describe("dividirEmChunks", () => {
   });
 
   it("obedece ao teto de chunks por documento", () => {
-    const chunks = dividirEmChunks(texto(500_000), { tamanho: 1000, sobreposicao: 100, maxChunks: 5 });
+    const chunks = dividirEmChunks(texto(500_000), {
+      tamanho: 1000,
+      sobreposicao: 100,
+      maxChunks: 5,
+    });
     expect(chunks).toHaveLength(5);
   });
 

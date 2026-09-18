@@ -32,8 +32,10 @@ export function fundirRRF(
     });
   }
 
-  return [...scores.entries()]
-    .map(([id, score]) => ({ id, score }))
-    // Desempate por id: a ordem precisa ser a mesma entre execuções.
-    .sort((a, b) => b.score - a.score || a.id.localeCompare(b.id));
+  return (
+    [...scores.entries()]
+      .map(([id, score]) => ({ id, score }))
+      // Desempate por id: a ordem precisa ser a mesma entre execuções.
+      .sort((a, b) => b.score - a.score || a.id.localeCompare(b.id))
+  );
 }
