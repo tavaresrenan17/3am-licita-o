@@ -17,7 +17,10 @@
     "coletar:documentos": "tsx scripts/coletar-documentos.ts",
     "sincronizar": "tsx scripts/sincronizar.ts",
     "recalcular:score": "tsx scripts/recalcular-score.ts",
-    "verificar:busca": "node scripts/verificar-busca-semantica.mjs"
+    "verificar:busca": "node scripts/verificar-busca-semantica.mjs",
+    "baixar:documentos": "tsx scripts/baixar-documentos.ts",
+    "gerar:embeddings": "tsx scripts/gerar-embeddings.ts",
+    "experimento:busca": "node scripts/experimento-busca.mjs"
   },
   "overrides": {
     "rolldown": "1.2.1"

@@ -1,0 +1,19 @@
+{
+  "versao": 1,
+  "gerado_em": "2026-09-18",
+  "instrucoes": "A ADR-001 exige no minimo 100 consultas reais e julgamento de DOIS avaliadores numa escala 0-3 (irrelevante, relacionado, relevante, ideal), com divergencia resolvida por consenso e sem revelar qual mecanismo produziu cada resultado. As consultas abaixo sao uma semente representativa, NAO um conjunto de avaliacao completo. O campo julgamentos comeca vazio de proposito: preenche-lo e trabalho humano, e o gate de relevancia da ADR permanece NAO CUMPRIDO enquanto estiver vazio.",
+  "consultas": [
+    { "id": "q001", "texto": "reforma de escola", "nota": "sinonimo esperado: manutencao predial em unidade de ensino", "julgamentos": [] },
+    { "id": "q002", "texto": "pavimentacao asfaltica", "nota": "sem acento de proposito", "julgamentos": [] },
+    { "id": "q003", "texto": "pavimentação asfáltica", "nota": "par acentuado de q002", "julgamentos": [] },
+    { "id": "q004", "texto": "aquisicao de medicamentos", "julgamentos": [] },
+    { "id": "q005", "texto": "coleta de lixo urbano", "julgamentos": [] },
+    { "id": "q006", "texto": "merenda escolar", "julgamentos": [] },
+    { "id": "q007", "texto": "software de gestao", "julgamentos": [] },
+    { "id": "q008", "texto": "obra de drenagem", "julgamentos": [] },
+    { "id": "q009", "texto": "locacao de veiculos", "julgamentos": [] },
+    { "id": "q010", "texto": "servicos de vigilancia patrimonial", "julgamentos": [] },
+    { "id": "q011", "texto": "TR", "nota": "sigla curta, abaixo do tamanho do trigrama", "julgamentos": [] },
+    { "id": "q012", "texto": "reforma ou ampliacao", "nota": "operador em portugues, que o websearch_to_tsquery nao entende", "julgamentos": [] }
+  ]
+}
