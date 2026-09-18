@@ -48,7 +48,13 @@ export function dividirEmChunks(texto: string, opcoes: OpcoesChunk = {}): string
     if (trecho.length > 0) chunks.push(trecho);
 
     if (fim >= limpo.length) break;
-    inicio = fim - sobreposicao;
+    // Progresso garantido. O recuo por limite de palavra acima pode puxar `fim`
+    // para perto de 80% do tamanho; com sobreposição maior que isso,
+    // `fim - sobreposicao` andaria para TRÁS, `inicio` ficaria negativo, o
+    // slice devolveria string vazia, nenhum chunk seria empilhado e nada
+    // avançaria. E como este laço é síncrono, ele não fica só girando: trava o
+    // processo inteiro. Medido com tamanho 100 e sobreposição 90.
+    inicio = Math.max(inicio + 1, fim - sobreposicao);
   }
 
   return chunks;

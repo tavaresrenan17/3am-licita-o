@@ -43,6 +43,17 @@ describe("dividirEmChunks", () => {
     expect(MAX_CHUNKS_DOC).toBe(40);
   });
 
+  it("sobreposição dentro da janela de recuo não trava, mesmo com espaços", () => {
+    // O fixture PRECISA ter espaço perto de 80% do tamanho: é o recuo por
+    // limite de palavra que empurra `inicio` para trás. Um texto só de "a"
+    // nunca exercita esse caminho, e foi por isso que o laço infinito passou
+    // despercebido pelo teste vizinho.
+    const comEspaco = "a".repeat(81) + " " + "b".repeat(5000);
+    const chunks = dividirEmChunks(comEspaco, { tamanho: 100, sobreposicao: 90 });
+    expect(chunks.length).toBeGreaterThan(0);
+    expect(chunks.length).toBeLessThanOrEqual(40);
+  });
+
   it("sobreposição maior que o tamanho não trava em laço infinito", () => {
     const chunks = dividirEmChunks(texto(5000), { tamanho: 100, sobreposicao: 500 });
     expect(chunks.length).toBeGreaterThan(0);
