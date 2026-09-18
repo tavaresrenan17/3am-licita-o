@@ -231,7 +231,11 @@ begin
     select al.id, al.licitacao_id, 'baixando', now() from alvos al
     on conflict (documento_id) do update
       set estado = 'baixando', atualizado_em = now(), erro = null,
-          tentativas = public.documentos_arquivo.tentativas + 1
+          -- Alias obrigatório: uma vez que o alvo do INSERT tem `as a`, toda
+          -- referência à mesma relação dentro do statement precisa usar `a`.
+          -- `public.documentos_arquivo.tentativas` aqui derruba a função na
+          -- primeira chamada, e o CREATE FUNCTION passa sem reclamar.
+          tentativas = a.tentativas + 1
     returning a.documento_id
   )
   select al.id, al.licitacao_id, al.url, al.nome, al.tipo_documento
@@ -803,7 +807,7 @@ describe("normalizarTexto", () => {
   });
 
   it("remove o caractere nulo, que o Postgres recusa em text", () => {
-    expect(normalizarTexto("a b")).toBe("ab");
+    expect(normalizarTexto("ab")).toBe("ab");
   });
 });
 ```
@@ -840,8 +844,8 @@ export interface TextoExtraido {
 }
 
 export function normalizarTexto(bruto: string): string {
-  // O Postgres recusa   em colunas text, e PDFs trazem isso.
-  return bruto.replace(/ /g, "").replace(/\s+/g, " ").trim();
+  // O Postgres recusa o caractere nulo (0x00) em colunas text, e PDFs trazem isso.
+  return bruto.replace(//g, "").replace(/\s+/g, " ").trim();
 }
 
 export function avaliarDensidade(chars: number, paginas: number): "extraido" | "sem_texto" {
