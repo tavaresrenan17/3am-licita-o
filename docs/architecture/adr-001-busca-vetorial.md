@@ -98,6 +98,29 @@ O rollback não remove dados imediatamente. Primeiro interrompe a leitura vetori
 
 A experiência atual continua previsível e com menor custo operacional. Consultas puramente semânticas podem continuar limitadas até que haja evidência suficiente. Em compensação, uma futura adoção de pgvector terá baseline, critérios de qualidade, limites de custo e retorno seguro definidos antes do rollout.
 
+## Estado da implementação (2026-09-18)
+
+A infraestrutura descrita em "Experimento exigido" foi construída: pipeline de
+download e extração de editais, embeddings em duas camadas (`bge-m3`, 1024
+dimensões, Ollama local), busca híbrida por RRF com pré-filtragem relacional e
+harness de medição (`npm run experimento:busca`).
+
+**A decisão desta ADR permanece em vigor.** `configuracao_busca.hibrido_ativo`
+nasce `false` e o caminho de produção continua lexical. Os gates 1, 4 e 5 são
+medidos automaticamente pelo harness; o gate 3 (ganho de relevância de ao menos
+10%) exige as 100 consultas julgadas por dois avaliadores descritas acima e
+**não está cumprido** — `docs/superpowers/specs/consultas-avaliacao.json` nasce
+com os julgamentos vazios de propósito. Ligar o híbrido antes disso contraria
+esta ADR.
+
+Medições feitas contra as fontes reais em 18/09/2026, que a decisão original não
+tinha: `bge-m3` separa corretamente o próprio exemplo desta ADR (0,5549 para
+"recuperação de prédio escolar" contra 0,3756 para "aquisição de medicamentos",
+consultando "reforma de escola municipal"); os editais amostrados têm camada de
+texto (1.300 e 2.726 chars/página); e o teto de 40 chunks por documento corta
+30-40% do texto de 100% da amostra, porque os editais reais têm 60 a 104 mil
+caracteres. Esse último número é o principal candidato a revisão.
+
 ## Referências
 
 - [Supabase: Vector indexes](https://supabase.com/docs/guides/ai/vector-indexes)

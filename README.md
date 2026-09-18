@@ -2,7 +2,24 @@
 
 ## Arquitetura de busca
 
-A busca de produção permanece lexical (`tsvector` e trigramas) com filtros relacionais. A decisão, as evidências e o protocolo que uma futura busca semântica precisa cumprir estão em [`docs/architecture/adr-001-busca-vetorial.md`](docs/architecture/adr-001-busca-vetorial.md).
+**A busca de produção continua lexical** (`tsvector` e trigramas) com filtros relacionais, e continuará enquanto `configuracao_busca.hibrido_ativo` for `false` — que é o padrão. A decisão, as evidências e o protocolo que a busca semântica precisa cumprir estão em [`docs/architecture/adr-001-busca-vetorial.md`](docs/architecture/adr-001-busca-vetorial.md).
+
+A infraestrutura semântica já existe, desligada, em três camadas:
+
+1. **Conteúdo** — os editais do PNCP são baixados, o texto é extraído e guardado em `documentos_arquivo`. O download tem teto de bytes (`DOCS_MAX_BYTES`, padrão 25 MB) e PDF escaneado, sem camada de texto, é marcado `sem_texto` em vez de virar ruído.
+2. **Vetores** — `licitacoes_embedding` (uma linha por licitação, sobre objeto+órgão+município) e `documento_chunks` (trechos do edital), gerados por `bge-m3` via Ollama local, 1024 dimensões. Cada linha guarda modelo, versão e o hash do texto de origem: mudou o objeto, muda o hash, e a linha volta para a fila.
+3. **Busca híbrida** — `buscar_licitacoes_hibrida` aplica **todos** os filtros relacionais antes do vetor e funde o ranking lexical com o vetorial por RRF. Qualquer falha do provedor cai para o lexical sozinha.
+
+Operação:
+
+```bash
+npm run verificar:busca       # confere o esquema depois de colar o SQL
+npm run baixar:documentos     # baixa editais e extrai texto (retomável)
+npm run gerar:embeddings      # vetoriza licitações e trechos (exige Ollama)
+npm run experimento:busca     # mede os gates da ADR-001
+```
+
+O provedor de embedding padrão é Ollama local (`ollama serve` + `ollama pull bge-m3`). Não há chave de API neste projeto, e onde o Ollama não estiver acessível a busca simplesmente permanece lexical.
 
 ## Benchmark do pipeline PNCP
 
