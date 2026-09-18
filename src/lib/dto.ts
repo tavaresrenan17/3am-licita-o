@@ -45,6 +45,13 @@ export interface LicitacaoDTO {
   prioridade: boolean;
   documentos_total: number;
   documentos_estado: EstadoDocumentos;
+  /**
+   * Trecho do edital que casou com a consulta, quando o resultado veio por
+   * similaridade semântica. `null` em toda busca lexical.
+   */
+  trecho: string | null;
+  /** true quando este resultado entrou pelo ranking vetorial, e não só pelo lexical. */
+  origem_semantica: boolean;
   url_pncp: string | null;
   link_sistema_origem: string | null;
   informacao_complementar: string | null;
@@ -80,6 +87,13 @@ export interface ResultadoBuscaDTO {
   pagina: number;
   totalPaginas: number;
   consultadoEm: string;
+  /**
+   * Como o resultado foi produzido. `lexical` é o padrão e o caminho de
+   * rollback exigido pela ADR-001; `hibrido` só aparece com a flag ligada.
+   */
+  modo: "lexical" | "hibrido";
+  /** true quando caiu para o lexical por FALHA, e não por configuração. */
+  degradou: boolean;
 }
 
 export interface DetalheDTO {

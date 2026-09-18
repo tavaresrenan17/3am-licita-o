@@ -286,6 +286,10 @@ function LicitacoesSalvas() {
   const itens = consulta.data?.itens ?? [];
   const total = consulta.data?.total ?? 0;
   const totalPaginas = consulta.data?.totalPaginas ?? 1;
+  // A tela não pode prometer semântica que não está ligada: o texto do campo
+  // muda só quando o servidor confirma que respondeu em modo híbrido.
+  const modoHibrido = consulta.data?.modo === "hibrido";
+  const buscaDegradou = consulta.data?.degradou === true;
 
   const set = <K extends keyof FiltrosLicitacoes>(k: K, v: FiltrosLicitacoes[K]) => {
     setFiltros((f) => ({ ...f, [k]: v }));
@@ -443,7 +447,11 @@ function LicitacoesSalvas() {
             <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
             <Input
               className="h-8 pl-8 text-xs placeholder:text-muted-foreground"
-              placeholder="Buscar por palavras-chave (ex.: pavimentação, reforma, escola)…"
+              placeholder={
+                modoHibrido
+                  ? "Busque por palavras ou por ideia (ex.: reforma de escola)…"
+                  : "Buscar por palavras-chave (ex.: pavimentação, reforma, escola)…"
+              }
               value={termo}
               onChange={(e) => setTermo(e.target.value)}
             />
@@ -475,7 +483,10 @@ function LicitacoesSalvas() {
                 </span>
               )}
               <ChevronDown
-                className={cn("ml-1 size-3 transition-transform", filtrosExpandidos && "rotate-180")}
+                className={cn(
+                  "ml-1 size-3 transition-transform",
+                  filtrosExpandidos && "rotate-180",
+                )}
               />
             </Button>
           </div>
@@ -503,7 +514,9 @@ function LicitacoesSalvas() {
             />
 
             <div className="space-y-1">
-              <Label className="text-[11px] font-medium text-muted-foreground">Data de publicação</Label>
+              <Label className="text-[11px] font-medium text-muted-foreground">
+                Data de publicação
+              </Label>
               <div className="grid grid-cols-2 gap-1.5">
                 <div>
                   <span className="mb-0.5 block text-[10px] text-muted-foreground">De</span>
@@ -567,12 +580,25 @@ function LicitacoesSalvas() {
             </span>
           ))}
           {filtrosAtivos > 0 && (
-            <Button variant="ghost" size="sm" className="ml-auto h-6 px-2 text-[11px]" onClick={limparTudo}>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="ml-auto h-6 px-2 text-[11px]"
+              onClick={limparTudo}
+            >
               <X className="mr-1 size-3" /> Limpar filtros
             </Button>
           )}
         </div>
       </section>
+
+      {buscaDegradou && (
+        // Degradar em silêncio seria pior que degradar: quem busca precisa
+        // saber que está vendo o resultado por palavra-chave, e não por ideia.
+        <p className="mt-3 rounded-lg border border-border bg-muted/40 px-3 py-2 text-[11px] text-muted-foreground">
+          Busca semântica indisponível; exibindo resultados por palavra-chave.
+        </p>
+      )}
 
       <section className="mt-3 overflow-hidden rounded-lg border border-border bg-card">
         {consulta.isLoading ? (
@@ -666,6 +692,17 @@ function LicitacoesSalvas() {
                               >
                                 {l.orgao} · {l.municipio ?? "—"} / {l.uf ?? "—"}
                               </span>
+                              {l.origem_semantica && l.trecho && (
+                                // O trecho é o que fez este resultado aparecer:
+                                // sem mostrá-lo, um acerto semântico parece
+                                // arbitrário para quem buscou.
+                                <span
+                                  className="mt-1 line-clamp-2 block text-[11px] italic text-muted-foreground"
+                                  title={l.trecho}
+                                >
+                                  Trecho do edital: “{l.trecho}”
+                                </span>
+                              )}
                             </div>
                           </div>
                         </td>

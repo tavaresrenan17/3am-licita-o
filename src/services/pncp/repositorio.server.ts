@@ -764,3 +764,73 @@ export async function atualizarLicitacaoInterna(args: {
   erro("Falha ao atualizar licitação", error);
   return data as Record<string, unknown>;
 }
+
+/**
+ * Busca com reordenação semântica, quando a flag do banco autoriza.
+ *
+ * A ADR-001 manda o lexical continuar sendo o caminho de produção, então a
+ * primeira coisa que esta função faz é ler `configuracao_busca.hibrido_ativo`.
+ * Com a flag desligada — que é o padrão — ela delega para `buscarLicitacoes` e
+ * o comportamento é byte a byte o de antes, sem gastar uma chamada ao provedor
+ * de embedding que o SQL ignoraria de qualquer forma.
+ *
+ * Qualquer falha do provedor ou da RPC híbrida cai para o lexical: é o caminho
+ * de rollback que a ADR exige, e ele acontece sozinho.
+ */
+export async function buscarLicitacoesComSemantica(p: ConsultaLicitacoesParams) {
+  const { data: cfgBusca } = await db()
+    .from("configuracao_busca")
+    .select("hibrido_ativo")
+    .eq("id", 1)
+    .maybeSingle();
+
+  if (!cfgBusca?.hibrido_ativo) {
+    const lexical = await buscarLicitacoes(p);
+    return { ...lexical, modo: "lexical" as const, degradou: false };
+  }
+
+  const { buscarComSemantica } = await import("../busca/hibrida.server");
+
+  const comuns = (args: Record<string, unknown>) => ({
+    p_filtros: args["p_filtros"],
+    p_direcao: p.direcao,
+    p_limite: args["p_limite"],
+    p_deslocamento: args["p_deslocamento"],
+    p_score_minimo: p.scoreMinimo,
+  });
+
+  const saida = await buscarComSemantica({
+    filtros: p.filtros,
+    limite: p.limite,
+    deslocamento: p.deslocamento,
+    rpc: {
+      async hibrida(args) {
+        const { data, error } = await db().rpc("buscar_licitacoes_hibrida", {
+          ...comuns(args),
+          p_ordenar: "relevancia",
+          p_embedding: args["p_embedding"],
+        });
+        if (error) throw new Error(error.message);
+        return data;
+      },
+      async lexical(args) {
+        const { data, error } = await db().rpc("buscar_licitacoes", {
+          ...comuns(args),
+          p_ordenar: p.ordenarPor,
+        });
+        if (error) throw new Error(error.message);
+        return data;
+      },
+    },
+  });
+
+  // A função híbrida não devolve `consultado_em`; o campo existe no contrato da
+  // tela, então marcamos o instante da resposta em vez de omiti-lo.
+  return {
+    itens: saida.itens as Record<string, unknown>[],
+    total: saida.total,
+    consultado_em: new Date().toISOString(),
+    modo: saida.modo,
+    degradou: saida.degradou,
+  };
+}

@@ -123,6 +123,9 @@ function paraDTO(l: Linha): LicitacaoDTO {
     documentos_estado: (l["documentos_estado"] ?? "pendente") as LicitacaoDTO["documentos_estado"],
     url_pncp: s(l["url_pncp"]),
     link_sistema_origem: s(l["link_sistema_origem"]),
+    // Só a busca híbrida preenche estes dois; no lexical eles não vêm.
+    trecho: s(l["trecho"]),
+    origem_semantica: Boolean(l["origem_semantica"]),
     informacao_complementar: s(l["informacao_complementar"]),
     processo: s(l["processo"]),
     srp: typeof l["srp"] === "boolean" ? (l["srp"] as boolean) : null,
@@ -154,7 +157,7 @@ export const buscarLicitacoesFn = createServerFn({ method: "POST" })
     const repo = await getRepo();
     const cfg = await repo.obterConfiguracoes();
 
-    const resultado = await repo.buscarLicitacoes({
+    const resultado = await repo.buscarLicitacoesComSemantica({
       // Invariante do catálogo operacional. Mesmo que um cliente antigo envie
       // `false` ou omita o campo, a API nunca devolve licitação encerrada ou
       // sem data limite. `licitacao_aberta` no banco também exige abertura e
@@ -173,6 +176,8 @@ export const buscarLicitacoesFn = createServerFn({ method: "POST" })
       pagina: data.pagina,
       totalPaginas: Math.max(1, Math.ceil(resultado.total / data.itensPorPagina)),
       consultadoEm: resultado.consultado_em,
+      modo: resultado.modo,
+      degradou: resultado.degradou,
     };
   });
 
@@ -302,8 +307,7 @@ export const iniciarSincronizacaoFn = createServerFn({ method: "POST" })
   .validator((d: unknown) => escopoSchema.partial().parse(d ?? {}))
   .handler(async ({ data }) => {
     const repo = await getRepo();
-    const { planejarPropostasAbertas, descreverEscopo, etapasProgressivas } =
-      await getPlanner();
+    const { planejarPropostasAbertas, descreverEscopo, etapasProgressivas } = await getPlanner();
 
     const emAndamento = await repo.jobEmAndamento();
     if (emAndamento) {
