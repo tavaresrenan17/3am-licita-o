@@ -1243,8 +1243,12 @@ export async function executarTickArquivos(
       const item = pendentes.shift();
       if (!item) return;
       const espera = proximaPartida - agora();
+      // A vaga de partida é reservada ANTES de qualquer await. Atualizar
+      // `proximaPartida` depois do `dormir` abriria uma janela em que o outro
+      // trabalhador lê o valor velho, dorme o mesmo tanto e dispara junto —
+      // duas partidas no mesmo instante, furando o limite do arquivo 03 §8.
+      proximaPartida = Math.max(proximaPartida, agora()) + cfg.intervaloPartidaMs;
       if (espera > 0) await dormir(espera);
-      proximaPartida = agora() + cfg.intervaloPartidaMs;
       await processar(item);
     }
   }
@@ -1768,6 +1772,16 @@ describe("dividirEmChunks", () => {
     expect(chunks.length).toBeGreaterThan(0);
     expect(chunks.length).toBeLessThan(200);
   });
+
+  it("sobreposição dentro da janela de recuo não trava, mesmo com espaços", () => {
+    // O fixture PRECISA ter espaço perto de 80% do tamanho: é o recuo por
+    // limite de palavra que empurra `inicio` para trás. Um texto só de "a"
+    // nunca exercita esse caminho e deixa o laço infinito passar despercebido.
+    const comEspaco = "a".repeat(81) + " " + "b".repeat(5000);
+    const chunks = dividirEmChunks(comEspaco, { tamanho: 100, sobreposicao: 90 });
+    expect(chunks.length).toBeGreaterThan(0);
+    expect(chunks.length).toBeLessThanOrEqual(40);
+  });
 });
 ```
 
@@ -1831,7 +1845,12 @@ export function dividirEmChunks(texto: string, opcoes: OpcoesChunk = {}): string
     if (trecho.length > 0) chunks.push(trecho);
 
     if (fim >= limpo.length) break;
-    inicio = fim - sobreposicao;
+    // Progresso garantido. O recuo por limite de palavra pode puxar `fim` para
+    // perto de 80% do tamanho; com sobreposição acima disso, `fim - sobreposicao`
+    // andaria para TRÁS, `inicio` ficaria negativo, o slice devolveria string
+    // vazia e o laço nunca terminaria — travando o processo, porque ele é
+    // síncrono. Medido: com tamanho 100 e sobreposição 90, trava de verdade.
+    inicio = Math.max(inicio + 1, fim - sobreposicao);
   }
 
   return chunks;
