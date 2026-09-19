@@ -43,7 +43,7 @@ import {
   type StatusInterno,
 } from "@/lib/types";
 import { brl, dataBR, diasRestantes, numero } from "@/lib/format";
-import { DEFINICOES } from "@/lib/filtros";
+import { DEFINICOES, definicoesDoGrupo, presetPrazo } from "@/lib/filtros";
 import {
   useAtualizarInterno,
   useConfiguracoes,
@@ -532,6 +532,127 @@ function LicitacoesSalvas() {
                 placeholder="Sem limite"
                 value={filtros.valor_max}
                 onChange={(e) => set("valor_max", e.target.value)}
+                className="h-8 text-xs"
+              />
+            </div>
+
+            {/* --- prazo da proposta: os dois filtros que o backend aceitava e
+                a tela nunca ofereceu, mais os atalhos de quem pensa em
+                "o que fecha essa semana" --- */}
+            <div className="space-y-1">
+              <Label className="text-[11px] font-medium text-muted-foreground">
+                Prazo da proposta
+              </Label>
+              <div className="grid grid-cols-2 gap-1.5">
+                <div>
+                  <span className="mb-0.5 block text-[10px] text-muted-foreground">De</span>
+                  <Input
+                    type="date"
+                    aria-label="Encerra a partir de"
+                    value={filtros.limite_de}
+                    onChange={(e) => set("limite_de", e.target.value)}
+                    className="h-8 text-xs"
+                  />
+                </div>
+                <div>
+                  <span className="mb-0.5 block text-[10px] text-muted-foreground">Até</span>
+                  <Input
+                    type="date"
+                    aria-label="Encerra até"
+                    value={filtros.limite_ate}
+                    onChange={(e) => set("limite_ate", e.target.value)}
+                    className="h-8 text-xs"
+                  />
+                </div>
+              </div>
+              <div className="flex gap-1 pt-1">
+                {[7, 15, 30].map((dias) => (
+                  <Button
+                    key={dias}
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-6 px-2 text-[10px]"
+                    onClick={() => {
+                      // Os atalhos preenchem as duas pontas de uma vez e
+                      // pulam o helper `set`: por isso repetem aqui o reset
+                      // de página que `set` faria para cada campo isolado.
+                      const p = presetPrazo(dias);
+                      setFiltros((f) => ({ ...f, ...p }));
+                      setPagina(1);
+                    }}
+                  >
+                    {dias} dias
+                  </Button>
+                ))}
+              </div>
+            </div>
+
+            {/* --- documentos: "só as que têm edital" é provavelmente o filtro
+                mais útil do sistema, e não existia na tela --- */}
+            <div className="space-y-1">
+              <Label className="text-[11px] font-medium text-muted-foreground">Documentos</Label>
+              <div className="flex flex-col gap-1 pt-1">
+                {definicoesDoGrupo("documentos").map((def) => (
+                  <label key={def.chave} className="flex items-center gap-1.5 text-xs">
+                    <input
+                      type="checkbox"
+                      className="size-3.5"
+                      checked={Boolean(filtros[def.chave])}
+                      onChange={(e) => set(def.chave, e.target.checked as never)}
+                    />
+                    {def.rotulo}
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {/* --- meu fluxo: `prioridade` é três estados ("", "sim", "nao"),
+                não booleano — desmarcar volta para "" (indiferente), nunca
+                para "nao" --- */}
+            <div className="space-y-1">
+              <Label className="text-[11px] font-medium text-muted-foreground">Meu fluxo</Label>
+              <div className="flex flex-col gap-1 pt-1">
+                <label className="flex items-center gap-1.5 text-xs">
+                  <input
+                    type="checkbox"
+                    className="size-3.5"
+                    checked={Boolean(filtros.recomendadas)}
+                    onChange={(e) => set("recomendadas", e.target.checked)}
+                  />
+                  Só recomendadas
+                </label>
+                <label className="flex items-center gap-1.5 text-xs">
+                  <input
+                    type="checkbox"
+                    className="size-3.5"
+                    checked={Boolean(filtros.nao_analisadas)}
+                    onChange={(e) => set("nao_analisadas", e.target.checked)}
+                  />
+                  Só não analisadas
+                </label>
+                <label className="flex items-center gap-1.5 text-xs">
+                  <input
+                    type="checkbox"
+                    className="size-3.5"
+                    checked={filtros.prioridade === "sim"}
+                    onChange={(e) => set("prioridade", e.target.checked ? "sim" : "")}
+                  />
+                  Só prioritárias
+                </label>
+              </div>
+            </div>
+
+            {/* --- entrada no catálogo --- */}
+            <div className="space-y-1">
+              <Label className="text-[11px] font-medium text-muted-foreground">
+                No catálogo desde
+              </Label>
+              <Input
+                type="date"
+                aria-label="No catálogo desde"
+                value={filtros.criadas_de}
+                onChange={(e) => set("criadas_de", e.target.value)}
                 className="h-8 text-xs"
               />
             </div>
