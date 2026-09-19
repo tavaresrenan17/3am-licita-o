@@ -20,9 +20,18 @@ describe("decidirAcaoTecla", () => {
   });
 
   it("classifica", () => {
-    expect(decidirAcaoTecla(ev({ key: "i" }))).toEqual({ tipo: "classificar", status: "interessante" });
-    expect(decidirAcaoTecla(ev({ key: "a" }))).toEqual({ tipo: "classificar", status: "em_analise" });
-    expect(decidirAcaoTecla(ev({ key: "d" }))).toEqual({ tipo: "classificar", status: "descartada" });
+    expect(decidirAcaoTecla(ev({ key: "i" }))).toEqual({
+      tipo: "classificar",
+      status: "interessante",
+    });
+    expect(decidirAcaoTecla(ev({ key: "a" }))).toEqual({
+      tipo: "classificar",
+      status: "em_analise",
+    });
+    expect(decidirAcaoTecla(ev({ key: "d" }))).toEqual({
+      tipo: "classificar",
+      status: "descartada",
+    });
   });
 
   it("abre, prioriza e pede ajuda", () => {
@@ -53,7 +62,10 @@ describe("decidirAcaoTecla", () => {
   });
 
   it("nao diferencia maiuscula de minuscula", () => {
-    expect(decidirAcaoTecla(ev({ key: "I" }))).toEqual({ tipo: "classificar", status: "interessante" });
+    expect(decidirAcaoTecla(ev({ key: "I" }))).toEqual({
+      tipo: "classificar",
+      status: "interessante",
+    });
   });
 });
 
