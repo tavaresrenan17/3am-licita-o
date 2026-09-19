@@ -55,6 +55,9 @@ interface DefinicaoFiltro {
   chave: keyof FiltrosLicitacoes;
   rotulo: string;
   grupo: GrupoFiltro;
+  // "booleano" é liga/desliga (`com_edital`); "tri" tem três estados —
+  // sim / não / indiferente — porque `prioridade` viaja como string vazia,
+  // "sim" ou "nao", e "indiferente" não é o mesmo que "nao".
   tipo: "texto" | "data" | "moeda" | "booleano" | "opcoes" | "tri";
   /** Como o chip de filtro ativo descreve o valor escolhido. */
   descrever: (valor: string | boolean) => string;
