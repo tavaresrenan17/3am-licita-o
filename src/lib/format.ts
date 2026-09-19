@@ -11,14 +11,22 @@ export const brl = (v: number | null | undefined) =>
         maximumFractionDigits: 2,
       }).format(v);
 
-export const dataBR = (iso?: string | null) =>
-  iso
-    ? new Intl.DateTimeFormat("pt-BR", {
-        timeZone: "America/Sao_Paulo",
-      }).format(
-        new Date(iso.includes("T") ? iso : `${iso}T12:00:00Z`)
-      )
-    : "—";
+/**
+ * Data ISO no formato brasileiro, ou "—" quando não dá para formatar.
+ *
+ * A checagem de data inválida não é zelo vazio: `Intl.DateTimeFormat.format`
+ * LANÇA `RangeError` com uma data inválida, e `dataBR` é chamada dentro do
+ * render de quatro rotas — uma data estranha derrubaria a página inteira onde
+ * antes saía texto feio numa célula. Nenhum chamador de hoje passa lixo (tudo
+ * vem de `timestamptz`), e é justamente por isso que a falha só apareceria em
+ * produção, no dia em que aparecesse.
+ */
+export const dataBR = (iso?: string | null) => {
+  if (!iso) return "—";
+  const d = new Date(iso.includes("T") ? iso : `${iso}T12:00:00Z`);
+  if (Number.isNaN(d.getTime())) return "—";
+  return new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo" }).format(d);
+};
 
 export const dataHoraBR = (iso?: string | number | null) =>
   iso

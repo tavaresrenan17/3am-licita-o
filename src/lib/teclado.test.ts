@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { ATALHOS, decidirAcaoTecla, limitarIndice, type EventoTecla } from "./teclado";
+import {
+  ATALHOS,
+  alvoEhInterativo,
+  avancaApos,
+  decidirAcaoTecla,
+  limitarIndice,
+  type EventoTecla,
+} from "./teclado";
 
 const ev = (over: Partial<EventoTecla>): EventoTecla => ({
   key: "j",
@@ -7,6 +14,7 @@ const ev = (over: Partial<EventoTecla>): EventoTecla => ({
   altKey: false,
   metaKey: false,
   alvoTag: "body",
+  alvoRole: "",
   alvoEditavel: false,
   ...over,
 });
@@ -48,6 +56,53 @@ describe("decidirAcaoTecla", () => {
       expect(decidirAcaoTecla(ev({ key: "j", alvoTag: tag }))).toBeNull();
     }
     expect(decidirAcaoTecla(ev({ key: "i", alvoEditavel: true }))).toBeNull();
+  });
+
+  it("IGNORA tudo quando o foco esta num BOTAO", () => {
+    // O caso que passou: `Enter` com o foco em "Salvar" dentro do diálogo de
+    // observação perdia o texto digitado e navegava para o detalhe. `Enter` é
+    // a tecla de ativação do botão; ele nunca foi nosso.
+    expect(decidirAcaoTecla(ev({ key: "Enter", alvoTag: "button" }))).toBeNull();
+    // E não é só o `Enter`: com o foco num botão, um `d` por distração
+    // classificaria a licitação selecionada por trás.
+    expect(decidirAcaoTecla(ev({ key: "d", alvoTag: "button" }))).toBeNull();
+    expect(decidirAcaoTecla(ev({ key: "j", alvoTag: "button" }))).toBeNull();
+    expect(decidirAcaoTecla(ev({ key: "?", alvoTag: "button" }))).toBeNull();
+  });
+
+  it("IGNORA tudo quando o foco esta num LINK", () => {
+    // `Enter` num `<Link>` da lista tem de navegar para o destino do link, e
+    // não para a licitação que estiver selecionada.
+    expect(decidirAcaoTecla(ev({ key: "Enter", alvoTag: "a" }))).toBeNull();
+    expect(decidirAcaoTecla(ev({ key: "i", alvoTag: "a" }))).toBeNull();
+    expect(decidirAcaoTecla(ev({ key: "ArrowDown", alvoTag: "a" }))).toBeNull();
+  });
+
+  it("IGNORA tudo quando o foco tem role interativo (Radix usa div)", () => {
+    // O item do menu suspenso do Radix é uma `div role="menuitem"`: a tag não
+    // denuncia nada, só o `role`. Uma lista de negação por tag deixa passar.
+    for (const role of ["menuitem", "option", "tab", "checkbox", "radio", "switch"]) {
+      expect(decidirAcaoTecla(ev({ key: "Enter", alvoTag: "div", alvoRole: role }))).toBeNull();
+      expect(decidirAcaoTecla(ev({ key: "d", alvoTag: "div", alvoRole: role }))).toBeNull();
+    }
+  });
+
+  it("ainda dispara quando o foco esta em elemento inerte", () => {
+    // A regra é de permissão, não de proibição total: linha da tabela, `body`
+    // e contêineres sem papel continuam sendo terreno dos atalhos.
+    expect(decidirAcaoTecla(ev({ key: "d", alvoTag: "tr", alvoRole: "row" }))).toEqual({
+      tipo: "classificar",
+      status: "descartada",
+    });
+    expect(decidirAcaoTecla(ev({ key: "j", alvoTag: "div" }))).toEqual({
+      tipo: "mover",
+      delta: 1,
+    });
+  });
+
+  it("nao se deixa enganar por maiuscula na tag ou no role", () => {
+    expect(decidirAcaoTecla(ev({ key: "d", alvoTag: "BUTTON" }))).toBeNull();
+    expect(decidirAcaoTecla(ev({ key: "d", alvoTag: "div", alvoRole: "MenuItem" }))).toBeNull();
   });
 
   it("IGNORA quando ha modificador, para nao sequestrar atalho do navegador", () => {
@@ -119,5 +174,41 @@ describe("ATALHOS", () => {
       const resultado = decidirAcaoTecla(ev({ key: t }));
       expect(resultado).not.toBeNull();
     }
+  });
+});
+
+describe("alvoEhInterativo", () => {
+  it("reconhece tag, role e contenteditable", () => {
+    expect(alvoEhInterativo("button", "", false)).toBe(true);
+    expect(alvoEhInterativo("a", "", false)).toBe(true);
+    expect(alvoEhInterativo("summary", "", false)).toBe(true);
+    expect(alvoEhInterativo("div", "menuitem", false)).toBe(true);
+    expect(alvoEhInterativo("div", "", true)).toBe(true);
+  });
+
+  it("nao considera interativo o que so contem coisa interativa", () => {
+    // A linha da tabela tem um botão dentro, mas ela mesma é inerte: é nela
+    // que o foco pousa quando o teclado move a seleção.
+    expect(alvoEhInterativo("tr", "row", false)).toBe(false);
+    expect(alvoEhInterativo("td", "gridcell", false)).toBe(false);
+    expect(alvoEhInterativo("body", "", false)).toBe(false);
+    expect(alvoEhInterativo("table", "grid", false)).toBe(false);
+  });
+});
+
+describe("avancaApos", () => {
+  it("classificar avanca, porque o gesto real e 'essa nao, proxima'", () => {
+    expect(avancaApos({ tipo: "classificar", status: "descartada" })).toBe(true);
+    expect(avancaApos({ tipo: "classificar", status: "interessante" })).toBe(true);
+  });
+
+  it("prioridade NAO avanca: marcar prioritaria e dizer 'volto nesta'", () => {
+    expect(avancaApos({ tipo: "prioridade" })).toBe(false);
+  });
+
+  it("mover, abrir e ajuda nao mexem na selecao por si", () => {
+    expect(avancaApos({ tipo: "mover", delta: 1 })).toBe(false);
+    expect(avancaApos({ tipo: "abrir" })).toBe(false);
+    expect(avancaApos({ tipo: "ajuda" })).toBe(false);
   });
 });

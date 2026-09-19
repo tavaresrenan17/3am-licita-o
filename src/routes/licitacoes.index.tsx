@@ -43,7 +43,14 @@ import {
   type StatusInterno,
 } from "@/lib/types";
 import { brl, dataBR, diasRestantes, numero } from "@/lib/format";
-import { DEFINICOES, definicoesDoGrupo, presetPrazo } from "@/lib/filtros";
+import {
+  DEFINICOES,
+  contarFiltrosAtivos,
+  definicoesDoGrupo,
+  filtrosDaBusca,
+  paramsDaBusca,
+  presetPrazo,
+} from "@/lib/filtros";
 import { ATALHOS, type AcaoTriagem } from "@/lib/teclado";
 import { useTriagemTeclado } from "@/hooks/useTriagemTeclado";
 import {
@@ -55,26 +62,66 @@ import {
 } from "@/services/api";
 
 /**
- * Filtros que podem chegar pela URL.
+ * Cada parâmetro chega da URL como texto, mas o roteador faz `JSON.parse` de
+ * cada valor antes de validar: `com_edital=true` vira booleano, `valor_min=500`
+ * vira número e `uf=SP` continua string. Estes dois auxiliares absorvem as três
+ * formas, em vez de o link quebrar a rota por causa de um tipo.
+ */
+const textoUrl = z.preprocess(
+  (v) => (v === undefined || v === null || v === "" ? undefined : String(v)),
+  z.string().optional(),
+);
+const boolUrl = z.preprocess(
+  (v) => (v === undefined || v === null || v === "" ? undefined : v === true || v === "true"),
+  z.boolean().optional(),
+);
+
+/**
+ * Filtros que podem chegar pela URL — TODOS eles, e não um subconjunto.
  *
  * Servem para o Dashboard abrir esta tela já recortada: um número que a equipe
  * leu no painel tem de abrir exatamente a lista que foi contada, senão o card
  * vira enfeite. São a semente do estado inicial — mexer nos filtros aqui não
  * reescreve a URL, e é de propósito: a barra continua sendo o link que trouxe
  * você, não um espelho de cada clique.
+ *
+ * A lista tem de ser completa porque este `z.object` é o que decide o que
+ * sobrevive ao "copiar link desta busca": o zod DESCARTA chave desconhecida
+ * sem erro nenhum. Quando aqui só havia seis chaves, onze filtros sumiam em
+ * silêncio — a começar pela palavra-chave, que é o filtro que dá nome ao
+ * botão — e quem recebia o link via uma lista diferente da compartilhada, sem
+ * nenhum indício.
+ *
+ * `uf` não valida mais o comprimento: um link com UF estranha deve devolver
+ * lista vazia, e não derrubar a rota de quem recebeu.
  */
 const buscaSchema = z.object({
-  uf: z.string().length(2).optional(),
-  categoria: z.string().optional(),
-  criadas_de: z.string().optional(),
-  limite_ate: z.string().optional(),
-  apenas_abertas: z.boolean().optional(),
-  recomendadas: z.boolean().optional(),
-  nao_analisadas: z.boolean().optional(),
+  palavra_chave: textoUrl,
+  uf: textoUrl,
+  municipio: textoUrl,
+  orgao: textoUrl,
+  modalidade: textoUrl,
+  valor_min: textoUrl,
+  valor_max: textoUrl,
+  publicacao_de: textoUrl,
+  publicacao_ate: textoUrl,
+  criadas_de: textoUrl,
+  limite_de: textoUrl,
+  limite_ate: textoUrl,
+  status_interno: textoUrl,
+  prioridade: textoUrl,
+  categoria: textoUrl,
+  com_edital: boolUrl,
+  com_projeto: boolUrl,
+  com_orcamento: boolUrl,
+  nao_analisadas: boolUrl,
+  recomendadas: boolUrl,
+  apenas_abertas: boolUrl,
   ordenar: z
     .enum(["data_limite_proposta", "valor_estimado", "data_publicacao", "score_aderencia"])
-    .optional(),
-  direcao: z.enum(["asc", "desc"]).optional(),
+    .optional()
+    .catch(undefined),
+  direcao: z.enum(["asc", "desc"]).optional().catch(undefined),
 });
 
 export const Route = createFileRoute("/licitacoes/")({
@@ -242,20 +289,19 @@ function LicitacoesSalvas() {
   const { data: opcoes } = useOpcoesFiltros();
   const { data: modalidades } = useModalidades();
   const atualizar = useAtualizarInterno();
+  // `useMutation` devolve objeto novo a cada render; `mutate` é estável. É ele
+  // que os callbacks do teclado fecham, para o ouvinte de `keydown` não ser
+  // re-registrado a cada render por causa de uma identidade que muda sozinha.
+  const { mutate: mutarInterno } = atualizar;
 
   const busca = Route.useSearch();
 
-  const [filtros, setFiltros] = useState<FiltrosLicitacoes>(() => ({
-    ...filtrosVazios,
-    uf: busca.uf ?? UF_INICIAL,
-    ...(busca.categoria ? { categoria: busca.categoria } : {}),
-    ...(busca.criadas_de ? { criadas_de: busca.criadas_de } : {}),
-    ...(busca.limite_ate ? { limite_ate: busca.limite_ate } : {}),
-    ...(busca.apenas_abertas ? { apenas_abertas: true } : {}),
-    ...(busca.recomendadas ? { recomendadas: true } : {}),
-    ...(busca.nao_analisadas ? { nao_analisadas: true } : {}),
-  }));
-  const [termo, setTermo] = useState("");
+  // Semeado por uma função pura e testada, cobrindo TODAS as chaves: era aqui
+  // que os filtros de um link compartilhado se perdiam ao chegar.
+  const [filtros, setFiltros] = useState<FiltrosLicitacoes>(() =>
+    filtrosDaBusca(busca, UF_INICIAL),
+  );
+  const [termo, setTermo] = useState(() => busca.palavra_chave ?? "");
   const [filtrosExpandidos, setFiltrosExpandidos] = useState(false);
   const [ordenarPor, setOrdenarPor] = useState<OrdenacaoCampo>(
     busca.ordenar ?? "data_limite_proposta",
@@ -286,8 +332,11 @@ function LicitacoesSalvas() {
     itensPorPagina,
   });
 
-  // `?? []` criaria um array novo a cada render, fazendo o `useCallback` do
-  // teclado mudar sempre e o ouvinte de `keydown` ser re-registrado toda vez.
+  // `?? []` criaria um array novo a cada render. Junto com o `mutate` estável
+  // acima, é isto que mantém `aoAgir` com a mesma identidade entre renders — e,
+  // portanto, o ouvinte de `keydown` registrado uma vez em vez de a cada
+  // render. Não havia vazamento nem registro duplo antes (a limpeza do efeito é
+  // garantida), só churn; o comentário anterior contava metade da história.
   const itens = useMemo(() => consulta.data?.itens ?? [], [consulta.data]);
   const total = consulta.data?.total ?? 0;
   const totalPaginas = consulta.data?.totalPaginas ?? 1;
@@ -298,9 +347,46 @@ function LicitacoesSalvas() {
 
   const [ajudaAberta, setAjudaAberta] = useState(false);
 
-  // Classificar avança para o próximo: o gesto real da triagem é "essa não,
-  // próxima". O catálogo tem 8.756 licitações e 3 marcadas — o que faltava não
-  // era filtro, era não precisar mirar e clicar em cada uma.
+  // Uma porta só para classificar e priorizar, usada pelo menu e pelo teclado.
+  // Quando o teclado chamava `mutate` direto, ele gravava sem histórico e sem
+  // toast: a trilha de auditoria ficava com buracos justamente no caminho que
+  // esta tela existe para incentivar.
+  const setStatus = useCallback(
+    (id: string, status: StatusInterno) => {
+      mutarInterno(
+        {
+          id,
+          statusInterno: status,
+          historico: `Status interno: ${STATUS_INTERNO_LABEL[status]}`,
+        },
+        {
+          onSuccess: () =>
+            toast.success(`Marcada como ${STATUS_INTERNO_LABEL[status].toLowerCase()}.`),
+        },
+      );
+    },
+    [mutarInterno],
+  );
+
+  const togglePrioridade = useCallback(
+    (id: string, atual: boolean) => {
+      mutarInterno(
+        {
+          id,
+          prioridade: !atual,
+          historico: atual ? "Prioridade removida" : "Marcada como prioritária",
+        },
+        {
+          onSuccess: () =>
+            toast.success(atual ? "Prioridade removida." : "Marcada como prioritária."),
+        },
+      );
+    },
+    [mutarInterno],
+  );
+
+  // Só traduz a ação em efeito. Quem decide que classificar avança para o item
+  // seguinte é `avancaApos`, em `@/lib/teclado`, onde a regra é testável.
   const aoAgir = useCallback(
     (acao: AcaoTriagem, i: number) => {
       if (acao.tipo === "ajuda") {
@@ -314,21 +400,50 @@ function LicitacoesSalvas() {
         return;
       }
       if (acao.tipo === "classificar") {
-        atualizar.mutate({ id: alvo.id, statusInterno: acao.status });
+        setStatus(alvo.id, acao.status);
         return;
       }
       if (acao.tipo === "prioridade") {
-        atualizar.mutate({ id: alvo.id, prioridade: !alvo.prioridade });
+        togglePrioridade(alvo.id, alvo.prioridade);
       }
     },
-    [itens, navigate, atualizar],
+    [itens, navigate, setStatus, togglePrioridade],
   );
 
-  const { indice, setIndice } = useTriagemTeclado({
+  // Trocar de recorte zera a seleção: o mesmo índice sobre outra lista aponta
+  // para uma licitação que o usuário nunca viu, e a página 2 tem os mesmos 25
+  // itens da página 1 — o efeito que só olhava `tamanho` não percebia nada.
+  const chaveLista = useMemo(
+    () => JSON.stringify([filtros, ordenarPor, direcao, pagina]),
+    [filtros, ordenarPor, direcao, pagina],
+  );
+
+  const { indice } = useTriagemTeclado({
     tamanho: itens.length,
-    ativo: !ajudaAberta,
+    // Nenhuma tecla pode classificar por trás de uma camada modal: com o
+    // diálogo de observação aberto o ouvinte sai do ar por inteiro. A ajuda
+    // não desliga o ouvinte — ela o restringe —, senão o `?` não fecharia o
+    // painel que o `?` abriu.
+    ativo: obsAberta === null,
+    somenteAjuda: ajudaAberta,
+    chaveLista,
     aoAgir,
   });
+
+  // A linha selecionada precisa entrar em cena: com 25 itens por página, uns 15
+  // toques em `j` levavam o anel para fora da janela, a tela parava de reagir
+  // visivelmente e o `i` seguinte classificava uma licitação que o usuário
+  // nunca leu. O foco programático é o que faz o leitor de tela anunciar a
+  // linha do `role="grid"`; `preventScroll` deixa o salto por conta do
+  // `scrollIntoView`, que usa `block: "nearest"` para não dar solavanco.
+  const linhasRef = useRef<(HTMLTableRowElement | null)[]>([]);
+  useEffect(() => {
+    if (indice < 0) return;
+    const linha = linhasRef.current[indice];
+    if (!linha) return;
+    linha.scrollIntoView({ block: "nearest" });
+    linha.focus({ preventScroll: true });
+  }, [indice]);
 
   const set = <K extends keyof FiltrosLicitacoes>(k: K, v: FiltrosLicitacoes[K]) => {
     setFiltros((f) => ({ ...f, [k]: v }));
@@ -342,28 +457,6 @@ function LicitacoesSalvas() {
       setDirecao(campo === "data_limite_proposta" ? "asc" : "desc");
     }
     setPagina(1);
-  };
-
-  const setStatus = (id: string, status: StatusInterno) => {
-    atualizar.mutate(
-      {
-        id,
-        statusInterno: status,
-        historico: `Status interno: ${STATUS_INTERNO_LABEL[status]}`,
-      },
-      {
-        onSuccess: () =>
-          toast.success(`Marcada como ${STATUS_INTERNO_LABEL[status].toLowerCase()}.`),
-      },
-    );
-  };
-
-  const togglePrioridade = (id: string, atual: boolean) => {
-    atualizar.mutate({
-      id,
-      prioridade: !atual,
-      historico: atual ? "Prioridade removida" : "Marcada como prioritária",
-    });
   };
 
   const salvarObs = () => {
@@ -382,16 +475,11 @@ function LicitacoesSalvas() {
     );
   };
 
-  const filtrosAtivos = [
-    filtros.palavra_chave,
-    filtros.modalidade,
-    filtros.uf !== UF_INICIAL ? filtros.uf : "",
-    filtros.municipio,
-    filtros.publicacao_de,
-    filtros.publicacao_ate,
-    filtros.valor_min,
-    filtros.valor_max,
-  ].filter(Boolean).length;
+  // Contado a partir das DEFINICOES, e não de uma lista escrita à mão: era a
+  // lista de oito campos que deixava `?recomendadas=true&categoria=Obras` mais
+  // "Com edital" somarem quatro filtros e o contador exibir zero — e o contador
+  // é quem decide se os botões "Limpar filtros" existem.
+  const filtrosAtivos = contarFiltrosAtivos(filtros, UF_INICIAL);
 
   const limparTudo = () => {
     // Limpa as escolhas do usuário, preservando as invariantes do catálogo:
@@ -422,6 +510,32 @@ function LicitacoesSalvas() {
       },
     });
   }
+
+  const copiarLink = () => {
+    // A URL não é espelho dos filtros — decisão registrada no topo deste
+    // arquivo. Quem quiser compartilhar um recorte compartilha por aqui, sem
+    // poluir o histórico do navegador a cada tecla. `paramsDaBusca` percorre a
+    // forma autoritativa dos filtros, e o `buscaSchema` lá em cima aceita todas
+    // as chaves: o link agora chega inteiro do outro lado.
+    const url = `${window.location.origin}/licitacoes?${paramsDaBusca(
+      filtros,
+      ordenarPor,
+      direcao,
+    ).toString()}`;
+
+    // Fora de contexto seguro (um deploy de LAN por http, por exemplo)
+    // `navigator.clipboard` é `undefined`, e ler `.writeText` dele lançaria
+    // SÍNCRONO — antes de existir `.catch()`. O clique não fazia nada e nem o
+    // toast de erro aparecia.
+    if (typeof navigator === "undefined" || !navigator.clipboard?.writeText) {
+      toast.error("Este navegador só libera a cópia em HTTPS. Copie a URL da barra.");
+      return;
+    }
+    void navigator.clipboard
+      .writeText(url)
+      .then(() => toast.success("Link desta busca copiado"))
+      .catch(() => toast.error("Não consegui copiar o link"));
+  };
 
   const SortHead = ({ campo, label }: { campo: OrdenacaoCampo; label: string }) => (
     <button
@@ -739,20 +853,7 @@ function LicitacoesSalvas() {
           variant="ghost"
           size="sm"
           className="h-7 px-2 text-[11px] text-muted-foreground"
-          onClick={() => {
-            // A URL não é espelho dos filtros — decisão registrada no topo
-            // deste arquivo. Quem quiser compartilhar um recorte compartilha
-            // por aqui, sem poluir o histórico do navegador a cada tecla.
-            const params = new URLSearchParams();
-            for (const [chave, valor] of Object.entries(filtros)) {
-              if (valor === "" || valor === false || valor === undefined) continue;
-              params.set(chave, String(valor));
-            }
-            void navigator.clipboard
-              .writeText(`${window.location.origin}/licitacoes?${params.toString()}`)
-              .then(() => toast.success("Link desta busca copiado"))
-              .catch(() => toast.error("Não consegui copiar o link"));
-          }}
+          onClick={copiarLink}
         >
           Copiar link
         </Button>
@@ -805,9 +906,13 @@ function LicitacoesSalvas() {
           />
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[1120px] table-fixed text-xs">
+            {/* `role="grid"` é o que faz o leitor de tela anunciar a
+                navegação por linha; sem ele a `<table>` fica com papel
+                `table`, onde `aria-selected` numa `<tr>` nem é atributo
+                permitido — o leitor ignorava e o axe acusava. */}
+            <table role="grid" className="w-full min-w-[1120px] table-fixed text-xs">
               <thead className="bg-secondary text-muted-foreground border-b border-border">
-                <tr className="border-b border-border">
+                <tr role="row" className="border-b border-border">
                   {visivel("objeto") && (
                     <th className="h-11 px-4 py-0 text-left font-medium">Oportunidade</th>
                   )}
@@ -853,10 +958,28 @@ function LicitacoesSalvas() {
                   return (
                     <tr
                       key={l.id}
+                      role="row"
+                      // A limpeza do ref (React 19) evita guardar linha já
+                      // desmontada: sem ela, encolher a lista deixaria o
+                      // índice apontando para um nó solto no ar.
+                      ref={(el) => {
+                        linhasRef.current[i] = el;
+                        return () => {
+                          linhasRef.current[i] = null;
+                        };
+                      }}
                       aria-selected={i === indice}
-                      onMouseEnter={() => setIndice(i)}
+                      // Roving tabindex: só a linha selecionada é alcançável
+                      // pelo Tab. Sem seleção, a primeira linha é a porta de
+                      // entrada — e é exatamente nela que o primeiro `j` cai.
+                      tabIndex={i === (indice < 0 ? 0 : indice) ? 0 : -1}
+                      // NÃO existe `onMouseEnter` aqui, e a ausência é
+                      // deliberada: o cursor atravessando a tabela a caminho de
+                      // outra coisa roubava a seleção do teclado, e o `i`
+                      // seguinte marcava a linha errada. A premissa do recurso é
+                      // não classificar errado; quem usa mouse tem o `onClick`.
                       className={cn(
-                        "cursor-pointer border-b border-border/60 align-middle transition-colors last:border-0 hover:bg-accent/40",
+                        "cursor-pointer border-b border-border/60 align-middle outline-none transition-colors last:border-0 hover:bg-accent/40",
                         // A seleção precisa ser visível sem depender de cor
                         // sozinha: o anel marca a linha para quem navega por
                         // teclado sem tirar a mão do j/k.

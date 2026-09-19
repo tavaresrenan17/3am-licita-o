@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 import { filtrosVazios, type FiltrosLicitacoes } from "./types";
 import {
   DEFINICOES,
-  GRUPOS_ABERTOS,
   SEM_CONTROLE,
+  contarFiltrosAtivos,
   definicoesDoGrupo,
+  filtrosDaBusca,
+  paramsDaBusca,
   presetPrazo,
 } from "./filtros";
 
@@ -41,10 +43,6 @@ describe("DEFINICOES", () => {
     expect(grupoDe("recomendadas")).toBe("fluxo");
     expect(grupoDe("nao_analisadas")).toBe("fluxo");
     expect(grupoDe("prioridade")).toBe("fluxo");
-  });
-
-  it("abre so os grupos onde a decisao de triagem acontece", () => {
-    expect([...GRUPOS_ABERTOS].sort()).toEqual(["fluxo", "prazo"]);
   });
 });
 
@@ -103,5 +101,106 @@ describe("presetPrazo", () => {
     // falha em máquinas UTC, detectando a regressão na CI.
     const r = presetPrazo(0, new Date("2026-09-19T02:00:00Z"));
     expect(r.limite_de).toBe("2026-09-18");
+  });
+});
+
+describe("contarFiltrosAtivos", () => {
+  it("conta os filtros novos, que a lista escrita a mao ignorava", () => {
+    // O cenário exato do defeito: vindo do Dashboard com `recomendadas` e
+    // `categoria`, mais "Com edital" marcado na tela. Contador antigo: 0.
+    const filtros = {
+      ...filtrosVazios,
+      uf: "SP",
+      recomendadas: true,
+      categoria: "Obras",
+      com_edital: true,
+    };
+    expect(contarFiltrosAtivos(filtros, "SP")).toBe(3);
+  });
+
+  it("nao conta o recorte inicial do catalogo, mas conta a troca de UF", () => {
+    expect(contarFiltrosAtivos({ ...filtrosVazios, uf: "SP" }, "SP")).toBe(0);
+    expect(contarFiltrosAtivos({ ...filtrosVazios, uf: "MG" }, "SP")).toBe(1);
+  });
+
+  it("nao conta `apenas_abertas`, que o servidor impoe", () => {
+    // `filtrosVazios` já traz `apenas_abertas: true`; contá-lo faria a tela
+    // nascer com um filtro ativo que ninguém escolheu.
+    expect(contarFiltrosAtivos(filtrosVazios, "")).toBe(0);
+  });
+
+  it("conta toda chave descrita, e nao uma lista paralela", () => {
+    // Se alguém acrescentar um filtro em DEFINICOES, ele passa a contar sem
+    // ninguém precisar lembrar de um quarto lugar.
+    const todos = { ...filtrosVazios } as FiltrosLicitacoes;
+    for (const def of DEFINICOES) {
+      (todos[def.chave] as string | boolean) =
+        typeof filtrosVazios[def.chave] === "boolean" ? true : "x";
+    }
+    expect(contarFiltrosAtivos(todos, "")).toBe(DEFINICOES.length);
+  });
+});
+
+describe("link da busca (ida e volta)", () => {
+  const cheios: FiltrosLicitacoes = {
+    palavra_chave: "pavimentação",
+    uf: "SP",
+    municipio: "Campinas",
+    orgao: "Prefeitura",
+    modalidade: "Pregão Eletrônico",
+    valor_min: "50000",
+    valor_max: "900000",
+    publicacao_de: "2026-01-01",
+    publicacao_ate: "2026-02-01",
+    criadas_de: "2026-03-01",
+    limite_de: "2026-09-19",
+    limite_ate: "2026-09-30",
+    status_interno: "nova",
+    prioridade: "sim",
+    categoria: "Pavimentação",
+    com_edital: true,
+    com_projeto: true,
+    com_orcamento: true,
+    nao_analisadas: true,
+    recomendadas: true,
+    apenas_abertas: true,
+  };
+
+  it("nao perde NENHUM filtro na ida e na volta", () => {
+    // O defeito: o botão serializava tudo, o schema da rota conhecia seis
+    // chaves e o zod descartava o resto sem erro — a palavra-chave, que dá
+    // nome ao botão, era a primeira a cair.
+    const params = paramsDaBusca(cheios);
+    const lidos = Object.fromEntries(params.entries());
+    expect(filtrosDaBusca(lidos, "SP")).toEqual(cheios);
+  });
+
+  it("leva ordenacao e direcao, que o schema aceitava e o botao nao enviava", () => {
+    const params = paramsDaBusca(cheios, "valor_estimado", "desc");
+    expect(params.get("ordenar")).toBe("valor_estimado");
+    expect(params.get("direcao")).toBe("desc");
+  });
+
+  it("nao escreve filtro vazio na URL", () => {
+    const params = paramsDaBusca({ ...filtrosVazios, uf: "SP" });
+    expect([...params.keys()].sort()).toEqual(["apenas_abertas", "uf"]);
+  });
+
+  it("aceita booleano como `true` e como a string 'true'", () => {
+    // O roteador faz JSON.parse de cada parâmetro: `com_edital=true` chega
+    // booleano, mas um link montado à mão chega string. Significam o mesmo.
+    expect(filtrosDaBusca({ com_edital: true }, "SP").com_edital).toBe(true);
+    expect(filtrosDaBusca({ com_edital: "true" }, "SP").com_edital).toBe(true);
+    expect(filtrosDaBusca({ com_edital: "false" }, "SP").com_edital).toBe(false);
+  });
+
+  it("cai no recorte inicial quando o link nao traz UF", () => {
+    expect(filtrosDaBusca({}, "SP").uf).toBe("SP");
+    expect(filtrosDaBusca({ uf: "MG" }, "SP").uf).toBe("MG");
+  });
+
+  it("ignora chave que nao e filtro", () => {
+    const r = filtrosDaBusca({ ordenar: "valor_estimado", direcao: "desc", uf: "RJ" }, "SP");
+    expect(r).toEqual({ ...filtrosVazios, uf: "RJ" });
   });
 });

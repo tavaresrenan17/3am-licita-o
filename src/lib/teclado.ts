@@ -16,6 +16,8 @@ export interface EventoTecla {
   metaKey: boolean;
   /** Nome da tag do elemento focado, em minúsculo. */
   alvoTag: string;
+  /** Atributo `role` do elemento focado, em minúsculo; "" quando não há. */
+  alvoRole: string;
   /** true quando o elemento focado é `contenteditable`. */
   alvoEditavel: boolean;
 }
@@ -38,12 +40,71 @@ export const ATALHOS: readonly { tecla: string; descricao: string }[] = [
   { tecla: "?", descricao: "mostrar estes atalhos" },
 ];
 
-const CAMPOS_DE_TEXTO = new Set(["input", "textarea", "select"]);
+/**
+ * Tags cujo elemento já responde a teclado por conta própria.
+ *
+ * `option` e `summary` entram porque também têm ativação por tecla; `label`
+ * não entra porque quem recebe o foco é o controle associado, não ela.
+ */
+const TAGS_INTERATIVAS = new Set([
+  "input",
+  "textarea",
+  "select",
+  "option",
+  "button",
+  "a",
+  "summary",
+]);
+
+/**
+ * `role` que declara um elemento qualquer (tipicamente uma `div`) como
+ * interativo. É por aqui que passam os componentes do Radix: o item de menu
+ * suspenso é uma `div role="menuitem"` e a ativação dele é o `Enter`.
+ */
+const ROLES_INTERATIVOS = new Set([
+  "button",
+  "link",
+  "menuitem",
+  "menuitemcheckbox",
+  "menuitemradio",
+  "option",
+  "tab",
+  "checkbox",
+  "radio",
+  "switch",
+  "textbox",
+  "searchbox",
+  "combobox",
+  "spinbutton",
+  "slider",
+]);
+
+/**
+ * O alvo do evento já tem significado próprio para a tecla digitada.
+ *
+ * Esta é uma lista de PERMISSÃO invertida, e não uma lista de negação de
+ * campos de texto: o atalho só dispara quando o foco está em algo inerte.
+ * A versão anterior isentava apenas `input`/`textarea`/`select`, e por isso
+ * engolia o `Enter` de qualquer botão ou link — um `Enter` em "Salvar" no
+ * diálogo de observação perdia o texto digitado e navegava para outra tela.
+ * Vale para TODAS as teclas, não só `Enter`: com o foco num botão, um `d`
+ * digitado por distração classificaria a licitação selecionada por trás.
+ */
+export function alvoEhInterativo(
+  alvoTag: string,
+  alvoRole: string,
+  alvoEditavel: boolean,
+): boolean {
+  if (alvoEditavel) return true;
+  if (TAGS_INTERATIVAS.has(alvoTag.toLowerCase())) return true;
+  return ROLES_INTERATIVOS.has(alvoRole.toLowerCase());
+}
 
 export function decidirAcaoTecla(e: EventoTecla): AcaoTriagem | null {
-  // Regra 1: nada dispara enquanto se digita. Sem isto, escrever "edital" na
-  // busca descartaria uma licitação no "d".
-  if (CAMPOS_DE_TEXTO.has(e.alvoTag.toLowerCase()) || e.alvoEditavel) return null;
+  // Regra 1: nada dispara quando o foco está num elemento que já responde a
+  // teclado. Sem isto, escrever "edital" na busca descartaria uma licitação
+  // no "d", e o "Enter" de qualquer botão viraria "abrir a licitação".
+  if (alvoEhInterativo(e.alvoTag, e.alvoRole, e.alvoEditavel)) return null;
 
   // Regra 2: modificador é do navegador, não nosso.
   if (e.ctrlKey || e.altKey || e.metaKey) return null;
@@ -70,6 +131,18 @@ export function decidirAcaoTecla(e: EventoTecla): AcaoTriagem | null {
     default:
       return null;
   }
+}
+
+/**
+ * Classificar avança para o próximo item; as demais ações não mexem na seleção.
+ *
+ * O gesto real da triagem é "essa não, próxima": sem o avanço o ciclo vira
+ * `d`, `j`, `d`, `j` em vez de `d`, `d`, `d`. Alternar prioridade NÃO avança,
+ * porque marcar como prioritária é dizer "volto nesta", e não "terminei com
+ * esta".
+ */
+export function avancaApos(acao: AcaoTriagem): boolean {
+  return acao.tipo === "classificar";
 }
 
 /**

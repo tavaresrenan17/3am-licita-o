@@ -35,4 +35,19 @@ describe("dataBR", () => {
     // com componente de hora (que sempre foram interpretados corretamente em UTC).
     expect(dataBR("2026-09-30T23:30:00Z")).toBe("30/09/2026");
   });
+
+  it("degrada para travessão em vez de LANÇAR com data invalida", () => {
+    // `Intl.DateTimeFormat.format` lança RangeError com data inválida, e
+    // `dataBR` roda dentro do render de quatro rotas: uma exceção derrubaria a
+    // página inteira onde antes saía "Invalid Date" numa célula.
+    expect(() => dataBR("lixo")).not.toThrow();
+    expect(dataBR("lixo")).toBe("—");
+    expect(dataBR("2026-13-45")).toBe("—");
+  });
+
+  it("vazio e nulo continuam virando travessão", () => {
+    expect(dataBR("")).toBe("—");
+    expect(dataBR(null)).toBe("—");
+    expect(dataBR(undefined)).toBe("—");
+  });
 });

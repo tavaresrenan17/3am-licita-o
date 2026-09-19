@@ -11,7 +11,7 @@
  * e o teste de cobertura falha se alguém esquecer.
  */
 import { brl, dataBR, diaBR } from "./format";
-import type { FiltrosLicitacoes } from "./types";
+import { filtrosVazios, type FiltrosLicitacoes, type OrdenacaoCampo } from "./types";
 
 export type GrupoFiltro = "prazo" | "documentos" | "fluxo" | "local" | "valor";
 
@@ -38,9 +38,6 @@ export interface DefinicaoFiltro {
  * desligar algo que não pode.
  */
 export const SEM_CONTROLE: ReadonlySet<keyof FiltrosLicitacoes> = new Set(["apenas_abertas"]);
-
-/** Grupos que nascem abertos: é onde a decisão de triagem acontece. */
-export const GRUPOS_ABERTOS: readonly GrupoFiltro[] = ["prazo", "fluxo"];
 
 export const DEFINICOES: readonly DefinicaoFiltro[] = [
   // --- busca
@@ -205,4 +202,88 @@ export function presetPrazo(
   agora: Date = new Date(),
 ): { limite_de: string; limite_ate: string } {
   return { limite_de: diaBR(0, agora), limite_ate: diaBR(dias, agora) };
+}
+
+/**
+ * Quantos filtros o usuário escolheu, contados a partir das DEFINIÇÕES.
+ *
+ * Era uma lista escrita à mão de oito campos, e por isso os nove filtros novos
+ * mais `categoria` não contavam: chegar do Dashboard com
+ * `?recomendadas=true&categoria=Obras` e marcar "Com edital" dava quatro
+ * filtros ativos e contador zero — e o contador é quem decide se o botão
+ * "Limpar filtros" existe. É a mesma classe de bug que este trabalho veio
+ * consertar, sobrevivendo dentro da correção.
+ *
+ * `ufBase` é o recorte inicial do catálogo (SP): ele não é escolha do usuário
+ * e não conta, mas trocar de UF conta.
+ */
+export function contarFiltrosAtivos(filtros: FiltrosLicitacoes, ufBase: string): number {
+  let total = 0;
+  for (const def of DEFINICOES) {
+    const valor = filtros[def.chave];
+    if (valor === "" || valor === false || valor === undefined) continue;
+    if (def.chave === "uf" && valor === ufBase) continue;
+    total += 1;
+  }
+  return total;
+}
+
+/** O que um link de busca pode carregar: os filtros mais a ordenação. */
+export interface BuscaLink extends Partial<
+  Record<keyof FiltrosLicitacoes, string | boolean | undefined>
+> {
+  ordenar?: OrdenacaoCampo | undefined;
+  direcao?: "asc" | "desc" | undefined;
+}
+
+/**
+ * Monta os parâmetros do link "copiar link desta busca".
+ *
+ * Percorre `filtrosVazios`, que é a forma autoritativa de `FiltrosLicitacoes`,
+ * e não uma lista paralela — a versão anterior serializava tudo mas o schema
+ * da rota só conhecia seis chaves e o zod descarta chave desconhecida sem
+ * erro, então onze filtros (a começar pela palavra-chave, que dá nome ao
+ * botão) sumiam em silêncio e quem recebia o link via outra lista.
+ *
+ * Fica de fora só o que é vazio: filtro não escolhido não vira parâmetro.
+ * Um `uf` vazio também não viaja, e quem recebe o link cai no recorte inicial
+ * do catálogo — a mesma invariante que "Limpar filtros" aplica.
+ */
+export function paramsDaBusca(
+  filtros: FiltrosLicitacoes,
+  ordenar?: OrdenacaoCampo,
+  direcao?: "asc" | "desc",
+): URLSearchParams {
+  const params = new URLSearchParams();
+  for (const chave of Object.keys(filtrosVazios) as (keyof FiltrosLicitacoes)[]) {
+    const valor = filtros[chave];
+    if (valor === "" || valor === false || valor === undefined) continue;
+    params.set(chave, String(valor));
+  }
+  if (ordenar) params.set("ordenar", ordenar);
+  if (direcao) params.set("direcao", direcao);
+  return params;
+}
+
+/**
+ * A volta: semeia o estado dos filtros com o que chegou pela URL.
+ *
+ * Aceita booleano tanto como `true` quanto como a string `"true"`, porque o
+ * roteador faz `JSON.parse` de cada parâmetro e o resultado depende do que
+ * estava escrito — `com_edital=true` chega booleano, mas um link montado à
+ * mão chega string, e as duas coisas têm de significar o mesmo.
+ */
+export function filtrosDaBusca(busca: BuscaLink, ufPadrao: string): FiltrosLicitacoes {
+  const saida = { ...filtrosVazios };
+  for (const chave of Object.keys(filtrosVazios) as (keyof FiltrosLicitacoes)[]) {
+    const recebido = busca[chave];
+    if (recebido === undefined || recebido === null || recebido === "") continue;
+    if (typeof filtrosVazios[chave] === "boolean") {
+      (saida[chave] as boolean) = recebido === true || recebido === "true";
+    } else {
+      (saida[chave] as string) = String(recebido);
+    }
+  }
+  if (!saida.uf) saida.uf = ufPadrao;
+  return saida;
 }
