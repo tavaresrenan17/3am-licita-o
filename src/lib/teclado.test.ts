@@ -100,6 +100,19 @@ describe("decidirAcaoTecla", () => {
     });
   });
 
+  it("IGNORA tambem quando o foco esta no CONTEINER, e nao num item", () => {
+    // Achado lendo o fonte do Radix: ao abrir, o menu foca o proprio elemento
+    // de conteudo (`role="menu"`), nao um item — e volta a focá-lo sempre que o
+    // cursor sai de um item. Sem os papeis de conteiner aqui, um `d` com o menu
+    // aberto classificava a licitacao de tras, que e exatamente a falha que
+    // esta regra existe para impedir.
+    for (const role of ["menu", "dialog", "alertdialog", "listbox", "combobox"]) {
+      expect(decidirAcaoTecla(ev({ key: "d", alvoTag: "div", alvoRole: role }))).toBeNull();
+      expect(decidirAcaoTecla(ev({ key: "Enter", alvoTag: "div", alvoRole: role }))).toBeNull();
+      expect(decidirAcaoTecla(ev({ key: "j", alvoTag: "div", alvoRole: role }))).toBeNull();
+    }
+  });
+
   it("nao se deixa enganar por maiuscula na tag ou no role", () => {
     expect(decidirAcaoTecla(ev({ key: "d", alvoTag: "BUTTON" }))).toBeNull();
     expect(decidirAcaoTecla(ev({ key: "d", alvoTag: "div", alvoRole: "MenuItem" }))).toBeNull();

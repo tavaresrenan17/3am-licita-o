@@ -62,6 +62,17 @@ const TAGS_INTERATIVAS = new Set([
  * suspenso é uma `div role="menuitem"` e a ativação dele é o `Enter`.
  */
 const ROLES_INTERATIVOS = new Set([
+  // Os papéis de CONTÊINER entram aqui, e não só os de item, porque é o
+  // contêiner que recebe o foco primeiro. Lido no fonte do Radix: ao abrir, o
+  // menu foca o próprio elemento de conteúdo (`role="menu"`), e volta a focá-lo
+  // sempre que o cursor sai de um item. Sem "menu" nesta lista, um `d` digitado
+  // com o menu aberto classificava a licitação de trás — a mesma falha que a
+  // regra existe para impedir, entrando pela porta do contêiner.
+  "menu",
+  "dialog",
+  "alertdialog",
+  "listbox",
+  "combobox",
   "button",
   "link",
   "menuitem",
