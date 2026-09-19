@@ -296,7 +296,7 @@ export function presetPrazo(
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `npx vitest run src/lib/filtros.test.ts`
-Expected: PASS, 11 testes.
+Expected: PASS, 12 testes.
 
 Se o teste de cobertura falhar listando chaves órfãs, **não apague o teste**: acrescente a definição que falta. Esse teste é o ponto do trabalho.
 
@@ -822,7 +822,7 @@ Criar `src/hooks/useTriagemTeclado.ts`:
  * enquanto alguém digita, vivem em `@/lib/teclado`, onde dá para testá-las sem
  * DOM. Se este arquivo crescer, é sinal de que há lógica no lugar errado.
  */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { decidirAcaoTecla, limitarIndice, type AcaoTriagem } from "@/lib/teclado";
 
 export interface OpcoesTriagem {
@@ -834,6 +834,10 @@ export interface OpcoesTriagem {
 
 export function useTriagemTeclado({ tamanho, ativo, aoAgir }: OpcoesTriagem) {
   const [indice, setIndiceBruto] = useState(-1);
+  // O ouvinte de teclado e registrado uma vez e fecha sobre o indice daquele
+  // render. O ref e como ele le o valor atual sem virar dependencia do efeito.
+  const indiceRef = useRef(indice);
+  indiceRef.current = indice;
 
   // A lista muda de tamanho ao paginar ou filtrar; a seleção não pode ficar
   // apontando para um item que não existe mais.
@@ -862,13 +866,13 @@ export function useTriagemTeclado({ tamanho, ativo, aoAgir }: OpcoesTriagem) {
       e.preventDefault();
 
       if (acao.tipo === "mover") {
-        setIndiceBruto((atual) => limitarIndice((atual < 0 ? 0 : atual + acao.delta), tamanho));
+        setIndiceBruto((atual) => limitarIndice(atual < 0 ? 0 : atual + acao.delta, tamanho));
         return;
       }
-      setIndiceBruto((atual) => {
-        aoAgir(acao, atual);
-        return atual;
-      });
+      // `aoAgir` fica FORA do atualizador de estado: atualizador precisa ser
+      // puro, e o React pode chama-lo duas vezes em StrictMode -- o que
+      // dispararia a classificacao em dobro.
+      aoAgir(acao, indiceRef.current);
     }
     window.addEventListener("keydown", aoTeclar);
     return () => window.removeEventListener("keydown", aoTeclar);
