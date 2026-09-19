@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { sincronizacaoEstaAtualizada } from "./format";
+import { dataBR, sincronizacaoEstaAtualizada } from "./format";
 
 describe("sincronizacaoEstaAtualizada", () => {
   const agora = Date.parse("2026-09-16T15:00:00.000Z");
@@ -18,4 +18,21 @@ describe("sincronizacaoEstaAtualizada", () => {
       expect(sincronizacaoEstaAtualizada(status, "2026-09-16T14:00:00.000Z", agora)).toBe(false);
     },
   );
+});
+
+describe("dataBR", () => {
+  it("interpreta data pura em fuso de São Paulo, não UTC", () => {
+    // O bug era pré-existente: `new Date("2026-09-30")` é meia-noite UTC, que em
+    // São Paulo (UTC-3) é 21h do dia anterior (29º). Sem este teste, o off-by-one
+    // só aparecia em chips de filtro, onde o usuário vê a data formatada. O fix
+    // acrescenta "T12:00:00Z" a strings sem hora, garantindo que o dia é preservado
+    // quando convertido para São Paulo.
+    expect(dataBR("2026-09-30")).toBe("30/09/2026");
+  });
+
+  it("formata timestamp com hora no fuso de São Paulo como antes", () => {
+    // Prova que o fix não quebrou o caminho que já funcionava para timestamps
+    // com componente de hora (que sempre foram interpretados corretamente em UTC).
+    expect(dataBR("2026-09-30T23:30:00Z")).toBe("30/09/2026");
+  });
 });

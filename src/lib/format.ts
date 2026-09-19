@@ -12,7 +12,13 @@ export const brl = (v: number | null | undefined) =>
       }).format(v);
 
 export const dataBR = (iso?: string | null) =>
-  iso ? new Date(iso).toLocaleDateString("pt-BR") : "—";
+  iso
+    ? new Intl.DateTimeFormat("pt-BR", {
+        timeZone: "America/Sao_Paulo",
+      }).format(
+        new Date(iso.includes("T") ? iso : `${iso}T12:00:00Z`)
+      )
+    : "—";
 
 export const dataHoraBR = (iso?: string | number | null) =>
   iso
