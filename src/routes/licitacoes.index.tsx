@@ -43,6 +43,7 @@ import {
   type StatusInterno,
 } from "@/lib/types";
 import { brl, dataBR, diasRestantes, numero } from "@/lib/format";
+import { DEFINICOES } from "@/lib/filtros";
 import {
   useAtualizarInterno,
   useConfiguracoes,
@@ -362,55 +363,27 @@ function LicitacoesSalvas() {
     setPagina(1);
   };
 
+  // Os chips saem das definições, e não de uma cadeia de `if`. Era a cadeia que
+  // deixava filtro sem chip: nove filtros existiam no backend e nenhum deles
+  // aparecia aqui.
   const chipsAtivos: { chave: string; label: string; limpar?: () => void }[] = [
     { chave: "uf-base", label: filtros.uf || UF_INICIAL },
     { chave: "abertas", label: "Em aberto" },
   ];
-  if (filtros.palavra_chave)
+  for (const def of DEFINICOES) {
+    const valor = filtros[def.chave];
+    // `uf` já aparece como chip base; repetir seria ruído.
+    if (def.chave === "uf") continue;
+    if (valor === "" || valor === false || valor === undefined) continue;
     chipsAtivos.push({
-      chave: "palavra_chave",
-      label: `Busca: ${filtros.palavra_chave}`,
+      chave: def.chave,
+      label: def.descrever(valor),
       limpar: () => {
-        setTermo("");
-        set("palavra_chave", "");
+        if (def.chave === "palavra_chave") setTermo("");
+        set(def.chave, (typeof valor === "boolean" ? false : "") as never);
       },
     });
-  if (filtros.municipio)
-    chipsAtivos.push({
-      chave: "municipio",
-      label: filtros.municipio,
-      limpar: () => set("municipio", ""),
-    });
-  if (filtros.modalidade)
-    chipsAtivos.push({
-      chave: "modalidade",
-      label: filtros.modalidade,
-      limpar: () => set("modalidade", ""),
-    });
-  if (filtros.publicacao_de)
-    chipsAtivos.push({
-      chave: "publicacao_de",
-      label: `Publicadas desde ${dataBR(filtros.publicacao_de)}`,
-      limpar: () => set("publicacao_de", ""),
-    });
-  if (filtros.publicacao_ate)
-    chipsAtivos.push({
-      chave: "publicacao_ate",
-      label: `Publicadas até ${dataBR(filtros.publicacao_ate)}`,
-      limpar: () => set("publicacao_ate", ""),
-    });
-  if (filtros.valor_min)
-    chipsAtivos.push({
-      chave: "valor_min",
-      label: `Valor mínimo: ${brl(Number(filtros.valor_min))}`,
-      limpar: () => set("valor_min", ""),
-    });
-  if (filtros.valor_max)
-    chipsAtivos.push({
-      chave: "valor_max",
-      label: `Valor máximo: ${brl(Number(filtros.valor_max))}`,
-      limpar: () => set("valor_max", ""),
-    });
+  }
 
   const SortHead = ({ campo, label }: { campo: OrdenacaoCampo; label: string }) => (
     <button
