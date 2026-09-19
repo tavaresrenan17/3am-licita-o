@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowDown,
   ArrowUp,
@@ -44,6 +44,8 @@ import {
 } from "@/lib/types";
 import { brl, dataBR, diasRestantes, numero } from "@/lib/format";
 import { DEFINICOES, definicoesDoGrupo, presetPrazo } from "@/lib/filtros";
+import { ATALHOS, type AcaoTriagem } from "@/lib/teclado";
+import { useTriagemTeclado } from "@/hooks/useTriagemTeclado";
 import {
   useAtualizarInterno,
   useConfiguracoes,
@@ -284,13 +286,49 @@ function LicitacoesSalvas() {
     itensPorPagina,
   });
 
-  const itens = consulta.data?.itens ?? [];
+  // `?? []` criaria um array novo a cada render, fazendo o `useCallback` do
+  // teclado mudar sempre e o ouvinte de `keydown` ser re-registrado toda vez.
+  const itens = useMemo(() => consulta.data?.itens ?? [], [consulta.data]);
   const total = consulta.data?.total ?? 0;
   const totalPaginas = consulta.data?.totalPaginas ?? 1;
   // A tela não pode prometer semântica que não está ligada: o texto do campo
   // muda só quando o servidor confirma que respondeu em modo híbrido.
   const modoHibrido = consulta.data?.modo === "hibrido";
   const buscaDegradou = consulta.data?.degradou === true;
+
+  const [ajudaAberta, setAjudaAberta] = useState(false);
+
+  // Classificar avança para o próximo: o gesto real da triagem é "essa não,
+  // próxima". O catálogo tem 8.756 licitações e 3 marcadas — o que faltava não
+  // era filtro, era não precisar mirar e clicar em cada uma.
+  const aoAgir = useCallback(
+    (acao: AcaoTriagem, i: number) => {
+      if (acao.tipo === "ajuda") {
+        setAjudaAberta((v) => !v);
+        return;
+      }
+      const alvo = itens[i];
+      if (!alvo) return;
+      if (acao.tipo === "abrir") {
+        void navigate({ to: "/licitacoes/$id", params: { id: alvo.id } });
+        return;
+      }
+      if (acao.tipo === "classificar") {
+        atualizar.mutate({ id: alvo.id, statusInterno: acao.status });
+        return;
+      }
+      if (acao.tipo === "prioridade") {
+        atualizar.mutate({ id: alvo.id, prioridade: !alvo.prioridade });
+      }
+    },
+    [itens, navigate, atualizar],
+  );
+
+  const { indice, setIndice } = useTriagemTeclado({
+    tamanho: itens.length,
+    ativo: !ajudaAberta,
+    aoAgir,
+  });
 
   const set = <K extends keyof FiltrosLicitacoes>(k: K, v: FiltrosLicitacoes[K]) => {
     setFiltros((f) => ({ ...f, [k]: v }));
@@ -686,6 +724,57 @@ function LicitacoesSalvas() {
         </div>
       </section>
 
+      <div className="mt-2 flex items-center gap-1">
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="h-7 px-2 text-[11px] text-muted-foreground"
+          onClick={() => setAjudaAberta((v) => !v)}
+        >
+          Atalhos de triagem (?)
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="h-7 px-2 text-[11px] text-muted-foreground"
+          onClick={() => {
+            // A URL não é espelho dos filtros — decisão registrada no topo
+            // deste arquivo. Quem quiser compartilhar um recorte compartilha
+            // por aqui, sem poluir o histórico do navegador a cada tecla.
+            const params = new URLSearchParams();
+            for (const [chave, valor] of Object.entries(filtros)) {
+              if (valor === "" || valor === false || valor === undefined) continue;
+              params.set(chave, String(valor));
+            }
+            void navigator.clipboard
+              .writeText(`${window.location.origin}/licitacoes?${params.toString()}`)
+              .then(() => toast.success("Link desta busca copiado"))
+              .catch(() => toast.error("Não consegui copiar o link"));
+          }}
+        >
+          Copiar link
+        </Button>
+      </div>
+
+      {ajudaAberta && (
+        <div className="mt-2 rounded-lg border border-border bg-card p-3">
+          <p className="mb-2 text-[11px] font-medium">Atalhos de triagem</p>
+          <ul className="grid grid-cols-2 gap-x-6 gap-y-1 text-[11px] text-muted-foreground">
+            {ATALHOS.map((a) => (
+              <li key={a.tecla} className="flex justify-between gap-4">
+                <kbd className="rounded border border-border px-1 font-mono">{a.tecla}</kbd>
+                <span className="text-right">{a.descricao}</span>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2 text-[10px] text-muted-foreground">
+            Os atalhos não disparam enquanto você digita num campo.
+          </p>
+        </div>
+      )}
+
       {buscaDegradou && (
         // Degradar em silêncio seria pior que degradar: quem busca precisa
         // saber que está vendo o resultado por palavra-chave, e não por ideia.
@@ -753,7 +842,7 @@ function LicitacoesSalvas() {
                 </tr>
               </thead>
               <tbody>
-                {itens.map((l) => {
+                {itens.map((l, i) => {
                   const dias = l.data_limite_proposta
                     ? diasRestantes(l.data_limite_proposta)
                     : null;
@@ -764,7 +853,15 @@ function LicitacoesSalvas() {
                   return (
                     <tr
                       key={l.id}
-                      className="cursor-pointer border-b border-border/60 align-middle transition-colors last:border-0 hover:bg-accent/40"
+                      aria-selected={i === indice}
+                      onMouseEnter={() => setIndice(i)}
+                      className={cn(
+                        "cursor-pointer border-b border-border/60 align-middle transition-colors last:border-0 hover:bg-accent/40",
+                        // A seleção precisa ser visível sem depender de cor
+                        // sozinha: o anel marca a linha para quem navega por
+                        // teclado sem tirar a mão do j/k.
+                        i === indice && "bg-accent/60 ring-1 ring-inset ring-primary/40",
+                      )}
                       onClick={() => navigate({ to: "/licitacoes/$id", params: { id: l.id } })}
                     >
                       {visivel("objeto") && (
