@@ -150,7 +150,8 @@ export const DEFINICOES: readonly DefinicaoFiltro[] = [
     rotulo: "Prioridade",
     grupo: "fluxo",
     tipo: "tri",
-    descrever: (v) => (v === "sim" ? "Prioritárias" : "Não prioritárias"),
+    descrever: (v) =>
+      v === "sim" ? "Prioritárias" : v === "nao" ? "Não prioritárias" : "Qualquer prioridade",
   },
 
   // --- valor e classificação

@@ -85,10 +85,39 @@ describe("limitarIndice", () => {
 });
 
 describe("ATALHOS", () => {
-  it("documenta toda tecla que faz alguma coisa", () => {
-    // A tela de ajuda é gerada desta lista; um atalho fora dela é um atalho
-    // secreto.
-    expect(ATALHOS.length).toBeGreaterThanOrEqual(6);
-    expect(ATALHOS.every((a) => a.tecla && a.descricao)).toBe(true);
+  it("documenta correspondência perfeita entre teclas e descricoes", () => {
+    // A tela de ajuda é gerada desta lista. Qualquer atalho no switch sem
+    // entrada em ATALHOS vira secreto. Qualquer entrada sem correspondência
+    // vira documentação mentirosa. O teste garante correspondência 1:1.
+    //
+    // Entradas como "j / ↓" representam duas teclas. Precisamos expandir e
+    // verificar que cada uma dispara uma ação, mapeando símbolos visuais
+    // (↓, ↑) para seus nomes de tecla (ArrowDown, ArrowUp).
+    const teclasCadastradas = new Set<string>();
+    const mapearSimbolo = (s: string): string => {
+      if (s === "↓") return "ArrowDown";
+      if (s === "↑") return "ArrowUp";
+      return s;
+    };
+
+    for (const a of ATALHOS) {
+      const partes = a.tecla.split("/").map((p) => p.trim());
+      for (const p of partes) {
+        teclasCadastradas.add(mapearSimbolo(p));
+      }
+    }
+
+    // Toda tecla que dispara uma ação deve estar documentada
+    const taclasQueDisparam = ["j", "ArrowDown", "k", "ArrowUp", "Enter", "i", "a", "d", "p", "?"];
+    for (const t of taclasQueDisparam) {
+      expect(teclasCadastradas.has(t)).toBe(true);
+    }
+
+    // Toda tecla documentada deve disparar uma ação (não deve haver entradas
+    // fantasmas)
+    for (const t of teclasCadastradas) {
+      const resultado = decidirAcaoTecla(ev({ key: t }));
+      expect(resultado).not.toBeNull();
+    }
   });
 });

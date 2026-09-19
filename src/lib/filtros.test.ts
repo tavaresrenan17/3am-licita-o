@@ -59,10 +59,14 @@ describe("descrever", () => {
     expect(d.descrever("2026-09-30")).toBe("Encerra até 30/09/2026");
   });
 
-  it("tri distingue sim de nao", () => {
+  it("tri distingue sim, nao e indiferente", () => {
     const d = DEFINICOES.find((x) => x.chave === "prioridade")!;
     expect(d.descrever("sim")).toBe("Prioritárias");
     expect(d.descrever("nao")).toBe("Não prioritárias");
+    // Indiferente não é o mesmo que não: "" (vazio) é um terceiro estado.
+    // A geração de chips pula valores vazios, mas a função está errada se
+    // transforma "" em "Não prioritárias" — mistura semântica com apresentação.
+    expect(d.descrever("")).toBe("Qualquer prioridade");
   });
 
   it("moeda sai formatada", () => {
@@ -89,5 +93,15 @@ describe("presetPrazo", () => {
   it("atravessa a virada de mes", () => {
     const r = presetPrazo(15, new Date("2026-09-25T12:00:00"));
     expect(r.limite_ate).toBe("2026-10-10");
+  });
+
+  it("usa diaBR para respeitar o fuso de São Paulo, não Date local", () => {
+    // 02:00 UTC do dia 19 é 23:00 do dia 18 em São Paulo. Uma implementação
+    // ingênua com `Date` local acerta numa máquina em BRT e erra numa máquina
+    // em UTC — e o workflow do GitHub roda em UTC. Este caso trava a resposta
+    // correta nos dois lugares. Se alguém reverter para Date.getDate(), o teste
+    // falha em máquinas UTC, detectando a regressão na CI.
+    const r = presetPrazo(0, new Date("2026-09-19T02:00:00Z"));
+    expect(r.limite_de).toBe("2026-09-18");
   });
 });
