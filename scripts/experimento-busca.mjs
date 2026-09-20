@@ -142,6 +142,18 @@ for (const consulta of consultas.consultas) {
       latencias.push(dt);
     }
 
+    // Registrar a latencia por consulta logo apos o laco de repeticoes, antes
+    // da chamada lexical: se a lexical falhar, o catch abaixo pula direto para
+    // relatorio.consultas.push sem chegar ao push que ficava mais abaixo. Isso
+    // deixava latencia_por_consulta com menos entradas do que o agregado
+    // global (que ja tinha somado as REPETICOES desta consulta a `latencias`),
+    // podendo sumir do ranking justamente a consulta mais lenta.
+    latenciaPorConsulta.push({
+      id: consulta.id,
+      texto: consulta.texto,
+      ...resumoLatencia(latenciasConsulta),
+    });
+
     // Lexical e comparacao de conteudo (ids, completude) sao avaliados uma vez
     // por consulta: sao sobre o que a busca devolve, nao sobre quanto tempo
     // leva, e repeti-los so multiplicaria chamadas sem medir nada novo. A
@@ -160,12 +172,6 @@ for (const consulta of consultas.consultas) {
     registro.novos_no_hibrido = registro.hibrido.filter((id) => !registro.lexical.includes(id)).length;
     // Completude sob filtros: com >= 10 elegiveis, tem que voltar 10.
     registro.completo = registro.total_elegiveis >= 10 ? registro.hibrido.length === 10 : true;
-
-    latenciaPorConsulta.push({
-      id: consulta.id,
-      texto: consulta.texto,
-      ...resumoLatencia(latenciasConsulta),
-    });
   } catch (e) {
     registro.erro = e.message;
     relatorio.falhas.push(`${consulta.id}: ${e.message}`);
@@ -192,15 +198,26 @@ relatorio.latencia_ms = {
       : null,
 };
 relatorio.latencia_por_consulta = latenciaPorConsulta;
+// O criterio 4 da ADR-001 exige p95/p99 dentro da meta E amostra >= 100
+// execucoes. Sem a segunda parte, um run de poucas amostras (onde p95 e so o
+// pior caso isolado) podia marcar `cumprido: true` mesmo sem a resolucao
+// estatistica que a ADR pede.
+const amostraSuficiente = resumoGeral.amostras >= 100;
 relatorio.gates.latencia = {
   p95: relatorio.latencia_ms.p95,
   meta_p95: 300,
   p99: relatorio.latencia_ms.p99,
   meta_p99: 600,
+  amostras: resumoGeral.amostras,
+  minimo_amostras: 100,
   cumprido:
     relatorio.latencia_ms.p95 !== null &&
     relatorio.latencia_ms.p95 <= 300 &&
-    relatorio.latencia_ms.p99 <= 600,
+    relatorio.latencia_ms.p99 <= 600 &&
+    amostraSuficiente,
+  ...(amostraSuficiente
+    ? {}
+    : { observacao: `amostra de ${resumoGeral.amostras} execucoes; a ADR-001 exige >= 100 para este gate.` }),
 };
 
 const incompletas = relatorio.consultas.filter((c) => c.completo === false).length;

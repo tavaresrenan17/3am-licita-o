@@ -179,10 +179,25 @@ Medição de 20/09/2026, depois de `20260920120000_limiar_exato_hibrida.sql`:
     amostra de 108   p50 = 149 ms    p95 = 337 ms    p99 = 428 ms
 
 A segunda linha é a que vale: 108 execuções, 9 por consulta, a amostra ≥ 100 que
-esta ADR exige. As três consultas mais lentas por p95 são "coleta de lixo
-urbano" (474 ms), "software de gestão" (428 ms) e "aquisição de medicamentos"
-(426 ms), com zero falhas. Quando a amostra era de 12, o p95 era simplesmente o
-pior caso isolado — e isso mudava o veredito em 77 ms.
+esta ADR exige — e ela foi cumprida. As três mais lentas pelo pior caso de 9
+execuções são "coleta de lixo urbano" (474 ms), "software de gestão" (428 ms) e
+"aquisição de medicamentos" (426 ms), com zero falhas. Com 9 repetições,
+nearest-rank dá k = ceil(0,95 × 9) = 9 de 9: esses três números são o maior
+valor de cada consulta, não um p95 com sentido estatístico — só o rótulo estava
+errado, os números continuam corretos.
+
+A queda de 414 ms para 337 ms não se explica pelo tamanho da amostra: o p50
+caiu de 352 ms para 149 ms, e tamanho de amostra muda qual estatística de ordem
+se lê, não a tendência central. A causa é metodológica — as 9 repetições por
+consulta são consecutivas, sobre a mesma consulta e o mesmo embedding, com os
+buffers do Postgres já segurando aquele working set. O que 149 ms mede é
+latência de repetição quente, não a latência de uma consulta nova chegando fria.
+A amostra ≥ 100 que esta ADR exige foi cumprida, mas o número é o melhor caso de
+cache quente: para tráfego de consultas variadas, sem repetição consecutiva da
+mesma busca, a lacuna até a meta de 300 ms pode ser maior que os 37 ms que a
+linha de baixo sugere. A observação sobre a amostra de 12 continua verdadeira —
+seu p95 era mesmo o pior caso isolado —, só que isso explica a diferença entre
+as duas linhas em parte, não sozinho.
 
 A função passou a contar os elegíveis e escolher a estratégia: até
 `configuracao_busca.limiar_exato` (5.000) pré-filtra e varre o subconjunto;
@@ -200,15 +215,18 @@ Dois defeitos foram corrigidos junto, e o segundo estava no instrumento:
   ADR pede latência "após aquecimento" — o harness aquecia o modelo e não o
   banco. Agora aquece os dois.
 
-Latência por consulta depois da mudança, as mesmas 12 do harness: RPC entre 106
-e 430 ms, contra 8.415–9.867 ms antes. "Serviços de vigilância patrimonial", que
-devolve zero no lexical e quatro corretos no híbrido, responde em 152 ms.
+Latência por consulta depois da mudança, primeira checagem com as mesmas 12 do
+harness: RPC entre 106 e 430 ms, contra 8.415–9.867 ms antes. "Serviços de
+vigilância patrimonial", que devolve zero no lexical e quatro corretos no
+híbrido, responde em 152 ms. A checagem seguinte, com amostra de 108, encontrou
+consultas até 474 ms — a faixa de 106 a 430 ms era apenas o que 12 execuções
+tinham revelado até então, não o teto real.
 
 ### Decisão
 
 **A decisão original desta ADR permanece em vigor**, e o motivo mudou de lugar.
-O critério 4 deixou de ser um abismo: 414 ms contra 300 ms de meta, na mesma
-ordem de grandeza. Duas coisas seguem valendo:
+O critério 4 deixou de ser um abismo: 337 ms contra 300 ms de meta, com amostra
+de 108, na mesma ordem de grandeza. Duas coisas seguem valendo:
 
 1. **337 ms não é 300 ms.** A amostra agora tem 108 execuções, como esta ADR
    exige, então o número é defensável — e o que ele diz é que faltam 12% para a
@@ -240,8 +258,11 @@ Duas observações medidas que não mudam a decisão mas informam a próxima:
   0,40, dirigida pelo vetor de objeto e não pelos documentos. Limiar não
   resolve; é assunto separado.
 
-Medição completa em
-[`2026-09-19-medicao-limiar-com-documentos.md`](2026-09-19-medicao-limiar-com-documentos.md).
+A medição de latência com amostra de 108 está registrada nesta própria ADR, na
+seção "O limiar exato foi implementado, e o critério 4 caiu de 9.287 ms para
+337 ms", acima. `2026-09-19-medicao-limiar-com-documentos.md` trata de outro
+assunto — a calibragem do limiar de distância — e sua medição de latência é a
+de 12 amostras, superada pela de 108 aqui registrada.
 
 ## Referências
 
