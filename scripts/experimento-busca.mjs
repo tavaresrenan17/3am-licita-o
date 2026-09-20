@@ -12,6 +12,8 @@
  */
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 
+import { resumoLatencia } from "./lib/estatistica.mjs";
+
 for (const linha of readFileSync(new URL("../.env", import.meta.url), "utf8").split(/\r?\n/)) {
   const m = /^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/.exec(linha);
   if (m?.[1] && m[2] !== undefined) process.env[m[1]] = m[2].replace(/^["']|["']$/g, "");
@@ -45,12 +47,10 @@ async function embutir(texto) {
   return `[${j.embeddings[0].join(",")}]`;
 }
 
-function percentil(valores, p) {
-  if (valores.length === 0) return null;
-  const ordenado = [...valores].sort((a, b) => a - b);
-  const i = Math.min(ordenado.length - 1, Math.ceil((p / 100) * ordenado.length) - 1);
-  return ordenado[Math.max(i, 0)];
-}
+// Repeticoes da fase de latencia por consulta. Com as 12 consultas do arquivo
+// de avaliacao, o padrao 9 da 9 x 12 = 108 execucoes, acima do minimo de 100
+// que a ADR-001 exige para o percentil ter resolucao de verdade.
+const REPETICOES = Number(process.env.EXPERIMENTO_REPETICOES ?? 9);
 
 const consultas = JSON.parse(
   readFileSync(new URL("../docs/superpowers/specs/consultas-avaliacao.json", import.meta.url), "utf8"),
@@ -118,20 +118,35 @@ try {
 }
 
 const latencias = [];
+const latenciaPorConsulta = [];
 
 for (const consulta of consultas.consultas) {
   const registro = { id: consulta.id, texto: consulta.texto, lexical: [], hibrido: [], erro: null };
   try {
+    // O embedding e gerado UMA vez e reaproveitado nas REPETICOES chamadas: medir
+    // o Ollama de novo a cada repeticao mediria o modelo, nao a RPC, e o
+    // relogio abaixo cobre so a busca hibrida no banco.
     const literal = await embutir(consulta.texto);
 
-    const t0 = Date.now();
-    const hibrido = await rpc("buscar_licitacoes_hibrida", {
-      p_filtros: { palavra_chave: consulta.texto },
-      p_embedding: literal,
-      p_limite: 10,
-    });
-    latencias.push(Date.now() - t0);
+    const latenciasConsulta = [];
+    let hibrido;
+    for (let i = 0; i < REPETICOES; i++) {
+      const t0 = Date.now();
+      hibrido = await rpc("buscar_licitacoes_hibrida", {
+        p_filtros: { palavra_chave: consulta.texto },
+        p_embedding: literal,
+        p_limite: 10,
+      });
+      const dt = Date.now() - t0;
+      latenciasConsulta.push(dt);
+      latencias.push(dt);
+    }
 
+    // Lexical e comparacao de conteudo (ids, completude) sao avaliados uma vez
+    // por consulta: sao sobre o que a busca devolve, nao sobre quanto tempo
+    // leva, e repeti-los so multiplicaria chamadas sem medir nada novo. A
+    // resposta hibrida usada aqui e a da ultima repeticao — mesma consulta e
+    // mesmo embedding, entao o conteudo e o mesmo em qualquer repeticao.
     const lexical = await rpc("buscar_licitacoes", {
       p_filtros: { palavra_chave: consulta.texto },
       p_limite: 10,
@@ -145,6 +160,12 @@ for (const consulta of consultas.consultas) {
     registro.novos_no_hibrido = registro.hibrido.filter((id) => !registro.lexical.includes(id)).length;
     // Completude sob filtros: com >= 10 elegiveis, tem que voltar 10.
     registro.completo = registro.total_elegiveis >= 10 ? registro.hibrido.length === 10 : true;
+
+    latenciaPorConsulta.push({
+      id: consulta.id,
+      texto: consulta.texto,
+      ...resumoLatencia(latenciasConsulta),
+    });
   } catch (e) {
     registro.erro = e.message;
     relatorio.falhas.push(`${consulta.id}: ${e.message}`);
@@ -152,18 +173,25 @@ for (const consulta of consultas.consultas) {
   relatorio.consultas.push(registro);
 }
 
+const resumoGeral = resumoLatencia(latencias);
 relatorio.latencia_ms = {
-  amostras: latencias.length,
-  p50: percentil(latencias, 50),
-  p95: percentil(latencias, 95),
-  p99: percentil(latencias, 99),
-  // Uma execucao por consulta. Com 12 amostras, "p99" e apenas o maior valor
-  // observado — nao ha resolucao para um percentil 99. A ADR-001 pede >= 100
-  // execucoes; enquanto o harness fizer uma volta so, o rotulo honesto e este.
+  amostras: resumoGeral.amostras,
+  p50: resumoGeral.p50,
+  p95: resumoGeral.p95,
+  p99: resumoGeral.p99,
+  min: resumoGeral.min,
+  max: resumoGeral.max,
+  media: resumoGeral.media,
+  repeticoes_por_consulta: REPETICOES,
+  // Ausencia de aviso (null) e informacao: significa que a amostra atingiu o
+  // minimo que a ADR-001 exige e o percentil tem resolucao de verdade.
   aviso:
-    `amostra de ${latencias.length} execucoes (uma por consulta); a ADR-001 pede >= 100. ` +
-    "Com esta amostra, p99 e o maximo observado, nao um percentil.",
+    resumoGeral.amostras < 100
+      ? `amostra de ${resumoGeral.amostras} execucoes (${REPETICOES} por consulta); a ADR-001 pede >= 100. ` +
+        "Com amostra pequena, p99 pode ser apenas o maximo observado, nao um percentil real."
+      : null,
 };
+relatorio.latencia_por_consulta = latenciaPorConsulta;
 relatorio.gates.latencia = {
   p95: relatorio.latencia_ms.p95,
   meta_p95: 300,
@@ -228,8 +256,27 @@ if (relatorio.modo_observado !== "hibrido") {
 }
 
 console.log(`Cobertura de embeddings: ${(taxa * 100).toFixed(2)}% (gate: >= 99%)`);
-console.log(`Latencia p95: ${relatorio.latencia_ms.p95} ms | p99: ${relatorio.latencia_ms.p99} ms`);
-console.log(`Latencia: ${relatorio.latencia_ms.aviso}`);
-console.log(`Consultas com falha: ${relatorio.falhas.length}`);
+console.log(
+  `Latencia: amostra de ${relatorio.latencia_ms.amostras} execucoes ` +
+    `(${relatorio.latencia_ms.repeticoes_por_consulta} por consulta) | ` +
+    `p50: ${relatorio.latencia_ms.p50} ms | p95: ${relatorio.latencia_ms.p95} ms | ` +
+    `p99: ${relatorio.latencia_ms.p99} ms`,
+);
+// Ausencia de aviso (amostra >= 100) tambem e informacao — deixamos isso
+// explicito em vez de imprimir "null" no terminal.
+console.log(`Latencia: ${relatorio.latencia_ms.aviso ?? "amostra >= 100, sem ressalva."}`);
+
+const maisLentas = [...relatorio.latencia_por_consulta]
+  .filter((c) => c.p95 !== null)
+  .sort((a, b) => b.p95 - a.p95)
+  .slice(0, 3);
+if (maisLentas.length > 0) {
+  console.log("\nConsultas mais lentas (por p95):");
+  for (const c of maisLentas) {
+    console.log(`  ${c.id} | ${c.texto} | ${c.p95} ms`);
+  }
+}
+
+console.log(`\nConsultas com falha: ${relatorio.falhas.length}`);
 console.log(`Gate de relevancia: ${relatorio.gates.relevancia.observacao}`);
 console.log(`\nPode ligar o hibrido? ${relatorio.gates.pode_ligar_hibrido ? "SIM" : "NAO"}`);
