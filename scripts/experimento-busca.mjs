@@ -99,6 +99,24 @@ relatorio.gates.cobertura = { valor: taxa, minimo: 0.99, cumprido: taxa >= 0.99 
 // Aquecimento: a primeira chamada carrega o modelo em memoria (medido: 6,9 s).
 await embutir("aquecimento").catch((e) => relatorio.falhas.push(`aquecimento: ${e.message}`));
 
+// Aquecer o BANCO tambem. O primeiro acesso ao indice HNSW carrega o grafo do
+// disco, e sem isto uma consulta qualquer aparece com 5 s: medido em 20/09/2026,
+// p50 de 352 ms e p95 de 5.091 ms numa amostra de 12: as outras onze ficaram
+// entre 106 e 430 ms. Com amostra pequena, esse unico valor vira o p95 e o
+// relatorio acusa reprovacao por carregamento de indice, nao por consulta lenta.
+// A ADR pede latencia "apos aquecimento" — do modelo E do banco.
+try {
+  const primeira = consultas.consultas[0];
+  const vetorAquecimento = await embutir(primeira.texto);
+  await rpc("buscar_licitacoes_hibrida", {
+    p_filtros: { palavra_chave: primeira.texto },
+    p_embedding: vetorAquecimento,
+    p_limite: 10,
+  });
+} catch (e) {
+  relatorio.falhas.push(`aquecimento do banco: ${e.message}`);
+}
+
 const latencias = [];
 
 for (const consulta of consultas.consultas) {

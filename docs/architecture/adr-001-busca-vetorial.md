@@ -132,7 +132,7 @@ vetorizados, 10.424 chunks).
 | 1 | cobertura ≥ 99% | **cumprido** — 8.792 de 8.792, 100% |
 | 2 | recall@10 do HNSW ≥ 0,95 | **inaplicável** — ver abaixo |
 | 3 | ganho de relevância ≥ 10% | em aberto, e já não é o que bloqueia |
-| 4 | p95/p99 nas metas | **REPROVADO** — ver abaixo |
+| 4 | p95/p99 nas metas | **414 ms** contra meta de 300 ms — era 9.287 ms; ver abaixo |
 | 5 | top-10 completo sob filtros | **cumprido** — 0 consultas incompletas |
 | 6 | custo aceito | custo de API é **zero** (Ollama local) |
 | 7 | fallback testado + observabilidade | fallback coberto por teste; observabilidade contínua ainda não existe |
@@ -171,22 +171,54 @@ exata só quando o conjunto elegível fosse pequeno e o índice quando fosse
 grande. Ela nunca foi implementada, e foi registrada como lacuna consciente na
 época. É ela que falta.
 
+### O limiar exato foi implementado, e o critério 4 caiu de 9.287 ms para 414 ms
+
+Medição de 20/09/2026, depois de `20260920120000_limiar_exato_hibrida.sql`:
+
+    p50 = 352 ms    p95 = 414 ms    meta de p95 = 300 ms
+
+A função passou a contar os elegíveis e escolher a estratégia: até
+`configuracao_busca.limiar_exato` (5.000) pré-filtra e varre o subconjunto;
+acima disso busca os 600 vizinhos mais próximos pelo HNSW sobre a tabela inteira
+e só então cruza com o filtro relacional. O resultado devolve
+`estrategia_vetorial` e `elegiveis`, porque acima do limiar a completude do
+top-10 deixa de ser garantida — a troca que a spec §4[C] autoriza.
+
+Dois defeitos foram corrigidos junto, e o segundo estava no instrumento:
+
+- `melhor_chunk` fazia `distinct on` sobre os 10.424 chunks **sem limite algum**;
+- o harness media o primeiro acesso ao HNSW, que carrega o grafo do disco. Isso
+  sozinho produzia p95 de 5.091 ms com p50 de 352 ms: onze das doze consultas
+  ficavam entre 106 e 430 ms, e a décima segunda era carregamento de índice. Esta
+  ADR pede latência "após aquecimento" — o harness aquecia o modelo e não o
+  banco. Agora aquece os dois.
+
+Latência por consulta depois da mudança, as mesmas 12 do harness: RPC entre 106
+e 430 ms, contra 8.415–9.867 ms antes. "Serviços de vigilância patrimonial", que
+devolve zero no lexical e quatro corretos no híbrido, responde em 152 ms.
+
 ### Decisão
 
-**A decisão original desta ADR permanece em vigor, e por um motivo melhor do que
-o que a motivou.** Não é mais o julgamento humano de relevância que segura o
-rollout — é um número objetivo, reproduzível e três vezes pior do que a pior
-leitura tolerável.
+**A decisão original desta ADR permanece em vigor**, e o motivo mudou de lugar.
+O critério 4 deixou de ser um abismo: 414 ms contra 300 ms de meta, na mesma
+ordem de grandeza. Duas coisas seguem valendo:
 
-O gate que teria sido o mais tentador de relaxar, por exigir trabalho humano
-caro, não é o que importa agora. E o gate 4, que parecia burocracia, pegou um
-defeito real antes de ele chegar ao usuário. **Este é o argumento para não
-afrouxar critério antes de exercitá-lo.**
+1. **414 ms não é 300 ms**, e a amostra tem 12 execuções, não as ≥ 100 que esta
+   ADR exige. O número justifica continuar, não declarar o gate cumprido.
+2. **O gate 3 continua sem um único julgamento humano.** Ligar o híbrido sem ele
+   contraria esta ADR, e a latência ter melhorado não muda isso.
+
+O que o episódio ensina vale mais que o número: o gate 4 pegou um defeito real
+de plano de consulta antes de chegar ao usuário, e investigá-lo revelou um
+segundo defeito — no próprio instrumento de medição. **Medir sem aquecer o banco
+teria condenado uma implementação correta.**
 
 Próximo trabalho, nesta ordem:
 
-1. Implementar `HIBRIDO_LIMIAR_EXATO` e medir de novo o critério 4.
-2. Só então retomar a conversa sobre o critério 3, com a busca já utilizável.
+1. Ampliar a amostra de latência para ≥ 100 execuções e confirmar o p95 com a
+   folga que esta ADR pede.
+2. Retomar o critério 3 com as 100 consultas julgadas — agora com a busca
+   utilizável, que era a condição que faltava.
 
 Duas observações medidas que não mudam a decisão mas informam a próxima:
 
