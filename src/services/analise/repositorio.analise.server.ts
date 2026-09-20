@@ -29,6 +29,7 @@ export interface MateriaPrimaAnalise {
 
 export interface EvidenciaAnalise {
   id: string;
+  licitacaoId: string;
   documentoId: string;
   nome: string;
   tipo: string;
@@ -230,26 +231,29 @@ export function criarRepositorioAnalise(porta: PortaSupabaseAnalise = portaSupab
           p_modelo: modelo,
           p_limite: limite,
         });
-        return (Array.isArray(data) ? data : []).map((valor) => {
-          const linha = registro(valor);
-          return {
+        return (Array.isArray(data) ? data : [])
+          .map((valor) => registro(valor))
+          .filter((linha) => linha["licitacao_id"] === licitacaoId)
+          .map((linha) => ({
             id: String(linha["chunk_id"]),
+            licitacaoId: String(linha["licitacao_id"]),
             documentoId: String(linha["documento_id"]),
             nome: String(linha["nome"] ?? ""),
             tipo: String(linha["tipo"] ?? "outro"),
             ordem: Number(linha["ordem"] ?? 0),
             trecho: String(linha["trecho"] ?? ""),
             distancia: Number(linha["distancia"] ?? 0),
-          };
-        });
+          }));
       } catch (erro) {
         throw new Error(`buscar chunks: ${mensagem(erro)}`);
       }
     },
 
-    async obterAnalise(licitacaoId: string): Promise<LinhaAnalise | null> {
+    async obterAnalise(licitacaoId: string, fingerprint?: string): Promise<LinhaAnalise | null> {
       try {
-        return mapearAnalise(await porta.obterAnalise(licitacaoId));
+        const linha = mapearAnalise(await porta.obterAnalise(licitacaoId));
+        if (fingerprint === undefined) return linha;
+        return linha?.estado === "pronta" && linha.fingerprint === fingerprint ? linha : null;
       } catch (erro) {
         throw new Error(`obter analise: ${mensagem(erro)}`);
       }

@@ -37,6 +37,7 @@ create or replace function public.buscar_chunks_analise(
   p_limite integer default 12
 ) returns table (
   chunk_id uuid,
+  licitacao_id uuid,
   documento_id uuid,
   nome text,
   tipo text,
@@ -57,6 +58,7 @@ begin
   return query
   with candidatos as materialized (
     select c.id,
+           c.licitacao_id,
            c.documento_id,
            d.nome,
            d.tipo_documento,
@@ -71,6 +73,7 @@ begin
        and c.modelo = p_modelo
   )
   select c.id,
+         c.licitacao_id,
          c.documento_id,
          c.nome,
          c.tipo_documento,
@@ -202,8 +205,7 @@ begin
          atualizado_em = now()
    where licitacao_id = p_licitacao_id
      and estado = 'processando'
-     and lease_id = p_lease_id
-     and lease_expira_em > now();
+     and lease_id = p_lease_id;
 
   if not found then
     raise exception 'lease da analise perdido ou expirado';
