@@ -1,0 +1,32 @@
+# Finais de linha.
+#
+# Este repositório tem `core.autocrlf=true` e o Prettier deste projeto exige LF.
+# Sem este arquivo, cada `git checkout` reescreve a árvore em CRLF e o ESLint
+# passa a acusar milhares de erros em código que está perfeitamente correto —
+# aconteceu três vezes em 19/09/2026, inclusive logo depois de uma mesclagem,
+# com 6.719 erros em `src` e zero diferença real contra o commit.
+#
+# `eol=lf` vale mais que o `core.autocrlf` da máquina, então isto resolve para
+# todo mundo que clonar, sem exigir configuração local de ninguém.
+* text=auto eol=lf
+
+# EXCEÇÃO: arquivos de lote do Windows ficam em CRLF.
+#
+# `scripts/rotina-3h.cmd` e `scripts/rotina-diaria.cmd` rodam sozinhos pelo
+# Agendador de Tarefas. O `cmd.exe` é conhecido por se comportar de forma
+# imprevisível com `goto` e labels em arquivos só com LF, e uma rotina que
+# falha de madrugada não avisa ninguém. Não vale o risco pela uniformidade.
+*.cmd text eol=crlf
+*.bat text eol=crlf
+
+# Binários: o git não deve tentar converter nada aqui.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.eot binary
