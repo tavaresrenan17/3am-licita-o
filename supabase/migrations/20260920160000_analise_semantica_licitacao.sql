@@ -23,6 +23,8 @@ create table if not exists public.licitacoes_analises (
 
 create index if not exists licitacoes_analises_estado_idx
   on public.licitacoes_analises (estado, atualizado_em desc);
+create index if not exists documento_chunks_licitacao_modelo_idx
+  on public.documento_chunks (licitacao_id, modelo);
 
 alter table public.licitacoes_analises enable row level security;
 
@@ -48,7 +50,7 @@ create or replace function public.buscar_chunks_analise(
 language plpgsql
 stable
 security definer
-set search_path = pg_catalog, public, extensions, pg_temp
+set search_path = pg_catalog, extensions, pg_temp
 as $$
 declare
   v_vetor extensions.halfvec(1024);
@@ -94,22 +96,37 @@ create or replace function public.adquirir_lease_analise(
   p_forcar boolean,
   p_prompt_versao text,
   p_algoritmo_versao text,
+  p_lease_id uuid,
   p_duracao interval default '5 minutes'
 ) returns table (adquirido boolean, linha jsonb)
 language plpgsql
 security definer
-set search_path = pg_catalog, public, pg_temp
+set search_path = pg_catalog, pg_temp
 as $$
 declare
   v_atual public.licitacoes_analises;
-  v_lease uuid;
+  v_duracao interval;
 begin
+  if p_lease_id is null then
+    raise exception 'lease_id obrigatorio';
+  end if;
+
   perform pg_advisory_xact_lock(hashtextextended(p_licitacao_id::text, 0));
+  v_duracao := least(
+    greatest(coalesce(p_duracao, '5 minutes'::interval), '1 minute'::interval),
+    '15 minutes'::interval
+  );
 
   select * into v_atual
     from public.licitacoes_analises
    where licitacao_id = p_licitacao_id
    for update;
+
+  -- Replay do mesmo pedido: confirma ownership sem reiniciar nem prolongar.
+  if found and v_atual.lease_id = p_lease_id then
+    return query select v_atual.estado = 'processando', to_jsonb(v_atual);
+    return;
+  end if;
 
   if found
      and v_atual.estado = 'processando'
@@ -126,8 +143,6 @@ begin
     return;
   end if;
 
-  v_lease := gen_random_uuid();
-
   insert into public.licitacoes_analises as a (
     licitacao_id, estado, resultado, fontes, cobertura, fingerprint,
     modelo, prompt_versao, algoritmo_versao, lease_id, lease_expira_em,
@@ -135,7 +150,7 @@ begin
   ) values (
     p_licitacao_id, 'processando', null, '[]'::jsonb, '{}'::jsonb,
     p_fingerprint, null, p_prompt_versao, p_algoritmo_versao,
-    v_lease, now() + p_duracao, null, now()
+    p_lease_id, now() + v_duracao, null, now()
   )
   on conflict (licitacao_id) do update
     set estado = 'processando',
@@ -152,6 +167,36 @@ begin
 end;
 $$;
 
+-- Heartbeat: pode recuperar um worker lento depois do vencimento, desde que
+-- nenhum novo token tenha assumido a linha.
+create or replace function public.renovar_lease_analise(
+  p_licitacao_id uuid,
+  p_lease_id uuid,
+  p_duracao interval default '5 minutes'
+) returns boolean
+language plpgsql
+security definer
+set search_path = pg_catalog, pg_temp
+as $$
+declare
+  v_duracao interval;
+begin
+  v_duracao := least(
+    greatest(coalesce(p_duracao, '5 minutes'::interval), '1 minute'::interval),
+    '15 minutes'::interval
+  );
+
+  update public.licitacoes_analises
+     set lease_expira_em = now() + v_duracao,
+         atualizado_em = now()
+   where licitacao_id = p_licitacao_id
+     and estado = 'processando'
+     and lease_id = p_lease_id;
+
+  return found;
+end;
+$$;
+
 create or replace function public.concluir_analise_licitacao(
   p_licitacao_id uuid,
   p_lease_id uuid,
@@ -162,8 +207,10 @@ create or replace function public.concluir_analise_licitacao(
 ) returns void
 language plpgsql
 security definer
-set search_path = pg_catalog, public, pg_temp
+set search_path = pg_catalog, pg_temp
 as $$
+declare
+  v_atual public.licitacoes_analises;
 begin
   update public.licitacoes_analises
      set estado = 'pronta',
@@ -171,7 +218,6 @@ begin
          fontes = coalesce(p_fontes, '[]'::jsonb),
          cobertura = coalesce(p_cobertura, '{}'::jsonb),
          modelo = p_modelo,
-         lease_id = null,
          lease_expira_em = null,
          erro = null,
          gerado_em = now(),
@@ -182,7 +228,15 @@ begin
      and lease_expira_em > now();
 
   if not found then
-    raise exception 'lease da analise perdido ou expirado';
+    select * into v_atual
+      from public.licitacoes_analises
+     where licitacao_id = p_licitacao_id;
+    if found
+       and v_atual.estado = 'pronta'
+       and v_atual.lease_id = p_lease_id then
+      return;
+    end if;
+    raise exception 'lease da analise perdido, expirado ou substituido';
   end if;
 end;
 $$;
@@ -194,12 +248,13 @@ create or replace function public.falhar_analise_licitacao(
 ) returns void
 language plpgsql
 security definer
-set search_path = pg_catalog, public, pg_temp
+set search_path = pg_catalog, pg_temp
 as $$
+declare
+  v_atual public.licitacoes_analises;
 begin
   update public.licitacoes_analises
      set estado = 'erro',
-         lease_id = null,
          lease_expira_em = null,
          erro = left(coalesce(p_erro, 'erro desconhecido'), 2000),
          atualizado_em = now()
@@ -208,14 +263,24 @@ begin
      and lease_id = p_lease_id;
 
   if not found then
-    raise exception 'lease da analise perdido ou expirado';
+    select * into v_atual
+      from public.licitacoes_analises
+     where licitacao_id = p_licitacao_id;
+    if found
+       and v_atual.estado = 'erro'
+       and v_atual.lease_id = p_lease_id then
+      return;
+    end if;
+    raise exception 'lease da analise perdido ou substituido';
   end if;
 end;
 $$;
 
 revoke all on function public.buscar_chunks_analise(uuid, text, text, integer)
   from public, anon, authenticated;
-revoke all on function public.adquirir_lease_analise(uuid, text, boolean, text, text, interval)
+revoke all on function public.adquirir_lease_analise(uuid, text, boolean, text, text, uuid, interval)
+  from public, anon, authenticated;
+revoke all on function public.renovar_lease_analise(uuid, uuid, interval)
   from public, anon, authenticated;
 revoke all on function public.concluir_analise_licitacao(uuid, uuid, jsonb, jsonb, jsonb, text)
   from public, anon, authenticated;
@@ -224,7 +289,9 @@ revoke all on function public.falhar_analise_licitacao(uuid, uuid, text)
 
 grant execute on function public.buscar_chunks_analise(uuid, text, text, integer)
   to service_role;
-grant execute on function public.adquirir_lease_analise(uuid, text, boolean, text, text, interval)
+grant execute on function public.adquirir_lease_analise(uuid, text, boolean, text, text, uuid, interval)
+  to service_role;
+grant execute on function public.renovar_lease_analise(uuid, uuid, interval)
   to service_role;
 grant execute on function public.concluir_analise_licitacao(uuid, uuid, jsonb, jsonb, jsonb, text)
   to service_role;

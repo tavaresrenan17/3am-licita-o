@@ -7,6 +7,7 @@ function portaFake(sobrescritas: Partial<PortaSupabaseAnalise> = {}): PortaSupab
   return {
     obterLicitacao: vi.fn(async () => ({ id: "lic-a", objeto: "Obra" })),
     obterDocumentos: vi.fn(async () => []),
+    obterModeloEsperado: vi.fn(async () => "bge-m3"),
     contarChunks: vi.fn(async () => 0),
     obterAnalise: vi.fn(async () => null),
     rpc: vi.fn(async () => []),
@@ -35,6 +36,7 @@ describe("repositorio de analise", () => {
     const materia = await repositorio.obterMateriaPrima("lic-a");
 
     expect(porta.obterDocumentos).toHaveBeenCalledWith("lic-a", true);
+    expect(porta.contarChunks).toHaveBeenCalledWith("lic-a", "bge-m3");
     expect(materia.documentos[0]).toMatchObject({
       documentoId: "doc-a",
       texto: "conteudo integral",
@@ -96,7 +98,14 @@ describe("repositorio de analise", () => {
     ]);
     const repositorio = criarRepositorioAnalise(portaFake({ rpc }));
 
-    const lease = await repositorio.adquirirLease("lic-a", "fp-atual", true, "prompt-1", "alg-1");
+    const lease = await repositorio.adquirirLease(
+      "lic-a",
+      "fp-atual",
+      true,
+      "prompt-1",
+      "alg-1",
+      "lease-cliente",
+    );
 
     expect(rpc).toHaveBeenCalledWith("adquirir_lease_analise", {
       p_licitacao_id: "lic-a",
@@ -104,9 +113,23 @@ describe("repositorio de analise", () => {
       p_forcar: true,
       p_prompt_versao: "prompt-1",
       p_algoritmo_versao: "alg-1",
+      p_lease_id: "lease-cliente",
     });
     expect(lease.adquirido).toBe(true);
     expect(lease.linha?.estado).toBe("processando");
+    expect(lease.leaseId).toBe("lease-cliente");
+  });
+
+  it("renova o lease com o mesmo token", async () => {
+    const rpc = vi.fn(async () => true);
+    const repositorio = criarRepositorioAnalise(portaFake({ rpc }));
+
+    await expect(repositorio.renovarLease("lic-a", "lease-a", "10 minutes")).resolves.toBe(true);
+    expect(rpc).toHaveBeenCalledWith("renovar_lease_analise", {
+      p_licitacao_id: "lic-a",
+      p_lease_id: "lease-a",
+      p_duracao: "10 minutes",
+    });
   });
 
   it("mapeia o cache persistido com fingerprint e versoes", async () => {
@@ -206,6 +229,10 @@ describe("contrato SQL da analise", () => {
   );
   const caminhoAplicacao = resolve(process.cwd(), "supabase/APLICAR-ANALISE-LICITACAO.sql");
   const sql = readFileSync(caminhoMigracao, "utf8").replace(/\r\n/g, "\n");
+  const codigoRepositorio = readFileSync(
+    resolve(process.cwd(), "src/services/analise/repositorio.analise.server.ts"),
+    "utf8",
+  );
 
   it("mantem o SQL de aplicacao byte a byte equivalente a migracao", () => {
     expect(readFileSync(caminhoAplicacao)).toEqual(readFileSync(caminhoMigracao));
@@ -232,6 +259,7 @@ describe("contrato SQL da analise", () => {
       "adquirir_lease_analise",
       "concluir_analise_licitacao",
       "falhar_analise_licitacao",
+      "renovar_lease_analise",
     ]) {
       expect(sql).toMatch(
         new RegExp(
@@ -256,6 +284,22 @@ describe("contrato SQL da analise", () => {
     expect(leaseAtivo).toBeLessThan(cacheOuForce);
     expect(adquirir).toContain("v_atual.estado = 'processando'");
     expect(adquirir).toContain("v_atual.fingerprint = p_fingerprint");
+    expect(adquirir).toContain("v_atual.lease_id = p_lease_id");
+    expect(adquirir).toContain("select true, to_jsonb(v_atual)");
+    expect(adquirir.indexOf("v_atual.lease_id = p_lease_id")).toBeLessThan(leaseAtivo);
+  });
+
+  it("renova token atual inclusive expirado e limita a duracao", () => {
+    const renovar = sql.slice(
+      sql.indexOf("create or replace function public.renovar_lease_analise"),
+      sql.indexOf("create or replace function public.concluir_analise_licitacao"),
+    );
+
+    expect(renovar).toContain("lease_id = p_lease_id");
+    expect(renovar).toContain("estado = 'processando'");
+    expect(renovar).not.toContain("lease_expira_em > now()");
+    expect(renovar).toContain("greatest");
+    expect(renovar).toContain("least");
   });
 
   it("conclui somente lease ativo e falha qualquer lease ainda pertencente ao chamador", () => {
@@ -271,8 +315,33 @@ describe("contrato SQL da analise", () => {
     expect(concluir).toContain("lease_id = p_lease_id");
     expect(concluir).toContain("lease_expira_em > now()");
     expect(concluir).toContain("set estado = 'pronta'");
+    expect(concluir).toContain("v_atual.estado = 'pronta'");
+    expect(concluir).toContain("v_atual.lease_id = p_lease_id");
     expect(falhar).toContain("lease_id = p_lease_id");
     expect(falhar).not.toContain("lease_expira_em > now()");
     expect(falhar).toContain("set estado = 'erro'");
+    expect(falhar).toContain("v_atual.estado = 'erro'");
+    expect(falhar).toContain("v_atual.lease_id = p_lease_id");
+  });
+
+  it("conta somente chunks da licitacao, documentos ativos e modelo configurado", () => {
+    expect(sql).toContain("create index if not exists documento_chunks_licitacao_modelo_idx");
+    expect(sql).toContain("on public.documento_chunks (licitacao_id, modelo)");
+    const contador = codigoRepositorio.slice(
+      codigoRepositorio.indexOf("async contarChunks"),
+      codigoRepositorio.indexOf(
+        "async obterAnalise",
+        codigoRepositorio.indexOf("async contarChunks"),
+      ),
+    );
+    expect(contador).toContain('.eq("licitacao_id", licitacaoId)');
+    expect(contador).toContain('.eq("modelo", modelo)');
+    expect(contador).toContain('.eq("documentos_licitacao.ativo", true)');
+  });
+
+  it("usa search_path minimo nas RPCs", () => {
+    const funcoes = sql.match(/set search_path = [^\n]+/g) ?? [];
+    expect(funcoes.length).toBeGreaterThanOrEqual(5);
+    expect(funcoes.every((linha) => !linha.includes("public"))).toBe(true);
   });
 });

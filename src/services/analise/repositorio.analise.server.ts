@@ -6,6 +6,7 @@
  * somente a síntese e os trechos citáveis.
  */
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { randomUUID } from "node:crypto";
 
 export type Json = null | boolean | number | string | Json[] | { [chave: string]: Json };
 
@@ -58,7 +59,8 @@ export interface LinhaAnalise {
 export interface PortaSupabaseAnalise {
   obterLicitacao(licitacaoId: string): Promise<LinhaGenerica | null>;
   obterDocumentos(licitacaoId: string, somenteAtivos: boolean): Promise<LinhaGenerica[]>;
-  contarChunks(licitacaoId: string): Promise<number>;
+  obterModeloEsperado(): Promise<string>;
+  contarChunks(licitacaoId: string, modelo: string): Promise<number>;
   obterAnalise(licitacaoId: string): Promise<LinhaGenerica | null>;
   rpc(nome: string, parametros: Record<string, unknown>): Promise<unknown>;
 }
@@ -148,11 +150,23 @@ function portaSupabase(): PortaSupabaseAnalise {
       return (data ?? []) as LinhaGenerica[];
     },
 
-    async contarChunks(licitacaoId) {
+    async obterModeloEsperado() {
+      const { data, error } = await db()
+        .from("configuracao_busca")
+        .select("modelo_esperado")
+        .eq("id", 1)
+        .single();
+      if (error) throw error;
+      return String(data.modelo_esperado);
+    },
+
+    async contarChunks(licitacaoId, modelo) {
       const { count, error } = await db()
         .from("documento_chunks")
-        .select("id", { count: "exact", head: true })
-        .eq("licitacao_id", licitacaoId);
+        .select("id,documentos_licitacao!inner(id)", { count: "exact", head: true })
+        .eq("licitacao_id", licitacaoId)
+        .eq("modelo", modelo)
+        .eq("documentos_licitacao.ativo", true);
       if (error) throw error;
       return count ?? 0;
     },
@@ -185,12 +199,13 @@ export function criarRepositorioAnalise(porta: PortaSupabaseAnalise = portaSupab
   return {
     async obterMateriaPrima(licitacaoId: string): Promise<MateriaPrimaAnalise> {
       try {
-        const [licitacao, linhas, chunksDisponiveis] = await Promise.all([
+        const [licitacao, linhas, modeloEsperado] = await Promise.all([
           porta.obterLicitacao(licitacaoId),
           porta.obterDocumentos(licitacaoId, true),
-          porta.contarChunks(licitacaoId),
+          porta.obterModeloEsperado(),
         ]);
         if (!licitacao) throw new Error("licitacao nao encontrada");
+        const chunksDisponiveis = await porta.contarChunks(licitacaoId, modeloEsperado);
         return {
           licitacao,
           documentos: linhas.map((linha) => {
@@ -265,7 +280,8 @@ export function criarRepositorioAnalise(porta: PortaSupabaseAnalise = portaSupab
       forcar: boolean,
       promptVersao = "v1",
       algoritmoVersao = "v1",
-    ): Promise<{ adquirido: boolean; linha: LinhaAnalise | null }> {
+      leaseId: string = randomUUID(),
+    ): Promise<{ adquirido: boolean; linha: LinhaAnalise | null; leaseId: string }> {
       try {
         const resposta = primeiro(
           await porta.rpc("adquirir_lease_analise", {
@@ -274,14 +290,34 @@ export function criarRepositorioAnalise(porta: PortaSupabaseAnalise = portaSupab
             p_forcar: forcar,
             p_prompt_versao: promptVersao,
             p_algoritmo_versao: algoritmoVersao,
+            p_lease_id: leaseId,
           }),
         );
         return {
           adquirido: resposta?.["adquirido"] === true,
           linha: mapearAnalise(resposta?.["linha"]),
+          leaseId,
         };
       } catch (erro) {
         throw new Error(`adquirir lease: ${mensagem(erro)}`);
+      }
+    },
+
+    async renovarLease(
+      licitacaoId: string,
+      leaseId: string,
+      duracao = "5 minutes",
+    ): Promise<boolean> {
+      try {
+        return (
+          (await porta.rpc("renovar_lease_analise", {
+            p_licitacao_id: licitacaoId,
+            p_lease_id: leaseId,
+            p_duracao: duracao,
+          })) === true
+        );
+      } catch (erro) {
+        throw new Error(`renovar lease: ${mensagem(erro)}`);
       }
     },
 
