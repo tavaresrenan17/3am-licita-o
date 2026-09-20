@@ -121,6 +121,87 @@ texto (1.300 e 2.726 chars/página); e o teto de 40 chunks por documento corta
 30-40% do texto de 100% da amostra, porque os editais reais têm 60 a 104 mil
 caracteres. Esse último número é o principal candidato a revisão.
 
+## Situação dos critérios em 20/09/2026
+
+Medido, não estimado. A infraestrutura está completa e carregada; os critérios
+foram exercitados contra o catálogo real (8.792 licitações e 509 editais
+vetorizados, 10.424 chunks).
+
+| # | critério | situação |
+|---|---|---|
+| 1 | cobertura ≥ 99% | **cumprido** — 8.792 de 8.792, 100% |
+| 2 | recall@10 do HNSW ≥ 0,95 | **inaplicável** — ver abaixo |
+| 3 | ganho de relevância ≥ 10% | em aberto, e já não é o que bloqueia |
+| 4 | p95/p99 nas metas | **REPROVADO** — ver abaixo |
+| 5 | top-10 completo sob filtros | **cumprido** — 0 consultas incompletas |
+| 6 | custo aceito | custo de API é **zero** (Ollama local) |
+| 7 | fallback testado + observabilidade | fallback coberto por teste; observabilidade contínua ainda não existe |
+| 8 | rollout por flag | mecanismo pronto, nunca exercitado em produção |
+
+### O critério 4 reprovou, e por uma margem que não se negocia
+
+Medição de 20/09/2026, três execuções por consulta, descartando a primeira:
+
+    p50 = 545 ms    p95 = 9.287 ms    máximo = 9.867 ms    meta de p95 = 300 ms
+
+Não é aquecimento e não é a fonte estar lenta. As mesmas consultas, no caminho
+lexical, levam de 99 a 744 ms — o híbrido é **30 a 50 vezes mais lento** que o
+lexical sobre os mesmos dados:
+
+| consulta | lexical | híbrido |
+|---|---|---|
+| serviços de vigilância patrimonial | 237–744 ms | 9.000–9.867 ms |
+| reforma ou ampliação | 128–203 ms | 8.415–8.622 ms |
+
+A ironia que fecha o diagnóstico: **a consulta mais lenta é exatamente a que
+justifica o recurso.** "Serviços de vigilância patrimonial" devolve zero
+resultados no lexical e quatro corretos no híbrido — e leva nove segundos.
+
+### Os critérios 2 e 4 têm a mesma causa raiz
+
+O critério 5 exige top-10 completo sob filtros, e para garanti-lo a
+implementação aplica **todos** os filtros relacionais antes da busca vetorial.
+Pré-filtrar assim impede o uso do índice aproximado: os dois índices HNSW
+existem e não servem a consulta nenhuma. Daí o critério 2 não ter o que
+comparar, e daí o custo do critério 4 — toda consulta faz varredura exata sobre
+8.792 vetores de objeto e 10.424 chunks.
+
+A especificação previa a saída: `HIBRIDO_LIMIAR_EXATO`, que usaria distância
+exata só quando o conjunto elegível fosse pequeno e o índice quando fosse
+grande. Ela nunca foi implementada, e foi registrada como lacuna consciente na
+época. É ela que falta.
+
+### Decisão
+
+**A decisão original desta ADR permanece em vigor, e por um motivo melhor do que
+o que a motivou.** Não é mais o julgamento humano de relevância que segura o
+rollout — é um número objetivo, reproduzível e três vezes pior do que a pior
+leitura tolerável.
+
+O gate que teria sido o mais tentador de relaxar, por exigir trabalho humano
+caro, não é o que importa agora. E o gate 4, que parecia burocracia, pegou um
+defeito real antes de ele chegar ao usuário. **Este é o argumento para não
+afrouxar critério antes de exercitá-lo.**
+
+Próximo trabalho, nesta ordem:
+
+1. Implementar `HIBRIDO_LIMIAR_EXATO` e medir de novo o critério 4.
+2. Só então retomar a conversa sobre o critério 3, com a busca já utilizável.
+
+Duas observações medidas que não mudam a decisão mas informam a próxima:
+
+- **Vetorizar os 509 editais comprou pouco até agora:** um resultado novo
+  inequívoco em 12 consultas, porque os chunks cobrem 257 de 8.792 licitações
+  (2,9%). O valor atual da busca semântica vem da camada de objeto, que está a
+  100%. Reavaliar o limiar quando a cobertura documental passar de 20–25%: o
+  ruído de preâmbulo jurídico já aparece em 0,45 e escala com a cobertura.
+- **A consulta "aquisição de medicamentos" infla de 23 para 223 resultados** em
+  0,40, dirigida pelo vetor de objeto e não pelos documentos. Limiar não
+  resolve; é assunto separado.
+
+Medição completa em
+[`2026-09-19-medicao-limiar-com-documentos.md`](2026-09-19-medicao-limiar-com-documentos.md).
+
 ## Referências
 
 - [Supabase: Vector indexes](https://supabase.com/docs/guides/ai/vector-indexes)
