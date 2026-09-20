@@ -11,9 +11,9 @@ import {
 } from "./mapper";
 
 const fixture = (nome: string) =>
-  JSON.parse(
-    readFileSync(new URL(`./__fixtures__/${nome}`, import.meta.url), "utf8"),
-  ) as { data: ContratacaoPNCP[] };
+  JSON.parse(readFileSync(new URL(`./__fixtures__/${nome}`, import.meta.url), "utf8")) as {
+    data: ContratacaoPNCP[];
+  };
 
 const cfg = {
   palavras_chave: PALAVRAS_CHAVE_PADRAO,

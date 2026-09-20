@@ -297,27 +297,31 @@ function SincronizacaoPage() {
               )}
             </div>
 
-            {(erro || job?.mensagem_erro) && (() => {
-              const msg = erro ?? job?.mensagem_erro ?? "";
-              const isCooldown = msg.includes("aguardando") || msg.includes("temporariamente") || msg.includes("cooldown");
-              return isCooldown ? (
-                <div className="mt-3 rounded-md border border-warning/40 bg-warning/10 p-3 text-xs text-warning">
-                  <p className="flex items-center gap-1.5 font-semibold">
-                    <Loader2 className="size-3 animate-spin" />
-                    Aguardando cooldown da API
-                  </p>
-                  <p className="mt-1 text-muted-foreground">{msg}</p>
-                  <p className="mt-1 text-[10px] text-muted-foreground">
-                    O sistema tentará novamente automaticamente em alguns segundos.
-                  </p>
-                </div>
-              ) : (
-                <div className="mt-3 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive">
-                  <p className="font-semibold">Erros da última sincronização</p>
-                  <p className="mt-1">{msg}</p>
-                </div>
-              );
-            })()}
+            {(erro || job?.mensagem_erro) &&
+              (() => {
+                const msg = erro ?? job?.mensagem_erro ?? "";
+                const isCooldown =
+                  msg.includes("aguardando") ||
+                  msg.includes("temporariamente") ||
+                  msg.includes("cooldown");
+                return isCooldown ? (
+                  <div className="mt-3 rounded-md border border-warning/40 bg-warning/10 p-3 text-xs text-warning">
+                    <p className="flex items-center gap-1.5 font-semibold">
+                      <Loader2 className="size-3 animate-spin" />
+                      Aguardando cooldown da API
+                    </p>
+                    <p className="mt-1 text-muted-foreground">{msg}</p>
+                    <p className="mt-1 text-[10px] text-muted-foreground">
+                      O sistema tentará novamente automaticamente em alguns segundos.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="mt-3 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive">
+                    <p className="font-semibold">Erros da última sincronização</p>
+                    <p className="mt-1">{msg}</p>
+                  </div>
+                );
+              })()}
 
             <p className="mt-3 flex items-start gap-1.5 text-[11px] text-muted-foreground">
               <Info className="mt-0.5 size-3 shrink-0" />A coleta acontece em etapas curtas
@@ -388,14 +392,17 @@ function SincronizacaoPage() {
               <div className="max-w-xl">
                 <div className="flex items-center gap-2">
                   <h2 className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
-                    <History className="size-4 text-primary" /> Sincronização Rápida (Atualização Incremental)
+                    <History className="size-4 text-primary" /> Sincronização Rápida (Atualização
+                    Incremental)
                   </h2>
                   <span className="bg-primary/20 text-primary text-[10px] font-bold px-2 py-0.5 rounded-full">
                     ⚡ Em Segundos
                   </span>
                 </div>
                 <p className="mt-1 text-[11px] text-muted-foreground">
-                  Busca apenas o que mudou na fonte desde a última coleta, sem recarregar o catálogo inteiro. Esta rota oficial consulta apenas as alterações recentes e conclui em poucos segundos.
+                  Busca apenas o que mudou na fonte desde a última coleta, sem recarregar o catálogo
+                  inteiro. Esta rota oficial consulta apenas as alterações recentes e conclui em
+                  poucos segundos.
                 </p>
               </div>
               <Button
@@ -627,16 +634,18 @@ function SincronizacaoPage() {
 
               <div className="rounded-md border border-primary/20 bg-primary/5 p-2.5 text-[11px] text-muted-foreground">
                 <p>
-                  ⚡ <strong className="text-foreground">Busca direta em etapa única:</strong> traz diretamente as oportunidades encerrando até <strong className="text-foreground">{horizonte} dias</strong> sem triplicar requisições em 5, 15 e 30 dias. A busca fica até 3x mais rápida!
+                  ⚡ <strong className="text-foreground">Busca direta em etapa única:</strong> traz
+                  diretamente as oportunidades encerrando até{" "}
+                  <strong className="text-foreground">{horizonte} dias</strong> sem triplicar
+                  requisições em 5, 15 e 30 dias. A busca fica até 3x mais rápida!
                 </p>
               </div>
 
               <label className="flex items-center gap-2 pt-0.5 text-[11px] text-muted-foreground cursor-pointer select-none">
-                <Checkbox
-                  checked={emEtapas}
-                  onCheckedChange={(v) => setEmEtapas(Boolean(v))}
-                />
-                <span>Dividir busca em etapas cumulativas (5, 15 e {horizonte} dias) — mais demorado</span>
+                <Checkbox checked={emEtapas} onCheckedChange={(v) => setEmEtapas(Boolean(v))} />
+                <span>
+                  Dividir busca em etapas cumulativas (5, 15 e {horizonte} dias) — mais demorado
+                </span>
               </label>
             </div>
 

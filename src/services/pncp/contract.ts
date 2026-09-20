@@ -125,8 +125,7 @@ export function validarDataPncp(parametro: string, valor: string): string {
   const mes = Number(valor.slice(4, 6));
   const dia = Number(valor.slice(6, 8));
   const d = new Date(Date.UTC(ano, mes - 1, dia));
-  const real =
-    d.getUTCFullYear() === ano && d.getUTCMonth() === mes - 1 && d.getUTCDate() === dia;
+  const real = d.getUTCFullYear() === ano && d.getUTCMonth() === mes - 1 && d.getUTCDate() === dia;
   if (!real) {
     throw new ParametroInvalidoError(parametro, `${valor} não é uma data de calendário`);
   }
@@ -146,10 +145,7 @@ function inteiroPositivo(parametro: string, valor: number, minimo = 1) {
  * Converte os parâmetros do projeto na query string do endpoint, validando tudo
  * antes da rede. Lança `ParametroInvalidoError` em qualquer desvio do contrato.
  */
-export function montarQuery(
-  endpoint: EndpointPNCP,
-  params: ParametrosConsulta,
-): URLSearchParams {
+export function montarQuery(endpoint: EndpointPNCP, params: ParametrosConsulta): URLSearchParams {
   const cap = CAPACIDADES[endpoint];
   const permitidos = new Set<string>([...cap.obrigatorios, ...cap.opcionais]);
 
@@ -236,7 +232,11 @@ export function montarQuery(
   query.set("pagina", String(params.pagina));
 
   const tamanho = params.tamanhoPagina ?? TAMANHO_PAGINA_PADRAO;
-  if (!Number.isInteger(tamanho) || tamanho < cap.tamanhoPaginaMin || tamanho > cap.tamanhoPaginaMax) {
+  if (
+    !Number.isInteger(tamanho) ||
+    tamanho < cap.tamanhoPaginaMin ||
+    tamanho > cap.tamanhoPaginaMax
+  ) {
     throw new ParametroInvalidoError(
       "tamanhoPagina",
       `esperado inteiro entre ${cap.tamanhoPaginaMin} e ${cap.tamanhoPaginaMax}, recebido ${tamanho}`,

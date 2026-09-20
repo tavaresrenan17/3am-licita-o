@@ -280,7 +280,9 @@ export function useSincronizacaoPNCP() {
             if (ticksCooldownSeguidos >= MAX_COOLDOWN_RETRIES) {
               motivo = "PNCP instável: aguardando cooldown há muitos ciclos";
               manterParaRetomada = true;
-              setErro("Fonte temporariamente indisponível. A sincronização será retomada na próxima execução.");
+              setErro(
+                "Fonte temporariamente indisponível. A sincronização será retomada na próxima execução.",
+              );
               break;
             }
             // Esperar 10 s e tentar outro tick — o cooldown no banco pode ter

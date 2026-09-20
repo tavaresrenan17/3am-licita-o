@@ -250,7 +250,7 @@ async function requisitarJson<T>(
         // Se o pool de conexões do PNCP estiver esgotado ("Erro na comunicação com o banco de dados"),
         // esperar pelo menos 3 segundos antes de nova tentativa para evitar amplificar a queda.
         const piso = ehSaturacaoDb ? 3_000 : Math.round(teto / 2);
-        const espera = retryAfter ?? (piso + Math.round(aleatorio() * (teto / 2)));
+        const espera = retryAfter ?? piso + Math.round(aleatorio() * (teto / 2));
 
         if (tentativa === tentativasMax) break;
         if (espera >= restante()) {

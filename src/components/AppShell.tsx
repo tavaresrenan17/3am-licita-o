@@ -73,9 +73,7 @@ export function AppShell({
             )}
             <div className="min-w-0">
               <h1 className="truncate text-base font-semibold tracking-tight">{titulo}</h1>
-              {descricao && (
-                <p className="truncate text-xs text-muted-foreground">{descricao}</p>
-              )}
+              {descricao && <p className="truncate text-xs text-muted-foreground">{descricao}</p>}
             </div>
           </div>
           <div className="flex items-center gap-2">{acoes}</div>
