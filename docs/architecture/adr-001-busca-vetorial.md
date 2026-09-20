@@ -132,7 +132,7 @@ vetorizados, 10.424 chunks).
 | 1 | cobertura ≥ 99% | **cumprido** — 8.792 de 8.792, 100% |
 | 2 | recall@10 do HNSW ≥ 0,95 | **inaplicável** — ver abaixo |
 | 3 | ganho de relevância ≥ 10% | em aberto, e já não é o que bloqueia |
-| 4 | p95/p99 nas metas | **414 ms** contra meta de 300 ms — era 9.287 ms; ver abaixo |
+| 4 | p95/p99 nas metas | **337 ms** contra meta de 300 ms, amostra de 108 — era 9.287 ms; ver abaixo |
 | 5 | top-10 completo sob filtros | **cumprido** — 0 consultas incompletas |
 | 6 | custo aceito | custo de API é **zero** (Ollama local) |
 | 7 | fallback testado + observabilidade | fallback coberto por teste; observabilidade contínua ainda não existe |
@@ -171,11 +171,18 @@ exata só quando o conjunto elegível fosse pequeno e o índice quando fosse
 grande. Ela nunca foi implementada, e foi registrada como lacuna consciente na
 época. É ela que falta.
 
-### O limiar exato foi implementado, e o critério 4 caiu de 9.287 ms para 414 ms
+### O limiar exato foi implementado, e o critério 4 caiu de 9.287 ms para 337 ms
 
 Medição de 20/09/2026, depois de `20260920120000_limiar_exato_hibrida.sql`:
 
-    p50 = 352 ms    p95 = 414 ms    meta de p95 = 300 ms
+    amostra de 12    p50 = 352 ms    p95 = 414 ms    meta de p95 = 300 ms
+    amostra de 108   p50 = 149 ms    p95 = 337 ms    p99 = 428 ms
+
+A segunda linha é a que vale: 108 execuções, 9 por consulta, a amostra ≥ 100 que
+esta ADR exige. As três consultas mais lentas por p95 são "coleta de lixo
+urbano" (474 ms), "software de gestão" (428 ms) e "aquisição de medicamentos"
+(426 ms), com zero falhas. Quando a amostra era de 12, o p95 era simplesmente o
+pior caso isolado — e isso mudava o veredito em 77 ms.
 
 A função passou a contar os elegíveis e escolher a estratégia: até
 `configuracao_busca.limiar_exato` (5.000) pré-filtra e varre o subconjunto;
@@ -203,8 +210,9 @@ devolve zero no lexical e quatro corretos no híbrido, responde em 152 ms.
 O critério 4 deixou de ser um abismo: 414 ms contra 300 ms de meta, na mesma
 ordem de grandeza. Duas coisas seguem valendo:
 
-1. **414 ms não é 300 ms**, e a amostra tem 12 execuções, não as ≥ 100 que esta
-   ADR exige. O número justifica continuar, não declarar o gate cumprido.
+1. **337 ms não é 300 ms.** A amostra agora tem 108 execuções, como esta ADR
+   exige, então o número é defensável — e o que ele diz é que faltam 12% para a
+   meta. O gate 4 continua não cumprido, por pouco e com dado sólido.
 2. **O gate 3 continua sem um único julgamento humano.** Ligar o híbrido sem ele
    contraria esta ADR, e a latência ter melhorado não muda isso.
 
@@ -215,8 +223,9 @@ teria condenado uma implementação correta.**
 
 Próximo trabalho, nesta ordem:
 
-1. Ampliar a amostra de latência para ≥ 100 execuções e confirmar o p95 com a
-   folga que esta ADR pede.
+1. Fechar os 37 ms que faltam no p95 — as três consultas mais lentas são o alvo
+   — ou rever a meta de 300 ms com argumento: ela foi escolhida antes de existir
+   qualquer medição desta busca.
 2. Retomar o critério 3 com as 100 consultas julgadas — agora com a busca
    utilizável, que era a condição que faltava.
 
