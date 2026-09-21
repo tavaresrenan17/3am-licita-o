@@ -6,9 +6,14 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  Download,
+  HardHat,
+  LayoutGrid,
+  List,
   MessageSquarePlus,
   Search,
   SlidersHorizontal,
+  Sparkles,
   Star,
   X,
 } from "lucide-react";
@@ -16,6 +21,8 @@ import { toast } from "sonner";
 import { z } from "zod";
 import { AppShell } from "@/components/AppShell";
 import { EmptyState, StatusInternoBadge, StatusPncpBadge } from "@/components/data-bits";
+import { LicitacaoCard } from "@/components/LicitacaoCard";
+import { exportarLicitacoesCsv } from "@/lib/exportar-csv";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -42,7 +49,7 @@ import {
   type OrdenacaoCampo,
   type StatusInterno,
 } from "@/lib/types";
-import { brl, dataBR, diasRestantes, numero } from "@/lib/format";
+import { brl, dataBR, dataHoraBR, diaBR, diasRestantes, numero } from "@/lib/format";
 import {
   DEFINICOES,
   contarFiltrosAtivos,
@@ -310,6 +317,23 @@ function LicitacoesSalvas() {
   const [pagina, setPagina] = useState(1);
   const [obsAberta, setObsAberta] = useState<string | null>(null);
   const [obsTexto, setObsTexto] = useState("");
+  const [modoVisualizacao, setModoVisualizacao] = useState<"tabela" | "cards">(() => {
+    if (typeof window === "undefined") return "tabela";
+    return (window.localStorage.getItem("3am-modo-visualizacao") as "tabela" | "cards") || "tabela";
+  });
+
+  const trocarModoVisualizacao = (modo: "tabela" | "cards") => {
+    setModoVisualizacao(modo);
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("3am-modo-visualizacao", modo);
+    }
+  };
+
+  useEffect(() => {
+    const handleAbrirAtalhos = () => setAjudaAberta(true);
+    window.addEventListener("abrir-atalhos-teclado", handleAbrirAtalhos);
+    return () => window.removeEventListener("abrir-atalhos-teclado", handleAbrirAtalhos);
+  }, []);
 
   // Digitar não dispara uma consulta por tecla.
   useEffect(() => {
@@ -566,7 +590,116 @@ function LicitacoesSalvas() {
         </>
       }
     >
-      <section className="rounded-lg border border-border bg-card p-3 shadow-sm">
+      <section className="rounded-xl border border-border/80 bg-card/90 p-3.5 shadow-sm">
+        {/* Presets Rápidos de Construção Civil */}
+        <div className="mb-3 flex flex-wrap items-center gap-1.5 border-b border-border/60 pb-2.5">
+          <span className="text-[11px] font-semibold text-muted-foreground mr-1">
+            Presets Rápidos:
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              setFiltros((f) => ({
+                ...f,
+                recomendadas: !f.recomendadas,
+                apenas_abertas: true,
+              }));
+              setPagina(1);
+            }}
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-all duration-150 cursor-pointer",
+              filtros.recomendadas
+                ? "border-success/60 bg-success/15 text-success shadow-xs font-semibold"
+                : "border-border/80 bg-muted/40 text-muted-foreground hover:border-success/40 hover:text-foreground",
+            )}
+          >
+            <HardHat className="size-3 text-success" />
+            <span>🏗️ Alta Aderência (Obras)</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              const ativo = filtros.limite_ate === diaBR(3);
+              setFiltros((f) => ({
+                ...f,
+                limite_ate: ativo ? "" : diaBR(3),
+                apenas_abertas: true,
+              }));
+              setPagina(1);
+            }}
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-all duration-150 cursor-pointer",
+              filtros.limite_ate === diaBR(3)
+                ? "border-warning/60 bg-warning/15 text-warning shadow-xs font-semibold"
+                : "border-border/80 bg-muted/40 text-muted-foreground hover:border-warning/40 hover:text-foreground",
+            )}
+          >
+            <span>⏱️ Prazos Críticos (≤ 3d)</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              const ativo = filtros.valor_min === "1000000";
+              setFiltros((f) => ({
+                ...f,
+                valor_min: ativo ? "" : "1000000",
+                apenas_abertas: true,
+              }));
+              setPagina(1);
+            }}
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-all duration-150 cursor-pointer",
+              filtros.valor_min === "1000000"
+                ? "border-primary/60 bg-primary/15 text-primary shadow-xs font-semibold"
+                : "border-border/80 bg-muted/40 text-muted-foreground hover:border-primary/40 hover:text-foreground",
+            )}
+          >
+            <span>💰 Grandes Obras (&gt; R$ 1M)</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              const ativo = filtros.prioridade === "true";
+              setFiltros((f) => ({
+                ...f,
+                prioridade: ativo ? "" : "true",
+              }));
+              setPagina(1);
+            }}
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-all duration-150 cursor-pointer",
+              filtros.prioridade === "true"
+                ? "border-primary/60 bg-primary/15 text-primary shadow-xs font-semibold"
+                : "border-border/80 bg-muted/40 text-muted-foreground hover:border-primary/40 hover:text-foreground",
+            )}
+          >
+            <Star className="size-3 fill-primary text-primary" />
+            <span>Minhas Prioritárias</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setFiltros((f) => ({
+                ...f,
+                com_edital: !f.com_edital,
+              }));
+              setPagina(1);
+            }}
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-all duration-150 cursor-pointer",
+              filtros.com_edital
+                ? "border-info/60 bg-info/15 text-info shadow-xs font-semibold"
+                : "border-border/80 bg-muted/40 text-muted-foreground hover:border-info/40 hover:text-foreground",
+            )}
+          >
+            <span>📄 Com Edital</span>
+          </button>
+        </div>
+
         <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center">
           <div className="relative min-w-0 flex-1">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
@@ -838,12 +971,12 @@ function LicitacoesSalvas() {
         </div>
       </section>
 
-      <div className="mt-2 flex items-center gap-1">
+      <div className="mt-2.5 flex items-center gap-1.5 flex-wrap">
         <Button
           type="button"
           variant="ghost"
           size="sm"
-          className="h-7 px-2 text-[11px] text-muted-foreground"
+          className="h-7 px-2 text-[11px] text-muted-foreground hover:text-foreground"
           onClick={() => setAjudaAberta((v) => !v)}
         >
           Atalhos de triagem (?)
@@ -852,11 +985,59 @@ function LicitacoesSalvas() {
           type="button"
           variant="ghost"
           size="sm"
-          className="h-7 px-2 text-[11px] text-muted-foreground"
+          className="h-7 px-2 text-[11px] text-muted-foreground hover:text-foreground"
           onClick={copiarLink}
         >
           Copiar link
         </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="h-7 px-2.5 text-[11px] text-muted-foreground hover:text-foreground border-border/80 cursor-pointer"
+          onClick={() => {
+            if (itens.length === 0) {
+              toast.error("Nenhuma licitação para exportar.");
+              return;
+            }
+            exportarLicitacoesCsv(itens, `licitacoes-3am-${diaBR().replace(/\//g, "-")}.csv`);
+            toast.success(`${itens.length} licitações exportadas para CSV.`);
+          }}
+          title="Exportar licitações filtradas para arquivo CSV compatível com Excel"
+        >
+          <Download className="mr-1.5 size-3" /> Exportar CSV
+        </Button>
+
+        <div className="ml-auto flex items-center gap-0.5 rounded-lg border border-border/80 bg-muted/40 p-0.5">
+          <button
+            type="button"
+            onClick={() => trocarModoVisualizacao("tabela")}
+            className={cn(
+              "flex size-6.5 items-center justify-center rounded-md text-xs transition-colors cursor-pointer",
+              modoVisualizacao === "tabela"
+                ? "bg-card text-foreground shadow-xs font-semibold"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+            title="Visualização em Tabela Densa"
+            aria-label="Visualização em Tabela Densa"
+          >
+            <List className="size-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => trocarModoVisualizacao("cards")}
+            className={cn(
+              "flex size-6.5 items-center justify-center rounded-md text-xs transition-colors cursor-pointer",
+              modoVisualizacao === "cards"
+                ? "bg-card text-foreground shadow-xs font-semibold"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+            title="Visualização em Cards de Oportunidades"
+            aria-label="Visualização em Cards de Oportunidades"
+          >
+            <LayoutGrid className="size-3.5" />
+          </button>
+        </div>
       </div>
 
       {ajudaAberta && (
@@ -904,6 +1085,22 @@ function LicitacoesSalvas() {
               </Button>
             }
           />
+        ) : modoVisualizacao === "cards" ? (
+          <div className="grid gap-3 p-3.5 sm:grid-cols-2 lg:grid-cols-3">
+            {itens.map((l, i) => (
+              <LicitacaoCard
+                key={l.id}
+                licitacao={l}
+                selecionada={i === indice}
+                onSetStatus={setStatus}
+                onTogglePrioridade={togglePrioridade}
+                onAbrirObs={(id) => {
+                  setObsAberta(id);
+                  setObsTexto("");
+                }}
+              />
+            ))}
+          </div>
         ) : (
           <div className="overflow-x-auto">
             {/* `role="grid"` é o que faz o leitor de tela anunciar a
@@ -1183,6 +1380,32 @@ function LicitacoesSalvas() {
             value={obsTexto}
             onChange={(e) => setObsTexto(e.target.value)}
           />
+          <div className="space-y-1.5">
+            <p className="text-[11px] font-medium text-muted-foreground">Motivos rápidos (GO / NO-GO):</p>
+            <div className="flex flex-wrap gap-1">
+              {[
+                "Falta Acervo (CAT)",
+                "Margem Inexequível",
+                "Prazo Curto",
+                "Raio Inviável",
+                "Risco Jurídico",
+                "Alta Margem / Viável",
+                "Acervo Pleno",
+              ].map((tag) => (
+                <button
+                  key={tag}
+                  type="button"
+                  onClick={() => {
+                    const prefixo = obsTexto ? `${obsTexto}\n• ` : "• ";
+                    setObsTexto(`${prefixo}${tag}`);
+                  }}
+                  className="rounded-md border border-border/80 bg-muted/40 px-2 py-0.5 text-[10px] text-muted-foreground hover:border-primary/50 hover:bg-accent hover:text-foreground cursor-pointer"
+                >
+                  + {tag}
+                </button>
+              ))}
+            </div>
+          </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setObsAberta(null)}>
               Cancelar

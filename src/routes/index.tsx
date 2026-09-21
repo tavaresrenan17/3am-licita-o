@@ -19,12 +19,15 @@ import {
   brl,
   dataBR,
   dataHoraBR,
+  diaBR,
   diasRestantes,
   numero,
   sincronizacaoEstaAtualizada,
 } from "@/lib/format";
-import { useLicitacoes, useMetricas } from "@/services/api";
+import { useAtualizarInterno, useLicitacoes, useMetricas } from "@/services/api";
 import { filtrosVazios } from "@/lib/types";
+import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/")({
   ssr: false,
@@ -48,6 +51,23 @@ export const Route = createFileRoute("/")({
 
 function Dashboard() {
   const { data: m, isLoading, isError, error } = useMetricas();
+  const mutarInterno = useAtualizarInterno();
+
+  const togglePrioridade = (id: string, atual: boolean) => {
+    mutarInterno.mutate(
+      {
+        id,
+        prioridade: !atual,
+        historico: atual
+          ? "Prioridade removida via Dashboard"
+          : "Marcada como prioritária via Dashboard",
+      },
+      {
+        onSuccess: () =>
+          toast.success(atual ? "Prioridade removida." : "Marcada como prioritária."),
+      },
+    );
+  };
 
   // Destaques: recomendadas pelo score e ainda abertas, pelo prazo mais curto.
   // O filtro roda no banco, sobre o catálogo inteiro.
@@ -221,43 +241,83 @@ function Dashboard() {
             {destaques.data?.itens.map((l) => {
               const dias = l.data_limite_proposta ? diasRestantes(l.data_limite_proposta) : null;
               return (
-                <Link
+                <div
                   key={l.id}
-                  to="/licitacoes/$id"
-                  params={{ id: l.id }}
-                  className="block px-4 py-3 transition-colors hover:bg-accent/40"
+                  className="group relative flex flex-col justify-between px-4 py-3.5 transition-colors hover:bg-accent/40"
                 >
                   <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                        {l.prioridade && <Star className="size-3 fill-primary text-primary" />}
-                        {l.municipio ?? "—"} / {l.uf ?? "—"} · {l.modalidade ?? "—"}
-                      </p>
-                      <p className="mt-0.5 line-clamp-2 text-sm">{l.objeto}</p>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            togglePrioridade(l.id, l.prioridade);
+                          }}
+                          className="flex size-5 items-center justify-center rounded text-muted-foreground transition-colors hover:text-primary cursor-pointer"
+                          title={l.prioridade ? "Remover prioridade" : "Marcar como prioritária"}
+                        >
+                          <Star
+                            className={cn(
+                              "size-3.5",
+                              l.prioridade
+                                ? "fill-primary text-primary"
+                                : "text-muted-foreground/60 hover:text-primary",
+                            )}
+                          />
+                        </button>
+                        <p className="truncate text-xs text-muted-foreground">
+                          {l.municipio ?? "—"} / {l.uf ?? "—"} · {l.orgao}
+                        </p>
+                      </div>
+                      <Link
+                        to="/licitacoes/$id"
+                        params={{ id: l.id }}
+                        className="mt-1 block"
+                      >
+                        <p className="line-clamp-2 text-sm font-semibold leading-snug group-hover:text-primary transition-colors">
+                          {l.objeto}
+                        </p>
+                      </Link>
                     </div>
                     <div className="shrink-0 text-right">
-                      <p className="num text-sm font-semibold">{brl(l.valor_estimado)}</p>
-                      <p
-                        className={
-                          dias !== null && dias <= 7
-                            ? "num text-[11px] text-warning"
-                            : "num text-[11px] text-muted-foreground"
-                        }
+                      <p className="num text-sm font-bold text-foreground">
+                        {brl(l.valor_estimado)}
+                      </p>
+                      <span
+                        className={cn(
+                          "num mt-1 inline-block rounded px-1.5 py-0.5 text-[10px] font-semibold",
+                          dias !== null && dias <= 3
+                            ? "bg-destructive/15 text-destructive"
+                            : dias !== null && dias <= 7
+                              ? "bg-warning/15 text-warning"
+                              : "bg-muted text-muted-foreground",
+                        )}
                       >
                         {dias === null
-                          ? "sem prazo informado"
-                          : dias >= 0
-                            ? `${dias} dias`
-                            : "encerrada"}{" "}
-                        · {dataBR(l.data_limite_proposta)}
-                      </p>
+                          ? "sem prazo"
+                          : dias === 0
+                            ? "Encerra hoje!"
+                            : dias > 0
+                              ? `Encerra em ${dias}d`
+                              : "Encerrada"}
+                      </span>
                     </div>
                   </div>
-                  <div className="mt-2 flex items-center gap-3">
-                    <StatusInternoBadge status={l.status_interno} />
-                    <ScoreBadge score={l.score_aderencia} />
+                  <div className="mt-2.5 flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <StatusInternoBadge status={l.status_interno} />
+                      <ScoreBadge score={l.score_aderencia} />
+                    </div>
+                    <Link
+                      to="/licitacoes/$id"
+                      params={{ id: l.id }}
+                      className="inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:underline"
+                    >
+                      Ver detalhes <ArrowRight className="size-3" />
+                    </Link>
                   </div>
-                </Link>
+                </div>
               );
             })}
           </div>
@@ -307,6 +367,68 @@ function Dashboard() {
                 <li className="text-muted-foreground">Sem dados no banco.</li>
               )}
             </ul>
+          </div>
+
+          <div className="rounded-xl border border-border/80 bg-card/90 p-4 shadow-sm">
+            <div className="flex items-center justify-between border-b border-border/60 pb-2.5">
+              <div>
+                <h2 className="text-sm font-semibold text-foreground">Pipeline da Construtora</h2>
+                <p className="text-[11px] text-muted-foreground">Esteira de triagem de obras públicas</p>
+              </div>
+              <span className="num text-xs font-bold text-primary">
+                {m ? numero(m.total) : "—"} total
+              </span>
+            </div>
+
+            <div className="mt-2.5 space-y-1.5">
+              <Link
+                to="/licitacoes"
+                search={{ status_interno: "nova", apenas_abertas: true }}
+                className="group flex items-center justify-between rounded-lg px-2 py-1.5 transition-colors hover:bg-muted/40"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="size-2 rounded-full bg-info" />
+                  <span className="text-xs text-muted-foreground group-hover:text-foreground">Não Analisadas</span>
+                </div>
+                <span className="num text-xs font-semibold">{m ? numero(m.nao_analisadas) : "—"}</span>
+              </Link>
+
+              <Link
+                to="/licitacoes"
+                search={{ recomendadas: true, apenas_abertas: true }}
+                className="group flex items-center justify-between rounded-lg px-2 py-1.5 transition-colors hover:bg-muted/40"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="size-2 rounded-full bg-success" />
+                  <span className="text-xs text-muted-foreground group-hover:text-foreground">Alta Aderência Obras</span>
+                </div>
+                <span className="num text-xs font-semibold text-success">{m ? numero(m.recomendadas) : "—"}</span>
+              </Link>
+
+              <Link
+                to="/licitacoes"
+                search={{ prioridade: "true", apenas_abertas: true }}
+                className="group flex items-center justify-between rounded-lg px-2 py-1.5 transition-colors hover:bg-muted/40"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="size-2 rounded-full bg-primary" />
+                  <span className="text-xs text-muted-foreground group-hover:text-foreground">Marcadas Prioritárias</span>
+                </div>
+                <span className="num text-xs font-semibold text-primary">{m ? numero(m.prioritarias) : "—"}</span>
+              </Link>
+
+              <Link
+                to="/licitacoes"
+                search={{ apenas_abertas: true, limite_ate: diaBR(7) }}
+                className="group flex items-center justify-between rounded-lg px-2 py-1.5 transition-colors hover:bg-muted/40"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="size-2 rounded-full bg-warning" />
+                  <span className="text-xs text-muted-foreground group-hover:text-foreground">Prazos Críticos (≤ 7d)</span>
+                </div>
+                <span className="num text-xs font-semibold text-warning">{m ? numero(m.prazo_proximo) : "—"}</span>
+              </Link>
+            </div>
           </div>
         </section>
       </div>

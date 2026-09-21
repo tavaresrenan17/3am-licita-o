@@ -6,6 +6,7 @@ import {
   HardHat,
   PanelLeft,
   ArrowLeft,
+  Search,
   type LucideIcon,
 } from "lucide-react";
 import { useState, type ReactNode } from "react";
@@ -13,11 +14,12 @@ import { cn } from "@/lib/utils";
 import { useMetricas } from "@/services/api";
 import { dataHoraBR, numero } from "@/lib/format";
 import { Button } from "@/components/ui/button";
+import { CommandPalette } from "@/components/CommandPalette";
 
 const NAV: { to: string; label: string; icon: LucideIcon }[] = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
-  { to: "/sincronizacao", label: "Sincronização PNCP", icon: RefreshCw },
   { to: "/licitacoes", label: "Licitações", icon: Table2 },
+  { to: "/sincronizacao", label: "Sincronização PNCP", icon: RefreshCw },
 ];
 
 export function AppShell({
@@ -37,6 +39,7 @@ export function AppShell({
 }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const router = useRouter();
+  const [paletteOpen, setPaletteOpen] = useState(false);
 
   // Exibe o botão de voltar automaticamente em qualquer página que não seja a Home (/)
   const deveMostrarVoltar = mostrarVoltar ?? pathname !== "/";
@@ -52,18 +55,18 @@ export function AppShell({
   };
 
   return (
-    <div className="flex min-h-screen bg-background">
-      <Sidebar />
+    <div className="flex min-h-screen bg-background text-foreground antialiased selection:bg-primary/20 selection:text-primary">
+      <Sidebar onOpenPalette={() => setPaletteOpen(true)} />
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-20 flex flex-wrap items-center justify-between gap-3 border-b border-border bg-background/95 px-5 py-3.5 backdrop-blur">
+        <header className="sticky top-0 z-20 flex flex-wrap items-center justify-between gap-3 border-b border-border/80 bg-background/85 px-5 py-3 backdrop-blur-md">
           <div className="flex items-center gap-2.5 min-w-0">
             {deveMostrarVoltar && (
               <Button
                 type="button"
                 variant="outline"
                 size="icon"
-                className="size-8 shrink-0 rounded-md border-border bg-card/60 hover:bg-accent hover:text-foreground text-muted-foreground shadow-xs cursor-pointer"
+                className="size-8 shrink-0 rounded-lg border-border/80 bg-card/60 hover:bg-accent hover:text-foreground text-muted-foreground shadow-xs cursor-pointer"
                 onClick={handleVoltar}
                 title="Voltar para a página anterior"
                 aria-label="Voltar para a página anterior"
@@ -73,32 +76,60 @@ export function AppShell({
             )}
             <div className="min-w-0">
               <h1 className="truncate text-base font-semibold tracking-tight">{titulo}</h1>
-              {descricao && <p className="truncate text-xs text-muted-foreground">{descricao}</p>}
+              {descricao && (
+                <p className="truncate text-xs text-muted-foreground">{descricao}</p>
+              )}
             </div>
           </div>
-          <div className="flex items-center gap-2">{acoes}</div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setPaletteOpen(true)}
+              className="hidden sm:inline-flex items-center gap-2 rounded-lg border border-border/80 bg-card/60 px-2.5 py-1.5 text-xs text-muted-foreground transition-all duration-150 hover:border-primary/40 hover:bg-accent hover:text-foreground cursor-pointer"
+              title="Abrir Command Palette (Ctrl+K)"
+            >
+              <Search className="size-3.5 text-muted-foreground" />
+              <span>Buscar comandos...</span>
+              <kbd className="rounded border border-border/80 bg-muted/80 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+                Ctrl K
+              </kbd>
+            </button>
+
+            {acoes}
+          </div>
         </header>
 
-        <nav className="flex gap-1 overflow-x-auto border-b border-border px-3 py-2 md:hidden">
-          {NAV.map(({ to, label, icon: Icon }) => (
-            <Link
-              key={to}
-              to={to}
-              className="flex items-center gap-1.5 whitespace-nowrap rounded-md px-2.5 py-1.5 text-xs text-muted-foreground hover:bg-accent"
-            >
-              <Icon className="size-3.5" />
-              {label}
-            </Link>
-          ))}
+        <nav className="flex gap-1 overflow-x-auto border-b border-border/80 px-3 py-2 md:hidden bg-card/40">
+          {NAV.map(({ to, label, icon: Icon }) => {
+            const ativo = to === "/" ? pathname === "/" : pathname.startsWith(to);
+            return (
+              <Link
+                key={to}
+                to={to}
+                className={cn(
+                  "flex items-center gap-1.5 whitespace-nowrap rounded-lg px-2.5 py-1.5 text-xs transition-colors",
+                  ativo
+                    ? "bg-accent font-medium text-foreground"
+                    : "text-muted-foreground hover:bg-accent/60",
+                )}
+              >
+                <Icon className={cn("size-3.5", ativo && "text-primary")} />
+                {label}
+              </Link>
+            );
+          })}
         </nav>
 
         <main className="flex-1 p-4 lg:p-5">{children}</main>
       </div>
+
+      <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
     </div>
   );
 }
 
-function Sidebar() {
+function Sidebar({ onOpenPalette }: { onOpenPalette: () => void }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   // Uma consulta só, compartilhada em cache com o Dashboard.
   const { data: metricas } = useMetricas();
@@ -120,25 +151,25 @@ function Sidebar() {
   return (
     <aside
       className={cn(
-        "sticky top-0 hidden h-screen shrink-0 flex-col border-r border-sidebar-border bg-sidebar transition-all duration-200 md:flex",
+        "sticky top-0 hidden h-screen shrink-0 flex-col border-r border-sidebar-border/80 bg-sidebar transition-all duration-200 md:flex",
         recolhida ? "w-16" : "w-60",
       )}
     >
       <div
         className={cn(
-          "flex items-center gap-2.5 border-b border-sidebar-border px-3 py-3",
-          recolhida && "justify-center",
+          "flex items-center gap-2.5 border-b border-sidebar-border/80 px-3.5 py-3",
+          recolhida && "justify-center px-2",
         )}
       >
-        <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground">
+        <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm shadow-primary/20">
           <HardHat className="size-5" />
         </div>
         {!recolhida && (
           <div className="min-w-0 leading-tight">
-            <p className="truncate text-sm font-semibold tracking-tight text-sidebar-foreground">
+            <p className="truncate text-sm font-bold tracking-tight text-sidebar-foreground">
               3AM LICITAÇÃO
             </p>
-            <p className="text-[11px] text-muted-foreground">Construção civil</p>
+            <p className="text-[11px] font-medium text-primary">Construção civil</p>
           </div>
         )}
       </div>
@@ -149,7 +180,7 @@ function Sidebar() {
           size="icon"
           onClick={toggle}
           className={cn(
-            "mb-2 h-8 w-full text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+            "mb-1 h-8 w-full text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
             recolhida && "w-8",
           )}
           aria-label={recolhida ? "Expandir sidebar" : "Recolher sidebar"}
@@ -160,7 +191,7 @@ function Sidebar() {
         </Button>
       </div>
 
-      <nav className="flex flex-col gap-0.5 px-2 py-2">
+      <nav className="flex flex-col gap-1 px-2 py-1">
         {NAV.map(({ to, label, icon: Icon }) => {
           const ativo = to === "/" ? pathname === "/" : pathname.startsWith(to);
           return (
@@ -168,15 +199,23 @@ function Sidebar() {
               key={to}
               to={to}
               className={cn(
-                "flex items-center gap-2.5 rounded-md px-3 py-2 text-sm transition-colors",
+                "group relative flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-all duration-150",
                 recolhida && "justify-center px-2",
                 ativo
-                  ? "bg-sidebar-accent font-medium text-sidebar-accent-foreground"
-                  : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground",
+                  ? "bg-sidebar-accent font-medium text-sidebar-accent-foreground shadow-xs"
+                  : "text-muted-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground",
               )}
               title={label}
             >
-              <Icon className={cn("size-4 shrink-0", ativo && "text-primary")} />
+              {ativo && (
+                <span className="absolute left-0 top-1/2 h-5 w-1 -translate-y-1/2 rounded-r-full bg-primary" />
+              )}
+              <Icon
+                className={cn(
+                  "size-4 shrink-0 transition-colors",
+                  ativo ? "text-primary" : "text-muted-foreground group-hover:text-foreground",
+                )}
+              />
               {!recolhida && <span className="truncate">{label}</span>}
             </Link>
           );
@@ -184,7 +223,7 @@ function Sidebar() {
       </nav>
 
       {!recolhida && (
-        <div className="mt-auto space-y-2 border-t border-sidebar-border px-4 py-4 text-[11px] text-muted-foreground">
+        <div className="mt-auto space-y-2.5 border-t border-sidebar-border/80 px-4 py-4 text-[11px] text-muted-foreground">
           <div className="flex items-center justify-between">
             <span>Licitações no banco</span>
             <span className="num font-semibold text-sidebar-foreground">

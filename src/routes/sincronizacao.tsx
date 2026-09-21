@@ -167,8 +167,13 @@ function SincronizacaoPage() {
       titulo="Sincronização PNCP"
       descricao="Consulta a API pública do PNCP e grava no banco. Análise e filtros ficam em Licitações Salvas."
       acoes={
-        rodando ? (
-          <Button size="sm" variant="outline" onClick={interromper}>
+        rodando || job?.status === "em_andamento" ? (
+          <Button
+            size="sm"
+            variant="outline"
+            className="border-destructive/50 text-destructive hover:bg-destructive/10 cursor-pointer"
+            onClick={() => interromper(job?.id)}
+          >
             <Square className="mr-1 size-3.5" /> Interromper
           </Button>
         ) : (
@@ -208,6 +213,23 @@ function SincronizacaoPage() {
               <p className="mt-1 text-[11px] text-muted-foreground">
                 Recorte: {job.descricao_escopo}
               </p>
+            )}
+
+            {job?.status === "em_andamento" && decorrido > 30 * 60 * 1000 && (
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-warning/40 bg-warning/10 p-2.5 text-xs text-warning">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="size-4 shrink-0" />
+                  <span>Esta sincronização está aberta há mais de 30 minutos. Se ela foi paralisada ou o navegador fechado, você pode resetá-la.</span>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 border-warning/60 bg-warning/20 text-warning hover:bg-warning/30 text-xs shrink-0 cursor-pointer"
+                  onClick={() => interromper(job.id)}
+                >
+                  Resetar Rotina
+                </Button>
+              </div>
             )}
 
             <div className="mt-4">

@@ -344,9 +344,25 @@ export function useSincronizacaoPNCP() {
     [conduzir],
   );
 
-  const interromper = useCallback(() => {
-    cancelado.current = true;
-  }, []);
+  const interromper = useCallback(
+    async (jobIdParaEncerrar?: string) => {
+      cancelado.current = true;
+      const targetId =
+        jobIdParaEncerrar ??
+        (status.data?.job?.status === "em_andamento" ? status.data.job.id : null);
+      if (targetId) {
+        try {
+          await interromperSincronizacaoFn({
+            data: { jobId: targetId, motivo: "Interrompida manualmente pelo usuário" },
+          });
+          await atualizarTelas();
+        } catch (e) {
+          console.error("Erro ao interromper sincronização no backend:", e);
+        }
+      }
+    },
+    [status.data?.job, atualizarTelas],
+  );
 
   return {
     rodando,
