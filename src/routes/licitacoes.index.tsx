@@ -309,7 +309,21 @@ function LicitacoesSalvas() {
     filtrosDaBusca(busca, UF_INICIAL),
   );
   const [termo, setTermo] = useState(() => busca.palavra_chave ?? "");
+  const buscaInputRef = useRef<HTMLInputElement>(null);
   const [filtrosExpandidos, setFiltrosExpandidos] = useState(false);
+
+  useEffect(() => {
+    const handleSlashKey = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) return;
+      if (e.key === "/" && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault();
+        buscaInputRef.current?.focus();
+      }
+    };
+    window.addEventListener("keydown", handleSlashKey);
+    return () => window.removeEventListener("keydown", handleSlashKey);
+  }, []);
   const [ordenarPor, setOrdenarPor] = useState<OrdenacaoCampo>(
     busca.ordenar ?? "data_limite_proposta",
   );
@@ -704,7 +718,8 @@ function LicitacoesSalvas() {
           <div className="relative min-w-0 flex-1">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
             <Input
-              className="h-8 pl-8 text-xs placeholder:text-muted-foreground"
+              ref={buscaInputRef}
+              className="h-8 pl-8 pr-8 text-xs placeholder:text-muted-foreground"
               placeholder={
                 modoHibrido
                   ? "Busque por palavras ou por ideia (ex.: reforma de escola)…"
@@ -713,11 +728,16 @@ function LicitacoesSalvas() {
               value={termo}
               onChange={(e) => setTermo(e.target.value)}
             />
+            {!termo && (
+              <kbd className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 rounded border border-border/80 bg-muted/60 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground shadow-xs">
+                /
+              </kbd>
+            )}
             {termo && (
               <button
                 type="button"
                 onClick={() => setTermo("")}
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer"
                 aria-label="Limpar termo de busca"
               >
                 <X className="size-3" />

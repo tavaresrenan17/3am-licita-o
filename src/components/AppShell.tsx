@@ -7,14 +7,16 @@ import {
   PanelLeft,
   ArrowLeft,
   Search,
+  Keyboard,
   type LucideIcon,
 } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { useState, useEffect, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { useMetricas } from "@/services/api";
 import { dataHoraBR, numero } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { CommandPalette } from "@/components/CommandPalette";
+import { AtalhosModal } from "@/components/AtalhosModal";
 
 const NAV: { to: string; label: string; icon: LucideIcon }[] = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -40,6 +42,27 @@ export function AppShell({
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const router = useRouter();
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [atalhosOpen, setAtalhosOpen] = useState(false);
+
+  // Listener para tecla '?'
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (
+        target.tagName === "INPUT" ||
+        target.tagName === "TEXTAREA" ||
+        target.isContentEditable
+      ) {
+        return;
+      }
+      if (e.key === "?" && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault();
+        setAtalhosOpen((prev) => !prev);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   // Exibe o botão de voltar automaticamente em qualquer página que não seja a Home (/)
   const deveMostrarVoltar = mostrarVoltar ?? pathname !== "/";
@@ -59,7 +82,7 @@ export function AppShell({
       <Sidebar onOpenPalette={() => setPaletteOpen(true)} />
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-20 flex flex-wrap items-center justify-between gap-3 border-b border-border/80 bg-background/85 px-5 py-3 backdrop-blur-md">
+        <header className="sticky top-0 z-20 flex flex-wrap items-center justify-between gap-3 border-b border-border/80 bg-background/85 px-5 py-2.5 backdrop-blur-md">
           <div className="flex items-center gap-2.5 min-w-0">
             {deveMostrarVoltar && (
               <Button
@@ -75,7 +98,13 @@ export function AppShell({
               </Button>
             )}
             <div className="min-w-0">
-              <h1 className="truncate text-base font-semibold tracking-tight">{titulo}</h1>
+              <div className="flex items-center gap-2">
+                <h1 className="truncate text-base font-semibold tracking-tight">{titulo}</h1>
+                <div className="hidden xl:inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-400">
+                  <span className="size-1.5 rounded-full bg-emerald-400 animate-pulse-subtle" />
+                  <span>PNCP Integrado</span>
+                </div>
+              </div>
               {descricao && (
                 <p className="truncate text-xs text-muted-foreground">{descricao}</p>
               )}
@@ -94,6 +123,16 @@ export function AppShell({
               <kbd className="rounded border border-border/80 bg-muted/80 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
                 Ctrl K
               </kbd>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setAtalhosOpen(true)}
+              className="inline-flex size-8 items-center justify-center rounded-lg border border-border/80 bg-card/60 text-muted-foreground transition-colors hover:border-primary/40 hover:bg-accent hover:text-foreground cursor-pointer"
+              title="Ver atalhos de teclado (?)"
+              aria-label="Atalhos de teclado"
+            >
+              <Keyboard className="size-3.5" />
             </button>
 
             {acoes}
@@ -125,6 +164,7 @@ export function AppShell({
       </div>
 
       <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
+      <AtalhosModal open={atalhosOpen} onOpenChange={setAtalhosOpen} />
     </div>
   );
 }
