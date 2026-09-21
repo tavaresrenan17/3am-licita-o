@@ -20,6 +20,10 @@ dist-ssr
 .wrangler/
 .dev.vars
 
+# Vercel
+.vercel
+
+
 # Segredos locais: o .env guarda a chave de serviço do Supabase, que ignora RLS
 # e nunca pode ser publicada.
 .env
