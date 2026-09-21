@@ -3,19 +3,23 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowDown,
   ArrowUp,
+  Check,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
   Download,
+  ExternalLink,
   HardHat,
   LayoutGrid,
   List,
   MessageSquarePlus,
   Search,
+  Send,
   SlidersHorizontal,
   Sparkles,
   Star,
   X,
+  XCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -27,6 +31,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -349,14 +360,26 @@ function LicitacoesSalvas() {
     return () => window.removeEventListener("abrir-atalhos-teclado", handleAbrirAtalhos);
   }, []);
 
-  // Digitar não dispara uma consulta por tecla.
-  useEffect(() => {
-    const t = setTimeout(() => {
-      setFiltros((f) => (f.palavra_chave === termo ? f : { ...f, palavra_chave: termo }));
-      setPagina(1);
-    }, 350);
-    return () => clearTimeout(t);
+  const executarBusca = useCallback(() => {
+    const termoLimpo = termo.trim();
+    setFiltros((f) => (f.palavra_chave === termoLimpo ? f : { ...f, palavra_chave: termoLimpo }));
+    setPagina(1);
   }, [termo]);
+
+  const limparBusca = useCallback(() => {
+    setTermo("");
+    setFiltros((f) => (!f.palavra_chave ? f : { ...f, palavra_chave: "" }));
+    setPagina(1);
+    buscaInputRef.current?.focus();
+  }, []);
+
+  // Se o usuário apagar o campo completamente, reseta o filtro para exibir todos
+  useEffect(() => {
+    if (termo === "" && filtros.palavra_chave) {
+      setFiltros((f) => ({ ...f, palavra_chave: "" }));
+      setPagina(1);
+    }
+  }, [termo, filtros.palavra_chave]);
 
   const itensPorPagina = config?.itens_por_pagina ?? 25;
   const colunas = config?.colunas_visiveis ?? COLUNAS.map((c) => c.key);
@@ -605,6 +628,118 @@ function LicitacoesSalvas() {
       }
     >
       <section className="rounded-xl border border-border/80 bg-card/90 p-3.5 shadow-sm">
+        {/* --- Triagem Comercial por Status Interno --- */}
+        <div className="mb-2.5 flex flex-wrap items-center gap-1.5 border-b border-border/60 pb-2.5">
+          <span className="text-[11px] font-semibold text-muted-foreground mr-1 flex items-center gap-1">
+            Status Interno:
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              setFiltros((f) => ({ ...f, status_interno: "" }));
+              setPagina(1);
+            }}
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-all duration-150 cursor-pointer",
+              !filtros.status_interno
+                ? "border-primary/80 bg-primary/20 text-primary font-semibold shadow-xs"
+                : "border-border/80 bg-muted/40 text-muted-foreground hover:border-border hover:text-foreground",
+            )}
+          >
+            <span>Todas</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              const ativo = filtros.status_interno === "interessante";
+              setFiltros((f) => ({ ...f, status_interno: ativo ? "" : "interessante" }));
+              setPagina(1);
+            }}
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-all duration-150 cursor-pointer",
+              filtros.status_interno === "interessante"
+                ? "border-emerald-500/70 bg-emerald-500/20 text-emerald-400 font-semibold shadow-xs ring-1 ring-emerald-500/40"
+                : "border-border/80 bg-muted/40 text-muted-foreground hover:border-emerald-500/40 hover:text-emerald-400",
+            )}
+          >
+            <Star className="size-3 fill-emerald-400 text-emerald-400" />
+            <span>Interessantes</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              const ativo = filtros.status_interno === "em_analise";
+              setFiltros((f) => ({ ...f, status_interno: ativo ? "" : "em_analise" }));
+              setPagina(1);
+            }}
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-all duration-150 cursor-pointer",
+              filtros.status_interno === "em_analise"
+                ? "border-amber-500/70 bg-amber-500/20 text-amber-400 font-semibold shadow-xs ring-1 ring-amber-500/40"
+                : "border-border/80 bg-muted/40 text-muted-foreground hover:border-amber-500/40 hover:text-amber-400",
+            )}
+          >
+            <Search className="size-3 text-amber-400" />
+            <span>Em Análise</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              const ativo = filtros.status_interno === "nova";
+              setFiltros((f) => ({ ...f, status_interno: ativo ? "" : "nova" }));
+              setPagina(1);
+            }}
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-all duration-150 cursor-pointer",
+              filtros.status_interno === "nova"
+                ? "border-sky-500/70 bg-sky-500/20 text-sky-400 font-semibold shadow-xs ring-1 ring-sky-500/40"
+                : "border-border/80 bg-muted/40 text-muted-foreground hover:border-sky-500/40 hover:text-sky-400",
+            )}
+          >
+            <Sparkles className="size-3 text-sky-400" />
+            <span>Novas</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              const ativo = filtros.status_interno === "descartada";
+              setFiltros((f) => ({ ...f, status_interno: ativo ? "" : "descartada" }));
+              setPagina(1);
+            }}
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-all duration-150 cursor-pointer",
+              filtros.status_interno === "descartada"
+                ? "border-rose-500/70 bg-rose-500/20 text-rose-400 font-semibold shadow-xs ring-1 ring-rose-500/40"
+                : "border-border/80 bg-muted/40 text-muted-foreground hover:border-rose-500/40 hover:text-rose-400",
+            )}
+          >
+            <XCircle className="size-3 text-rose-400" />
+            <span>Descartadas</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              const ativo = filtros.status_interno === "proposta_enviada";
+              setFiltros((f) => ({ ...f, status_interno: ativo ? "" : "proposta_enviada" }));
+              setPagina(1);
+            }}
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-all duration-150 cursor-pointer",
+              filtros.status_interno === "proposta_enviada"
+                ? "border-purple-500/70 bg-purple-500/20 text-purple-400 font-semibold shadow-xs ring-1 ring-purple-500/40"
+                : "border-border/80 bg-muted/40 text-muted-foreground hover:border-purple-500/40 hover:text-purple-400",
+            )}
+          >
+            <Send className="size-3 text-purple-400" />
+            <span>Propostas Enviadas</span>
+          </button>
+        </div>
+
         {/* Presets Rápidos de Construção Civil */}
         <div className="mb-3 flex flex-wrap items-center gap-1.5 border-b border-border/60 pb-2.5">
           <span className="text-[11px] font-semibold text-muted-foreground mr-1">
@@ -719,14 +854,16 @@ function LicitacoesSalvas() {
             <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
             <Input
               ref={buscaInputRef}
-              className="h-8 pl-8 pr-8 text-xs placeholder:text-muted-foreground"
-              placeholder={
-                modoHibrido
-                  ? "Busque por palavras ou por ideia (ex.: reforma de escola)…"
-                  : "Buscar por palavras-chave (ex.: pavimentação, reforma, escola)…"
-              }
+              className="h-8 pl-8 pr-16 text-xs placeholder:text-muted-foreground"
+              placeholder="Buscar por palavras-chave ou ideia vetorial (ex.: reforma de escola, pavimentação asfáltica)…"
               value={termo}
               onChange={(e) => setTermo(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  executarBusca();
+                }
+              }}
             />
             {!termo && (
               <kbd className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 rounded border border-border/80 bg-muted/60 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground shadow-xs">
@@ -736,21 +873,41 @@ function LicitacoesSalvas() {
             {termo && (
               <button
                 type="button"
-                onClick={() => setTermo("")}
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer"
+                onClick={limparBusca}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer"
                 aria-label="Limpar termo de busca"
               >
-                <X className="size-3" />
+                <X className="size-3.5" />
               </button>
             )}
           </div>
+
+          <Button
+            type="button"
+            size="sm"
+            className={cn(
+              "h-8 gap-1.5 px-3 text-xs font-semibold cursor-pointer shadow-sm transition-all shrink-0",
+              termo.trim() !== (filtros.palavra_chave ?? "") && termo.trim().length > 0
+                ? "bg-primary text-primary-foreground hover:bg-primary/90 ring-2 ring-primary/40"
+                : "bg-primary text-primary-foreground hover:bg-primary/90",
+            )}
+            onClick={executarBusca}
+            disabled={consulta.isFetching}
+            title="Buscar usando banco de dados vetorial com busca semântica (Pressione Enter)"
+          >
+            <Sparkles className={cn("size-3.5", consulta.isFetching && "animate-spin")} />
+            <span>Buscar</span>
+            <kbd className="ml-1 hidden rounded bg-black/20 px-1 py-0.5 font-mono text-[9px] text-primary-foreground/90 sm:inline-block">
+              ↵ Enter
+            </kbd>
+          </Button>
 
           <div className="flex items-center gap-2 shrink-0">
             <Button
               type="button"
               variant={filtrosExpandidos ? "secondary" : "outline"}
               size="sm"
-              className="h-8 text-xs"
+              className="h-8 text-xs cursor-pointer"
               onClick={() => setFiltrosExpandidos((v) => !v)}
             >
               <SlidersHorizontal className="mr-1.5 size-3.5" />
@@ -769,6 +926,39 @@ function LicitacoesSalvas() {
             </Button>
           </div>
         </div>
+
+        {/* Indicador de Busca Semântica Vetorial Ativa */}
+        {filtros.palavra_chave && (
+          <div className="mt-2.5 flex flex-wrap items-center gap-2 border-t border-border/40 pt-2 text-xs">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/40 bg-primary/10 px-2.5 py-0.5 text-[11px] font-medium text-primary">
+              <Sparkles className="size-3 text-primary animate-pulse" />
+              <span>
+                Busca Semântica Vetorial: <strong>"{filtros.palavra_chave}"</strong>
+              </span>
+              <button
+                type="button"
+                onClick={limparBusca}
+                className="ml-1 hover:text-foreground cursor-pointer"
+                title="Limpar busca"
+              >
+                <X className="size-3" />
+              </button>
+            </span>
+
+            {modoHibrido && (
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] text-emerald-400 font-medium">
+                <span className="size-1.5 rounded-full bg-emerald-400 animate-ping" />
+                Vetorizado com IA (bge-m3 / pgvector)
+              </span>
+            )}
+
+            {buscaDegradou && (
+              <span className="text-[10px] text-amber-400 font-medium">
+                ℹ️ Modo textual acionado
+              </span>
+            )}
+          </div>
+        )}
 
         {filtrosExpandidos && (
           <div className="mt-2.5 grid gap-2.5 border-t border-border/70 pt-2.5 sm:grid-cols-2 lg:grid-cols-3">
@@ -790,6 +980,30 @@ function LicitacoesSalvas() {
               options={opcoes?.["municipios"] ?? []}
               onChange={(v) => set("municipio", v)}
             />
+
+            <div className="space-y-1">
+              <Label className="text-[11px] font-medium text-muted-foreground">
+                Status interno / Triagem
+              </Label>
+              <Select
+                value={filtros.status_interno || "todos"}
+                onValueChange={(v) => {
+                  set("status_interno", v === "todos" ? "" : v);
+                }}
+              >
+                <SelectTrigger className="h-8 text-xs">
+                  <SelectValue placeholder="Todos os status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos os status</SelectItem>
+                  <SelectItem value="interessante">⭐ Interessante</SelectItem>
+                  <SelectItem value="em_analise">🔍 Em Análise</SelectItem>
+                  <SelectItem value="nova">🆕 Nova / Não triada</SelectItem>
+                  <SelectItem value="descartada">❌ Descartada</SelectItem>
+                  <SelectItem value="proposta_enviada">📤 Proposta Enviada</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
 
             <div className="space-y-1">
               <Label className="text-[11px] font-medium text-muted-foreground">
@@ -1317,35 +1531,154 @@ function LicitacoesSalvas() {
                       >
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="sm" className="h-7 px-2 text-xs">
-                              Ações
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className={cn(
+                                "h-7 px-2.5 text-xs font-medium gap-1.5 transition-all cursor-pointer shadow-xs",
+                                l.status_interno === "interessante" &&
+                                  "border-emerald-500/50 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20",
+                                l.status_interno === "em_analise" &&
+                                  "border-amber-500/50 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20",
+                                l.status_interno === "descartada" &&
+                                  "border-rose-500/50 bg-rose-500/10 text-rose-400 hover:bg-rose-500/20",
+                                l.status_interno === "proposta_enviada" &&
+                                  "border-purple-500/50 bg-purple-500/10 text-purple-400 hover:bg-purple-500/20",
+                                l.status_interno === "nova" &&
+                                  "border-border/80 hover:bg-muted text-foreground",
+                              )}
+                            >
+                              <span>Ações</span>
+                              <ChevronDown className="size-3 opacity-60" />
                             </Button>
                           </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
+                          <DropdownMenuContent align="end" className="w-56">
                             <DropdownMenuItem
                               onClick={() =>
                                 navigate({ to: "/licitacoes/$id", params: { id: l.id } })
                               }
+                              className="cursor-pointer font-medium"
                             >
-                              Abrir detalhe
+                              <ExternalLink className="mr-2 size-3.5 text-primary" /> Abrir ficha completa
                             </DropdownMenuItem>
+
                             <DropdownMenuSeparator />
-                            {(Object.keys(STATUS_INTERNO_LABEL) as StatusInterno[]).map((s) => (
-                              <DropdownMenuItem key={s} onClick={() => setStatus(l.id, s)}>
-                                Marcar como {STATUS_INTERNO_LABEL[s].toLowerCase()}
-                              </DropdownMenuItem>
-                            ))}
+
+                            <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                              Classificar Oportunidade
+                            </div>
+
+                            <DropdownMenuItem
+                              onClick={() => setStatus(l.id, "interessante")}
+                              className={cn(
+                                "cursor-pointer text-xs flex items-center justify-between",
+                                l.status_interno === "interessante" &&
+                                  "bg-emerald-500/15 font-semibold text-emerald-400",
+                              )}
+                            >
+                              <span className="flex items-center gap-2">
+                                <Star className="size-3.5 fill-emerald-400 text-emerald-400" />
+                                <span>Interessante</span>
+                              </span>
+                              {l.status_interno === "interessante" && (
+                                <Check className="size-3.5 text-emerald-400" />
+                              )}
+                            </DropdownMenuItem>
+
+                            <DropdownMenuItem
+                              onClick={() => setStatus(l.id, "em_analise")}
+                              className={cn(
+                                "cursor-pointer text-xs flex items-center justify-between",
+                                l.status_interno === "em_analise" &&
+                                  "bg-amber-500/15 font-semibold text-amber-400",
+                              )}
+                            >
+                              <span className="flex items-center gap-2">
+                                <Search className="size-3.5 text-amber-400" />
+                                <span>Em Análise</span>
+                              </span>
+                              {l.status_interno === "em_analise" && (
+                                <Check className="size-3.5 text-amber-400" />
+                              )}
+                            </DropdownMenuItem>
+
+                            <DropdownMenuItem
+                              onClick={() => setStatus(l.id, "descartada")}
+                              className={cn(
+                                "cursor-pointer text-xs flex items-center justify-between",
+                                l.status_interno === "descartada" &&
+                                  "bg-rose-500/15 font-semibold text-rose-400",
+                              )}
+                            >
+                              <span className="flex items-center gap-2">
+                                <XCircle className="size-3.5 text-rose-400" />
+                                <span>Descartada</span>
+                              </span>
+                              {l.status_interno === "descartada" && (
+                                <Check className="size-3.5 text-rose-400" />
+                              )}
+                            </DropdownMenuItem>
+
+                            <DropdownMenuItem
+                              onClick={() => setStatus(l.id, "proposta_enviada")}
+                              className={cn(
+                                "cursor-pointer text-xs flex items-center justify-between",
+                                l.status_interno === "proposta_enviada" &&
+                                  "bg-purple-500/15 font-semibold text-purple-400",
+                              )}
+                            >
+                              <span className="flex items-center gap-2">
+                                <Send className="size-3.5 text-purple-400" />
+                                <span>Proposta Enviada</span>
+                              </span>
+                              {l.status_interno === "proposta_enviada" && (
+                                <Check className="size-3.5 text-purple-400" />
+                              )}
+                            </DropdownMenuItem>
+
+                            <DropdownMenuItem
+                              onClick={() => setStatus(l.id, "nova")}
+                              className={cn(
+                                "cursor-pointer text-xs flex items-center justify-between text-muted-foreground",
+                                l.status_interno === "nova" &&
+                                  "bg-muted font-semibold text-foreground",
+                              )}
+                            >
+                              <span className="flex items-center gap-2">
+                                <Sparkles className="size-3.5 text-sky-400" />
+                                <span>Redefinir como Nova</span>
+                              </span>
+                              {l.status_interno === "nova" && (
+                                <Check className="size-3.5 text-sky-400" />
+                              )}
+                            </DropdownMenuItem>
+
                             <DropdownMenuSeparator />
-                            <DropdownMenuItem onClick={() => togglePrioridade(l.id, l.prioridade)}>
+
+                            <DropdownMenuItem
+                              onClick={() => togglePrioridade(l.id, l.prioridade)}
+                              className="cursor-pointer"
+                            >
+                              <Star
+                                className={cn(
+                                  "mr-2 size-3.5",
+                                  l.prioridade
+                                    ? "fill-primary text-primary"
+                                    : "text-muted-foreground",
+                                )}
+                              />
                               {l.prioridade ? "Remover prioridade" : "Marcar prioridade"}
                             </DropdownMenuItem>
+
                             <DropdownMenuItem
                               onClick={() => {
                                 setObsAberta(l.id);
                                 setObsTexto("");
                               }}
+                              className="cursor-pointer"
                             >
-                              <MessageSquarePlus className="mr-1.5 size-3.5" /> Observação rápida
+                              <MessageSquarePlus className="mr-2 size-3.5 text-muted-foreground" />{" "}
+                              Observação rápida
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>

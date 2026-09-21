@@ -167,7 +167,7 @@ function SincronizacaoPage() {
       titulo="Sincronização PNCP"
       descricao="Consulta a API pública do PNCP e grava no banco. Análise e filtros ficam em Licitações Salvas."
       acoes={
-        rodando || job?.status === "em_andamento" ? (
+        rodando ? (
           <Button
             size="sm"
             variant="outline"
@@ -176,6 +176,23 @@ function SincronizacaoPage() {
           >
             <Square className="mr-1 size-3.5" /> Interromper
           </Button>
+        ) : job?.status === "em_andamento" ? (
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              className="border-destructive/50 text-destructive hover:bg-destructive/10 cursor-pointer"
+              onClick={() => interromper(job?.id)}
+            >
+              <Square className="mr-1 size-3.5" /> Resetar Job
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => iniciar({ ufs, modalidades: mods, horizonteDias: horizonte })}
+            >
+              <RefreshCw className="mr-1 size-3.5" /> Retomar Sincronização
+            </Button>
+          </div>
         ) : (
           <Button
             size="sm"
@@ -215,20 +232,31 @@ function SincronizacaoPage() {
               </p>
             )}
 
-            {job?.status === "em_andamento" && decorrido > 30 * 60 * 1000 && (
+            {job?.status === "em_andamento" && !rodando && (
               <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-warning/40 bg-warning/10 p-2.5 text-xs text-warning">
                 <div className="flex items-center gap-2">
                   <AlertTriangle className="size-4 shrink-0" />
-                  <span>Esta sincronização está aberta há mais de 30 minutos. Se ela foi paralisada ou o navegador fechado, você pode resetá-la.</span>
+                  <span>
+                    Há um ciclo de sincronização pausado ou mantido para retomada. Você pode retomar a coleta de onde parou ou cancelá-lo.
+                  </span>
                 </div>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-7 border-warning/60 bg-warning/20 text-warning hover:bg-warning/30 text-xs shrink-0 cursor-pointer"
-                  onClick={() => interromper(job.id)}
-                >
-                  Resetar Rotina
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 border-warning/60 bg-warning/20 text-warning hover:bg-warning/30 text-xs shrink-0 cursor-pointer"
+                    onClick={() => interromper(job.id)}
+                  >
+                    Resetar
+                  </Button>
+                  <Button
+                    size="sm"
+                    className="h-7 text-xs shrink-0 cursor-pointer"
+                    onClick={() => iniciar({ ufs, modalidades: mods, horizonteDias: horizonte })}
+                  >
+                    Retomar
+                  </Button>
+                </div>
               </div>
             )}
 

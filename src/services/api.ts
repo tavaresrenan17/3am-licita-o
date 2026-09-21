@@ -7,6 +7,7 @@
 import { useCallback, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
+  AnaliseLicitacaoDTO,
   CoberturaDocumentosDTO,
   CoberturaIncrementalDTO,
   DetalheDTO,
@@ -25,16 +26,19 @@ import {
   coberturaIncrementalFn,
   executarTickDocumentosFn,
   executarTickFn,
+  gerarAnaliseLicitacaoFn,
   iniciarIncrementalFn,
   iniciarSincronizacaoFn,
   interromperSincronizacaoFn,
   listarModalidadesFn,
   listarSincronizacoesFn,
   metricasFn,
+  obterAnaliseLicitacaoFn,
   obterConfiguracoesFn,
   obterLicitacaoFn,
   opcoesFiltrosFn,
   salvarConfiguracoesFn,
+  sincronizarDocumentosLicitacaoFn,
   statusSincronizacaoFn,
 } from "@/services/licitacoes.functions";
 
@@ -255,7 +259,9 @@ export function useSincronizacaoPNCP() {
         // Teto de segurança: nunca laçar indefinidamente atrás de um conjunto
         // que pode estar mudando na fonte.
         let ticksCooldownSeguidos = 0;
+        let ticksErroSeguidos = 0;
         const MAX_COOLDOWN_RETRIES = 5;
+        const MAX_ERRO_RETRIES = 5;
 
         for (let volta = 0; volta < 300; volta++) {
           if (cancelado.current) break;
@@ -268,35 +274,43 @@ export function useSincronizacaoPNCP() {
             break;
           }
 
-          // Tick fez progresso: resetar contador de cooldown e continuar.
+          // Tick fez progresso: resetar contadores e continuar.
           if (resumo.paginasAplicadas > 0) {
             ticksCooldownSeguidos = 0;
+            ticksErroSeguidos = 0;
             continue;
           }
 
-          // Tick sem progresso — distinguir cooldown de falha real.
+          // Tick sem progresso — distinguir cooldown de falha transitória
           if (resumo.aguardandoCooldown) {
             ticksCooldownSeguidos++;
             if (ticksCooldownSeguidos >= MAX_COOLDOWN_RETRIES) {
-              motivo = "PNCP instável: aguardando cooldown há muitos ciclos";
+              motivo = "PNCP temporariamente sobrecarregado (cooldown de segurança atingido)";
               manterParaRetomada = true;
               setErro(
-                "Fonte temporariamente indisponível. A sincronização será retomada na próxima execução.",
+                "Fonte sob alta carga. A sincronização foi pausada para preservar o progresso e poderá ser retomada em instantes.",
               );
               break;
             }
-            // Esperar 10 s e tentar outro tick — o cooldown no banco pode ter
-            // passado e o segmento estará disponível novamente.
-            await new Promise((r) => setTimeout(r, 10_000));
+            // Esperar 6 s e tentar outro tick — o cooldown no banco pode ter passado
+            await new Promise((r) => setTimeout(r, 6_000));
             continue;
           }
 
-          // Tick sem progresso e sem cooldown, mas com erros: falha real.
+          // Tick sem progresso e com erros: tolerar até MAX_ERRO_RETRIES antes de pausar
           if (resumo.erros.length > 0) {
-            motivo = `Fonte instável: ${resumo.erros[0] ?? "falha na coleta"}`;
-            manterParaRetomada = true;
-            setErro(resumo.erros[0] ?? "Falha na coleta");
-            break;
+            ticksErroSeguidos++;
+            if (ticksErroSeguidos >= MAX_ERRO_RETRIES) {
+              motivo = `Fonte instável após ${MAX_ERRO_RETRIES} tentativas: ${resumo.erros[0] ?? "falha na coleta"}`;
+              manterParaRetomada = true;
+              setErro(
+                `Instabilidade temporária no PNCP: ${resumo.erros[0] ?? "falha na coleta"}. A sincronização foi pausada e pode ser retomada.`,
+              );
+              break;
+            }
+            // Espera breve para o servidor do PNCP respirar antes da próxima tentativa
+            await new Promise((r) => setTimeout(r, 4_000));
+            continue;
           }
 
           if (volta === 299) motivo = "Teto de ciclos do navegador atingido";
@@ -462,4 +476,35 @@ export function useColetaDocumentos() {
   }, []);
 
   return { rodando, erro, progresso, cobertura, iniciar, interromper };
+}
+
+export function useAnaliseLicitacao(id: string, ativo = true) {
+  return useQuery({
+    queryKey: ["analise-licitacao", id],
+    queryFn: () => obterAnaliseLicitacaoFn({ data: { id } }),
+    enabled: ativo && Boolean(id),
+    staleTime: 60_000,
+  });
+}
+
+export function useGerarAnaliseLicitacao(id: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (forcar: boolean = false) =>
+      gerarAnaliseLicitacaoFn({ data: { id, forcar } }),
+    onSuccess: (dados) => {
+      queryClient.setQueryData(["analise-licitacao", id], dados);
+    },
+  });
+}
+
+export function useSincronizarDocumentosLicitacao(id: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => sincronizarDocumentosLicitacaoFn({ data: { id } }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["licitacao", id] });
+      await queryClient.invalidateQueries({ queryKey: ["analise-licitacao", id] });
+    },
+  });
 }

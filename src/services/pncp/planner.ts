@@ -79,8 +79,24 @@ const normalizarUfs = (ufs: string[]) => {
   return normalizadas;
 };
 
+const PRIORIDADE_MODALIDADE: Record<number, number> = {
+  6: 1,  // Pregão - Eletrônico (maior volume e relevância)
+  4: 2,  // Concorrência - Eletrônica (obras e engenharia)
+  8: 3,  // Dispensa
+  7: 4,  // Pregão - Presencial
+  12: 5, // Credenciamento
+  9: 6,  // Inexigibilidade
+  5: 7,  // Concorrência - Presencial
+  1: 8,  // Leilão - Eletrônico
+};
+
 const normalizarModalidades = (mods: number[]) =>
-  [...new Set(mods.filter((m) => Number.isInteger(m) && m > 0))].sort((a, b) => a - b);
+  [...new Set(mods.filter((m) => Number.isInteger(m) && m > 0))].sort((a, b) => {
+    const pa = PRIORIDADE_MODALIDADE[a] ?? 99;
+    const pb = PRIORIDADE_MODALIDADE[b] ?? 99;
+    if (pa !== pb) return pa - pb;
+    return a - b;
+  });
 
 export function etapasProgressivas(horizonteDias: number): number[] {
   return [...new Set([5, 15, horizonteDias].filter((d) => d <= horizonteDias))].sort(

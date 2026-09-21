@@ -24,14 +24,27 @@ export type ResultadoDownload =
   | { ok: true; bytes: Uint8Array; sha256: string; tipo: TipoArquivo; tamanho: number }
   | { ok: false; motivo: "grande_demais" | "http" | "vazio"; detalhe: string; tamanho?: number };
 
+export function normalizarUrlDownload(url: string): string {
+  // A API do PNCP por vezes devolve URLs com porta interna :1401 (ex: https://pncp.gov.br:1401/...)
+  // Essa porta sofre timeout por bloqueios/firewalls; remover a porta usa a porta 443 padrão.
+  return url.replace(/:1401(?=\/|$)/, "");
+}
+
 export async function baixarArquivo(
   url: string,
   opcoes: OpcoesDownload = {},
 ): Promise<ResultadoDownload> {
+  const urlFinal = normalizarUrlDownload(url);
   const maxBytes = opcoes.maxBytes ?? MAX_BYTES_PADRAO;
   const buscar = opcoes.fetchImpl ?? fetch;
 
-  const resposta = await buscar(url, { redirect: "follow" });
+  const resposta = await buscar(urlFinal, {
+    redirect: "follow",
+    headers: {
+      "User-Agent":
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
+    },
+  });
 
   if (!resposta.ok) {
     return { ok: false, motivo: "http", detalhe: `HTTP ${resposta.status}` };

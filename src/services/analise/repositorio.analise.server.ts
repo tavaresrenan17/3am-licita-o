@@ -129,7 +129,7 @@ function portaSupabase(): PortaSupabaseAnalise {
       const { data, error } = await db()
         .from("licitacoes")
         .select(
-          "id,numero_controle_pncp,orgao,unidade_nome,uf,municipio,objeto,informacao_complementar,modalidade_nome,processo,valor_total_estimado,data_publicacao,data_abertura_proposta,data_encerramento_proposta,situacao_nome,categoria,source_hash,updated_at",
+          "id,numero_controle_pncp,cnpj_orgao,ano_compra,sequencial_compra,score_aderencia,orgao,unidade_nome,uf,municipio,objeto,informacao_complementar,modalidade_nome,processo,valor_total_estimado,data_publicacao,data_abertura_proposta,data_encerramento_proposta,situacao_nome,categoria,source_hash,updated_at",
         )
         .eq("id", licitacaoId)
         .maybeSingle();
@@ -141,7 +141,7 @@ function portaSupabase(): PortaSupabaseAnalise {
       let consulta = db()
         .from("documentos_licitacao")
         .select(
-          "id,nome,tipo_documento,ativo,documentos_arquivo(estado,texto,sha256,atualizado_em)",
+          "id,nome,tipo_documento,ativo,url,sequencial_documento,documentos_arquivo(estado,texto,sha256,atualizado_em)",
         )
         .eq("licitacao_id", licitacaoId);
       if (somenteAtivos) consulta = consulta.eq("ativo", true);
@@ -172,13 +172,26 @@ function portaSupabase(): PortaSupabaseAnalise {
     },
 
     async obterAnalise(licitacaoId) {
-      const { data, error } = await db()
-        .from("licitacoes_analises")
-        .select("*")
-        .eq("licitacao_id", licitacaoId)
-        .maybeSingle();
-      if (error) throw error;
-      return data as LinhaGenerica | null;
+      try {
+        const { data, error } = await db()
+          .from("licitacoes_analises")
+          .select("*")
+          .eq("licitacao_id", licitacaoId)
+          .maybeSingle();
+        if (error) {
+          if (error.code === "PGRST205" || error.message?.includes("schema cache")) {
+            return null;
+          }
+          throw error;
+        }
+        return data as LinhaGenerica | null;
+      } catch (erro: unknown) {
+        const err = erro as { code?: string; message?: string };
+        if (err?.code === "PGRST205" || err?.message?.includes("schema cache")) {
+          return null;
+        }
+        throw erro;
+      }
     },
 
     async rpc(nome, parametros) {
@@ -195,6 +208,37 @@ function arquivoAninhado(linha: LinhaGenerica): LinhaGenerica {
   return registro(valor);
 }
 
+async function enriquecerDocumentosSobDemanda(
+  licitacaoId: string,
+  licitacao: LinhaGenerica,
+  linhas: LinhaGenerica[],
+  porta: PortaSupabaseAnalise,
+): Promise<LinhaGenerica[]> {
+  const temTexto = linhas.some((l) => {
+    const a = arquivoAninhado(l);
+    return a["texto"] && String(a["texto"]).trim().length > 50;
+  });
+
+  // Se já tem documentos com texto em cache, não precisa rebaixar
+  if (temTexto) return linhas;
+
+  // Se a licitação não tem documentos ou não tem texto extraído, aciona o sincronizador otimizado sob demanda
+  try {
+    const { sincronizarArquivosLicitacaoSobDemanda } = await import(
+      "../documentos/otimizador.server"
+    );
+    await sincronizarArquivosLicitacaoSobDemanda(licitacaoId, {
+      cliente: db(),
+      concorrencia: 4,
+      maxArquivos: 5,
+    });
+    return await porta.obterDocumentos(licitacaoId, true);
+  } catch (err) {
+    console.warn("Aviso: Falha no otimizador de documentos sob demanda:", err);
+    return linhas;
+  }
+}
+
 export function criarRepositorioAnalise(porta: PortaSupabaseAnalise = portaSupabase()) {
   return {
     async obterMateriaPrima(licitacaoId: string): Promise<MateriaPrimaAnalise> {
@@ -205,10 +249,18 @@ export function criarRepositorioAnalise(porta: PortaSupabaseAnalise = portaSupab
           porta.obterModeloEsperado(),
         ]);
         if (!licitacao) throw new Error("licitacao nao encontrada");
+
+        let docsFinais = linhas;
+        try {
+          docsFinais = await enriquecerDocumentosSobDemanda(licitacaoId, licitacao, linhas, porta);
+        } catch {
+          // Continua com os documentos originais caso o enriquecimento sob demanda falhe
+        }
+
         const chunksDisponiveis = await porta.contarChunks(licitacaoId, modeloEsperado);
         return {
           licitacao,
-          documentos: linhas.map((linha) => {
+          documentos: docsFinais.map((linha) => {
             const arquivo = arquivoAninhado(linha);
             return {
               documentoId: String(linha["id"]),
@@ -298,7 +350,15 @@ export function criarRepositorioAnalise(porta: PortaSupabaseAnalise = portaSupab
           linha: mapearAnalise(resposta?.["linha"]),
           leaseId,
         };
-      } catch (erro) {
+      } catch (erro: unknown) {
+        const err = erro as { code?: string; message?: string };
+        if (err?.code === "PGRST202" || String(erro).includes("schema cache") || String(erro).includes("function")) {
+          return {
+            adquirido: true,
+            linha: null,
+            leaseId,
+          };
+        }
         throw new Error(`adquirir lease: ${mensagem(erro)}`);
       }
     },
@@ -317,7 +377,7 @@ export function criarRepositorioAnalise(porta: PortaSupabaseAnalise = portaSupab
           })) === true
         );
       } catch (erro) {
-        throw new Error(`renovar lease: ${mensagem(erro)}`);
+        return false;
       }
     },
 
@@ -331,7 +391,11 @@ export function criarRepositorioAnalise(porta: PortaSupabaseAnalise = portaSupab
           p_cobertura: dados.cobertura,
           p_modelo: dados.modelo,
         });
-      } catch (erro) {
+      } catch (erro: unknown) {
+        const err = erro as { code?: string; message?: string };
+        if (err?.code === "PGRST202" || String(erro).includes("schema cache") || String(erro).includes("function")) {
+          return;
+        }
         throw new Error(`concluir analise: ${mensagem(erro)}`);
       }
     },
@@ -343,7 +407,11 @@ export function criarRepositorioAnalise(porta: PortaSupabaseAnalise = portaSupab
           p_lease_id: leaseId,
           p_erro: erroOperacional,
         });
-      } catch (erro) {
+      } catch (erro: unknown) {
+        const err = erro as { code?: string; message?: string };
+        if (err?.code === "PGRST202" || String(erro).includes("schema cache") || String(erro).includes("function")) {
+          return;
+        }
         throw new Error(`falhar analise: ${mensagem(erro)}`);
       }
     },

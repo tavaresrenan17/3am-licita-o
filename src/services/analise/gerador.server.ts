@@ -1,0 +1,124 @@
+/**
+ * Cliente de chat para geração da análise semântica de licitações.
+ *
+ * Server-only por desenho: nunca vaza chaves nem detalhes de infraestrutura
+ * para o cliente. Compatível com a API padrão /v1/chat/completions (OpenAI,
+ * Ollama, Groq, OpenRouter, etc.).
+ */
+
+import { obterMemoriaGuiaTecnico2026 } from "./guiaTecnico2026";
+
+export interface OpcoesGeradorChat {
+  url?: string;
+  modelo?: string;
+  apiKey?: string;
+  timeoutMs?: number;
+  fetchImpl?: typeof fetch;
+}
+
+export interface GeradorChat {
+  readonly modelo: string;
+  gerar(prompt: string): Promise<string>;
+}
+
+export class GeradorChatOpenAI implements GeradorChat {
+  readonly modelo: string;
+  private readonly url: string;
+  private readonly apiKey: string | undefined;
+  private readonly timeoutMs: number;
+  private readonly buscar: typeof fetch;
+
+  constructor(opcoes: OpcoesGeradorChat = {}) {
+    this.url =
+      opcoes.url ??
+      process.env["ANALISE_API_URL"] ??
+      process.env["OPENAI_API_URL"] ??
+      "https://api.openai.com/v1";
+    this.modelo =
+      opcoes.modelo ??
+      process.env["ANALISE_MODELO"] ??
+      process.env["OPENAI_MODELO"] ??
+      "gpt-4o-mini";
+    this.apiKey = opcoes.apiKey ?? process.env["ANALISE_API_KEY"] ?? process.env["OPENAI_API_KEY"];
+    this.timeoutMs = opcoes.timeoutMs ?? Number(process.env["ANALISE_TIMEOUT_MS"] ?? 180_000);
+    this.buscar = opcoes.fetchImpl ?? fetch;
+  }
+
+  async gerar(prompt: string): Promise<string> {
+    if (!this.modelo) {
+      throw new Error("Modelo de IA não configurado para análise (ANALISE_MODELO)");
+    }
+
+    const headers: Record<string, string> = {
+      "content-type": "application/json",
+    };
+    if (this.apiKey) {
+      headers["authorization"] = `Bearer ${this.apiKey}`;
+    }
+
+    const endpoint = this.url.endsWith("/chat/completions")
+      ? this.url
+      : `${this.url.replace(/\/+$/, "")}/chat/completions`;
+
+    const sinal = AbortSignal.timeout(this.timeoutMs);
+
+    let resposta: Response;
+    try {
+      resposta = await this.buscar(endpoint, {
+        method: "POST",
+        headers,
+        signal: sinal,
+        body: JSON.stringify({
+          model: this.modelo,
+          messages: [
+            {
+              role: "system",
+              content: [
+                "Você é o consultor sênior de inteligência técnica em licitações e contratações públicas brasileiras (Lei nº 14.133/2021 consolidada, atualizada para 2026 pelo Decreto nº 12.807/2025 e jurisprudência pacificada do TCU).",
+                "Sua missão é auditar os documentos oficiais do certame para defender a segurança jurídica, as margens comerciais e a saúde de caixa da empresa fornecedora/construtora.",
+                "Utilize a seguinte base doutrinária e jurisprudencial especializada como memória de raciocínio:",
+                obterMemoriaGuiaTecnico2026(),
+                "Estruture a análise com rigor cirúrgico e responda exclusivamente em formato JSON válido conforme solicitado.",
+              ].join("\n\n"),
+            },
+            {
+              role: "user",
+              content: prompt,
+            },
+          ],
+          response_format: { type: "json_object" },
+          temperature: 0.1,
+        }),
+      });
+    } catch (erro) {
+      if (erro instanceof Error && erro.name === "TimeoutError") {
+        throw new Error(
+          `Tempo limite de ${Math.round(this.timeoutMs / 1000)}s excedido ao consultar o modelo de IA`,
+        );
+      }
+      throw new Error(
+        `Falha na comunicação com o modelo de IA: ${erro instanceof Error ? erro.message : String(erro)}`,
+      );
+    }
+
+    if (!resposta.ok) {
+      const textoErro = await resposta.text().catch(() => "");
+      throw new Error(`Modelo de IA respondeu HTTP ${resposta.status}: ${textoErro.slice(0, 200)}`);
+    }
+
+    const corpo = (await resposta.json()) as {
+      choices?: Array<{ message?: { content?: string } }>;
+    };
+
+    const conteudo = corpo.choices?.[0]?.message?.content;
+    if (!conteudo || conteudo.trim().length === 0) {
+      throw new Error("O modelo de IA retornou uma resposta vazia");
+    }
+
+    return conteudo;
+  }
+}
+
+export function criarGeradorChat(opcoes?: OpcoesGeradorChat): GeradorChat {
+  return new GeradorChatOpenAI(opcoes);
+}

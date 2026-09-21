@@ -291,7 +291,7 @@ export function mapearArquivos(licitacaoId: string, arquivos: ArquivoPNCP[]): Ma
       tipo_documento: classificarDocumento(arquivo),
       tipo_documento_pncp: limparTitulo(arquivo.tipoDocumentoNome) || null,
       nome: limparTitulo(arquivo.titulo),
-      url: arquivo.url?.trim() || arquivo.uri?.trim() || null,
+      url: (arquivo.url?.trim() || arquivo.uri?.trim() || "").replace(/:1401(?=\/|$)/, "") || null,
       // Sem offset, como no resto do PNCP: é horário de Brasília, não UTC.
       data_publicacao: paraInstanteUtc(arquivo.dataPublicacaoPncp),
       // A fonte marca como inativo o documento substituído ou retirado. Ele

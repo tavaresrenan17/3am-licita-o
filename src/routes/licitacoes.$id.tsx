@@ -17,9 +17,11 @@ import {
   History,
   Info,
   MapPin,
+  RefreshCw,
   Scale,
   Search,
   ShieldCheck,
+  Sparkles,
   Star,
   Tag,
   ThumbsDown,
@@ -49,8 +51,14 @@ import {
   type TipoDocumento,
 } from "@/lib/types";
 import { brl, dataBR, dataHoraBR, diasRestantes } from "@/lib/format";
-import { useAtualizarInterno, useLicitacao } from "@/services/api";
+import {
+  useAnaliseLicitacao,
+  useAtualizarInterno,
+  useLicitacao,
+  useSincronizarDocumentosLicitacao,
+} from "@/services/api";
 import { ChecklistDocumental, CronogramaLegal } from "@/components/EngenhariaWidgets";
+import { AnaliseLicitacaoSheet } from "@/components/AnaliseLicitacaoSheet";
 
 export const Route = createFileRoute("/licitacoes/$id")({
   ssr: false,
@@ -88,6 +96,10 @@ function DetalheLicitacao() {
   const [copiadoObjeto, setCopiadoObjeto] = useState(false);
   const [filtroDoc, setFiltroDoc] = useState("");
   const [tipoFiltroDoc, setTipoFiltroDoc] = useState<string>("todos");
+  const [sheetAnaliseAberta, setSheetAnaliseAberta] = useState(false);
+  const sincronizarDocs = useSincronizarDocumentosLicitacao(id);
+  const { data: analiseData } = useAnaliseLicitacao(id);
+  const analisePronta = Boolean(analiseData?.resultado || analiseData?.estado === "pronta");
 
   const licitacao = data?.licitacao;
 
@@ -209,6 +221,32 @@ function DetalheLicitacao() {
             title="Copiar resumo estruturado para WhatsApp ou relatório"
           >
             <Copy className="size-3.5" /> Copiar Resumo
+          </Button>
+
+          <Button
+            size="sm"
+            className={cn(
+              "h-8 gap-1.5 text-xs shadow-sm cursor-pointer font-medium transition-colors",
+              analisePronta
+                ? "bg-emerald-600 hover:bg-emerald-500 text-white border-emerald-500/30 shadow-emerald-950/20"
+                : "bg-primary text-primary-foreground hover:bg-primary/90",
+            )}
+            onClick={() => setSheetAnaliseAberta(true)}
+            title={
+              analisePronta
+                ? "Ver Análise com IA setorizada (Já gerada e salva no cadastro)"
+                : "Análise aprofundada dos editais e projetos com Inteligência Artificial"
+            }
+          >
+            {analisePronta ? (
+              <>
+                <CheckCircle2 className="size-3.5 text-emerald-200" /> Ver Análise com IA (Salva)
+              </>
+            ) : (
+              <>
+                <Sparkles className="size-3.5" /> Analisar com IA
+              </>
+            )}
           </Button>
 
           {licitacao.url_pncp && (
@@ -423,7 +461,9 @@ function DetalheLicitacao() {
 
             {licitacao.informacao_complementar && (
               <div className="mt-3 rounded border-l-2 border-primary/60 bg-muted/40 p-2.5 text-xs text-muted-foreground">
-                <p className="font-semibold text-foreground/80 mb-0.5">Informações Complementares:</p>
+                <p className="font-semibold text-foreground/80 mb-0.5">
+                  Informações Complementares:
+                </p>
                 <p className="whitespace-pre-line leading-relaxed">
                   {licitacao.informacao_complementar}
                 </p>
@@ -478,15 +518,21 @@ function DetalheLicitacao() {
                       <div className="space-y-1.5 text-xs">
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Modalidade:</span>
-                          <span className="font-medium text-foreground">{licitacao.modalidade ?? "—"}</span>
+                          <span className="font-medium text-foreground">
+                            {licitacao.modalidade ?? "—"}
+                          </span>
                         </div>
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Processo:</span>
-                          <span className="font-mono font-medium text-foreground">{licitacao.processo ?? "—"}</span>
+                          <span className="font-mono font-medium text-foreground">
+                            {licitacao.processo ?? "—"}
+                          </span>
                         </div>
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Registro de Preço (SRP):</span>
-                          <span className="font-medium text-foreground">{licitacao.srp ? "Sim" : "Não"}</span>
+                          <span className="font-medium text-foreground">
+                            {licitacao.srp ? "Sim" : "Não"}
+                          </span>
                         </div>
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Categoria da Oportunidade:</span>
@@ -494,7 +540,9 @@ function DetalheLicitacao() {
                         </div>
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Situação no PNCP:</span>
-                          <span className="font-medium text-foreground">{licitacao.status_pncp ?? "—"}</span>
+                          <span className="font-medium text-foreground">
+                            {licitacao.status_pncp ?? "—"}
+                          </span>
                         </div>
                       </div>
                     </div>
@@ -507,13 +555,18 @@ function DetalheLicitacao() {
                       <div className="space-y-1.5 text-xs">
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Órgão:</span>
-                          <span className="font-medium text-foreground text-right truncate max-w-[200px]" title={licitacao.orgao}>
+                          <span
+                            className="font-medium text-foreground text-right truncate max-w-[200px]"
+                            title={licitacao.orgao}
+                          >
                             {licitacao.orgao}
                           </span>
                         </div>
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">CNPJ:</span>
-                          <span className="font-mono font-medium text-foreground">{licitacao.cnpj_orgao}</span>
+                          <span className="font-mono font-medium text-foreground">
+                            {licitacao.cnpj_orgao}
+                          </span>
                         </div>
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Unidade:</span>
@@ -523,11 +576,16 @@ function DetalheLicitacao() {
                         </div>
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Município / UF:</span>
-                          <span className="font-medium text-foreground">{licitacao.municipio ?? "—"} / {licitacao.uf ?? "—"}</span>
+                          <span className="font-medium text-foreground">
+                            {licitacao.municipio ?? "—"} / {licitacao.uf ?? "—"}
+                          </span>
                         </div>
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Controle PNCP:</span>
-                          <span className="font-mono text-[11px] text-muted-foreground truncate max-w-[180px]" title={licitacao.pncp_id}>
+                          <span
+                            className="font-mono text-[11px] text-muted-foreground truncate max-w-[180px]"
+                            title={licitacao.pncp_id}
+                          >
                             {licitacao.pncp_id}
                           </span>
                         </div>
@@ -579,12 +637,39 @@ function DetalheLicitacao() {
                       </h3>
                       <p className="text-xs text-muted-foreground mt-0.5">
                         {data.licitacao.documentos_total} arquivos vinculados
-                        {data.documentosColetadoEm && ` · Coletados em ${dataBR(data.documentosColetadoEm)}`}
+                        {data.documentosColetadoEm &&
+                          ` · Coletados em ${dataBR(data.documentosColetadoEm)}`}
                       </p>
                     </div>
 
-                    {/* Barra de Filtro Rápido */}
-                    <div className="flex items-center gap-2">
+                    {/* Barra de Filtro Rápido e Ação Sob Demanda */}
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          sincronizarDocs.mutate(undefined, {
+                            onSuccess: (res) => {
+                              toast.success(
+                                `Sincronização concluída! ${res.extraidos} arquivo(s) prontos para a IA.`,
+                              );
+                            },
+                            onError: (err) => {
+                              toast.error(
+                                `Erro ao sincronizar: ${err instanceof Error ? err.message : String(err)}`,
+                              );
+                            },
+                          });
+                        }}
+                        disabled={sincronizarDocs.isPending}
+                        className="h-8 gap-1.5 text-xs text-primary border-primary/30 hover:bg-primary/10"
+                      >
+                        <RefreshCw
+                          className={cn("size-3.5", sincronizarDocs.isPending && "animate-spin")}
+                        />
+                        {sincronizarDocs.isPending ? "Lendo do PNCP..." : "Sincronizar Arquivos"}
+                      </Button>
+
                       <div className="relative w-full sm:w-48">
                         <Search className="absolute left-2.5 top-2.5 size-3.5 text-muted-foreground" />
                         <Input
@@ -706,13 +791,13 @@ function DetalheLicitacao() {
                           ) : data.documentosEstado === "erro" ? (
                             <>
                               Não foi possível coletar os documentos desta licitação
-                              {data.documentosErro ? `: ${data.documentosErro}` : "."} Você pode consultar
-                              os anexos diretamente na publicação oficial do PNCP.
+                              {data.documentosErro ? `: ${data.documentosErro}` : "."} Você pode
+                              consultar os anexos diretamente na publicação oficial do PNCP.
                             </>
                           ) : (
                             <>
-                              Os documentos não foram copiados para o catálogo. Consulte os anexos na
-                              publicação oficial do PNCP.
+                              Os documentos não foram copiados para o catálogo. Consulte os anexos
+                              na publicação oficial do PNCP.
                             </>
                           )}
                         </p>
@@ -747,8 +832,8 @@ function DetalheLicitacao() {
                   </div>
 
                   <p className="mt-2 text-xs text-muted-foreground">
-                    Valores de referência calculados com base nas exigências habituais da Nova Lei de
-                    Licitações para construtoras e fornecedores de obras:
+                    Valores de referência calculados com base nas exigências habituais da Nova Lei
+                    de Licitações para construtoras e fornecedores de obras:
                   </p>
 
                   <div className="mt-4 grid gap-3 sm:grid-cols-3">
@@ -810,7 +895,8 @@ function DetalheLicitacao() {
                         <div>
                           <p className="font-medium text-foreground">Raio de Operação</p>
                           <p className="text-[11px] text-muted-foreground">
-                            Localização em {licitacao.municipio}/{licitacao.uf} atende a logística da equipe.
+                            Localização em {licitacao.municipio}/{licitacao.uf} atende a logística
+                            da equipe.
                           </p>
                         </div>
                       </div>
@@ -820,7 +906,8 @@ function DetalheLicitacao() {
                         <div>
                           <p className="font-medium text-foreground">Prazos de Execução</p>
                           <p className="text-[11px] text-muted-foreground">
-                            Consultar cronograma físico-financeiro no edital para alocação de equipe.
+                            Consultar cronograma físico-financeiro no edital para alocação de
+                            equipe.
                           </p>
                         </div>
                       </div>
@@ -843,35 +930,116 @@ function DetalheLicitacao() {
 
           {/* COLUNA DIREITA (1/3): COCKPIT DE DECISÃO GO/NO-GO E ANÁLISE INTERNA */}
           <div className="space-y-4">
+            {/* Card de Análise com IA (Salva / Gerar) */}
+            <section
+              className={cn(
+                "rounded-xl border p-4 shadow-sm transition-colors",
+                analisePronta
+                  ? "border-emerald-500/30 bg-emerald-950/20"
+                  : "border-primary/30 bg-primary/5",
+              )}
+            >
+              <div className="flex items-center justify-between">
+                <span className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  <Sparkles className="size-3.5 text-primary" /> Análise com IA
+                </span>
+                {analisePronta ? (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-400 border border-emerald-500/30">
+                    <CheckCircle2 className="size-3" /> Salva no Cadastro
+                  </span>
+                ) : (
+                  <span className="text-[10px] text-muted-foreground">Não gerada</span>
+                )}
+              </div>
+
+              {analisePronta && analiseData?.resultado ? (
+                <div className="mt-3 space-y-2">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-muted-foreground">Veredito IA:</span>
+                    <span className="font-bold uppercase tracking-wider text-foreground">
+                      {analiseData.resultado.veredito}
+                    </span>
+                  </div>
+                  {analiseData.resultado.resumoExecutivo && (
+                    <p className="line-clamp-2 text-[11px] text-muted-foreground leading-relaxed">
+                      {analiseData.resultado.resumoExecutivo}
+                    </p>
+                  )}
+                  <p className="text-[10px] text-emerald-300/80 font-mono">
+                    ✓ Relatório salvo permanentemente nesta licitação
+                  </p>
+                  <Button
+                    size="sm"
+                    className="w-full h-8 gap-1.5 text-xs bg-emerald-600 hover:bg-emerald-500 text-white cursor-pointer mt-1"
+                    onClick={() => setSheetAnaliseAberta(true)}
+                  >
+                    <CheckCircle2 className="size-3.5" /> Abrir Relatório Setorizado
+                  </Button>
+                </div>
+              ) : (
+                <div className="mt-2.5 space-y-2">
+                  <p className="text-xs text-muted-foreground leading-snug">
+                    Analise os editais e anexos com IA para setorizar pontos importantes, riscos e o que é dispensável.
+                  </p>
+                  <p className="text-[10px] text-muted-foreground/80 italic">
+                    Ao gerar, o relatório é salvo de forma definitiva na licitação.
+                  </p>
+                  <Button
+                    size="sm"
+                    className="w-full h-8 gap-1.5 text-xs bg-primary text-primary-foreground hover:bg-primary/90 cursor-pointer"
+                    onClick={() => setSheetAnaliseAberta(true)}
+                  >
+                    <Sparkles className="size-3.5" /> Gerar Análise com IA
+                  </Button>
+                </div>
+              )}
+            </section>
+
             {/* Bloco de Decisão Rápida (GO / NO-GO) */}
             <section className="rounded-xl border border-border bg-card p-4 shadow-sm">
               <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 Decisão da Construtora
               </h2>
 
-              {/* Botões Rápidos GO / NO-GO */}
-              <div className="mt-3 grid grid-cols-2 gap-2">
+              {/* Botões Rápidos de Triagem Comercial */}
+              <div className="mt-3 grid grid-cols-3 gap-1.5">
                 <Button
                   size="sm"
-                  variant={licitacao.status_interno === "participando" ? "default" : "outline"}
+                  variant={licitacao.status_interno === "interessante" ? "default" : "outline"}
                   className={cn(
-                    "w-full gap-1.5 text-xs font-semibold cursor-pointer",
-                    licitacao.status_interno === "participando"
+                    "w-full gap-1 px-2 text-xs font-semibold cursor-pointer",
+                    licitacao.status_interno === "interessante"
                       ? "bg-emerald-600 hover:bg-emerald-700 text-white"
                       : "border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10",
                   )}
                   disabled={atualizar.isPending}
-                  onClick={() => salvarStatus("participando")}
+                  onClick={() => salvarStatus("interessante")}
                 >
-                  <ThumbsUp className="size-3.5" />
-                  <span>Participar (GO)</span>
+                  <Star className={cn("size-3.5", licitacao.status_interno === "interessante" && "fill-white")} />
+                  <span>Interessante</span>
+                </Button>
+
+                <Button
+                  size="sm"
+                  variant={licitacao.status_interno === "em_analise" ? "default" : "outline"}
+                  className={cn(
+                    "w-full gap-1 px-2 text-xs font-semibold cursor-pointer",
+                    licitacao.status_interno === "em_analise"
+                      ? "bg-amber-600 hover:bg-amber-700 text-white"
+                      : "border-amber-500/30 text-amber-400 hover:bg-amber-500/10",
+                  )}
+                  disabled={atualizar.isPending}
+                  onClick={() => salvarStatus("em_analise")}
+                >
+                  <Search className="size-3.5" />
+                  <span>Em Análise</span>
                 </Button>
 
                 <Button
                   size="sm"
                   variant={licitacao.status_interno === "descartada" ? "destructive" : "outline"}
                   className={cn(
-                    "w-full gap-1.5 text-xs font-semibold cursor-pointer",
+                    "w-full gap-1 px-2 text-xs font-semibold cursor-pointer",
                     licitacao.status_interno === "descartada"
                       ? "bg-rose-600 hover:bg-rose-700 text-white"
                       : "border-rose-500/30 text-rose-400 hover:bg-rose-500/10",
@@ -879,7 +1047,7 @@ function DetalheLicitacao() {
                   disabled={atualizar.isPending}
                   onClick={() => salvarStatus("descartada")}
                 >
-                  <ThumbsDown className="size-3.5" />
+                  <XCircle className="size-3.5" />
                   <span>Descartar</span>
                 </Button>
               </div>
@@ -957,7 +1125,11 @@ function DetalheLicitacao() {
                   disabled={atualizar.isPending}
                   onClick={() =>
                     atualizar.mutate(
-                      { id: licitacao.id, observacoes: obs, historico: "Observações da equipe salvas" },
+                      {
+                        id: licitacao.id,
+                        observacoes: obs,
+                        historico: "Observações da equipe salvas",
+                      },
                       { onSuccess: () => toast.success("Observações salvas com sucesso.") },
                     )
                   }
@@ -977,12 +1149,15 @@ function DetalheLicitacao() {
                   <li key={h.id} className="border-l-2 border-border/80 pl-2.5 text-xs">
                     <p className="text-foreground leading-snug">{h.texto}</p>
                     <p className="font-mono text-[10px] text-muted-foreground mt-0.5">
-                      {dataHoraBR(h.em)} · {h.origem === "pncp" ? "sincronização automática" : "equipe interna"}
+                      {dataHoraBR(h.em)} ·{" "}
+                      {h.origem === "pncp" ? "sincronização automática" : "equipe interna"}
                     </p>
                   </li>
                 ))}
                 {data.historico.length === 0 && (
-                  <li className="text-xs text-muted-foreground">Sem alterações registradas até o momento.</li>
+                  <li className="text-xs text-muted-foreground">
+                    Sem alterações registradas até o momento.
+                  </li>
                 )}
               </ul>
             </section>
@@ -995,21 +1170,35 @@ function DetalheLicitacao() {
               <ul className="mt-2.5 space-y-1 text-xs text-muted-foreground">
                 <li className="flex justify-between">
                   <span>Publicação Oficial:</span>
-                  <span className="font-mono font-medium text-foreground">{dataBR(licitacao.data_publicacao)}</span>
+                  <span className="font-mono font-medium text-foreground">
+                    {dataBR(licitacao.data_publicacao)}
+                  </span>
                 </li>
                 <li className="flex justify-between">
                   <span>Sincronização:</span>
-                  <span className="font-mono font-medium text-foreground">{dataHoraBR(licitacao.synced_at)}</span>
+                  <span className="font-mono font-medium text-foreground">
+                    {dataHoraBR(licitacao.synced_at)}
+                  </span>
                 </li>
                 <li className="flex justify-between">
                   <span>Última alteração:</span>
-                  <span className="font-mono font-medium text-foreground">{dataHoraBR(licitacao.updated_at)}</span>
+                  <span className="font-mono font-medium text-foreground">
+                    {dataHoraBR(licitacao.updated_at)}
+                  </span>
                 </li>
               </ul>
             </section>
           </div>
         </div>
       </div>
+
+      <AnaliseLicitacaoSheet
+        licitacaoId={licitacao.id}
+        aberto={sheetAnaliseAberta}
+        onOpenChange={setSheetAnaliseAberta}
+        objeto={licitacao.objeto}
+        orgao={licitacao.orgao}
+      />
     </AppShell>
   );
 }

@@ -143,6 +143,7 @@ async function main() {
   let concluido = false;
   let manterParaRetomada = false;
   let motivo = "Encerrada pelo agendador sem concluir";
+  let ticksErroSeguidos = 0;
   const total = { paginas: 0, recebidos: 0, novos: 0, atualizados: 0, naoAdmitidos: 0 };
   const inicio = Date.now();
   const limiteExecucaoMs = Number(process.env["SYNC_MAX_RUNTIME_MS"] ?? 0);
@@ -196,13 +197,19 @@ async function main() {
         break;
       }
 
-      // Tick sem avanço e com erro é fonte degradada: parar e deixar retomável,
-      // em vez de insistir contra um serviço instável.
-      if (resumo.paginasAplicadas === 0 && resumo.erros.length > 0) {
-        motivo = `Fonte instável: ${resumo.erros[0] ?? "falha na coleta"}`;
-        manterParaRetomada = true;
-        log("Encerrando: a fonte não respondeu neste tick. Rodar de novo retoma daqui.");
-        break;
+      if (resumo.paginasAplicadas > 0) {
+        ticksErroSeguidos = 0;
+      } else if (resumo.erros.length > 0) {
+        ticksErroSeguidos++;
+        if (ticksErroSeguidos >= 5) {
+          motivo = `Fonte instável após 5 tentativas: ${resumo.erros[0] ?? "falha na coleta"}`;
+          manterParaRetomada = true;
+          log("Encerrando: a fonte não respondeu após 5 tentativas seguidas. Rodar de novo retoma daqui.");
+          break;
+        }
+        log(`Aviso: tick sem avanço (${ticksErroSeguidos}/5). Aguardando 5s para o próximo tick...`);
+        await new Promise((r) => setTimeout(r, 5_000));
+        continue;
       }
     }
   } catch (e) {

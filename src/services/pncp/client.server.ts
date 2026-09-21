@@ -192,7 +192,11 @@ async function requisitarJson<T>(
     try {
       const resposta = await fetchImpl(url, {
         method: "GET",
-        headers: { Accept: "application/json" },
+        headers: {
+          Accept: "application/json",
+          "User-Agent":
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
+        },
         signal: controlador.signal,
       });
 
@@ -232,14 +236,17 @@ async function requisitarJson<T>(
         else falhas.erros5xx++;
         ultimoStatus = resposta.status;
         const textoErro = (await resposta.text().catch(() => "")).slice(0, 300);
+        const eh504 = resposta.status === 504 || textoErro.includes("504 Gateway");
         const ehSaturacaoDb =
           textoErro.includes("HikariPool") ||
           textoErro.includes("banco de dados") ||
-          resposta.status === 504;
+          eh504;
 
-        ultimoMotivo = ehSaturacaoDb
-          ? `PNCP saturado: ${textoErro || `HTTP ${resposta.status}`}`
-          : `HTTP ${resposta.status}${textoErro ? `: ${textoErro}` : ""}`;
+        ultimoMotivo = eh504
+          ? "PNCP temporariamente instável: 504 Gateway Time-out (servidor federal demorou a responder)"
+          : ehSaturacaoDb
+            ? `PNCP saturado: ${textoErro.replace(/<[^>]*>/g, "").trim().slice(0, 150) || `HTTP ${resposta.status}`}`
+            : `HTTP ${resposta.status}${textoErro ? `: ${textoErro.replace(/<[^>]*>/g, "").trim().slice(0, 150)}` : ""}`;
 
         const retryAfter =
           resposta.status === 429
@@ -308,12 +315,25 @@ async function requisitarJson<T>(
       ultimoStatus = null;
       const nome = erro instanceof Error ? erro.name.toLowerCase() : "";
       const mensagem = ultimoMotivo.toLowerCase();
-      if (nome.includes("abort") || nome.includes("timeout") || mensagem.includes("timeout")) {
+      const ehTimeout =
+        nome.includes("abort") ||
+        nome.includes("timeout") ||
+        mensagem.includes("abort") ||
+        mensagem.includes("timeout");
+
+      if (ehTimeout) {
         falhas.timeouts++;
+        ultimoMotivo = `Tempo limite esgotado (${Math.round(timeoutMs / 1000)}s) aguardando resposta da API do PNCP (servidor federal sobrecarregado)`;
       } else {
         falhas.outras++;
       }
       if (tentativa === tentativasMax) break;
+
+      // Se ocorreu timeout e o tempo restante do tick não permite uma nova tentativa completa,
+      // encerra as tentativas para liberar o tick e colocar este segmento em cooldown.
+      if (ehTimeout && Number.isFinite(orcamentoMs) && restante() < Math.min(timeoutMs, 10_000)) {
+        break;
+      }
 
       const teto = Math.min(esperaMaxMs, 1000 * 2 ** (tentativa - 1));
       const espera = Math.round(aleatorio() * teto);

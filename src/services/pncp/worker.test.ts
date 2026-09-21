@@ -771,3 +771,19 @@ describe("I07 — posse do segmento", () => {
     expect(r.paginasAplicadas).toBe(0);
   });
 });
+
+describe("cooldown e resiliência", () => {
+  it("sinaliza aguardandoCooldown como true quando o tick para por erro mas há segmentos pendentes", async () => {
+    const { banco } = bancoFalso([segmento("s1")]);
+    banco.haSegmentosPendentes = vi.fn(async () => true);
+    const buscar = vi.fn().mockRejectedValue(new Error("ECONNRESET"));
+
+    const r = await executarTick("job-1", { banco, cfg, buscar, ...relogio() });
+
+    expect(r.paginasAplicadas).toBe(0);
+    expect(r.jobConcluido).toBe(false);
+    expect(r.aguardandoCooldown).toBe(true);
+    expect(r.erros.length).toBeGreaterThan(0);
+  });
+});
+

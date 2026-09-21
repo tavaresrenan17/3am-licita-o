@@ -9,7 +9,7 @@
  * Sem palavra-chave não há o que vetorizar: filtro puro é trabalho relacional,
  * e chamar o provedor ali seria custo sem retorno.
  */
-import { OllamaEmbedder, paraLiteralPg, type Embedder } from "./embedder";
+import { obterEmbedderPadrao, paraLiteralPg, type Embedder } from "./embedder";
 
 export interface PortaBuscaRpc {
   hibrida(args: Record<string, unknown>): Promise<unknown>;
@@ -67,7 +67,7 @@ export async function buscarComSemantica(entrada: EntradaBusca): Promise<SaidaBu
     return normalizar(await rpc.lexical(argsBase), false);
   }
 
-  const embedder = entrada.embedder ?? new OllamaEmbedder();
+  const embedder = entrada.embedder ?? obterEmbedderPadrao();
 
   let literal: string;
   try {

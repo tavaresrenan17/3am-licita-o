@@ -708,6 +708,17 @@ export async function executarTick(jobId: string, opcoes: OpcoesTick): Promise<R
 
   await tentarFlushMetricas(true);
 
+  if (resumo.paginasAplicadas === 0 && !resumo.jobConcluido) {
+    if (aguardandoCooldown) {
+      resumo.aguardandoCooldown = true;
+    } else if (banco.haSegmentosPendentes) {
+      const haPendentes = await medirAdministracaoDb(() => banco.haSegmentosPendentes!(jobId));
+      if (haPendentes) {
+        resumo.aguardandoCooldown = true;
+      }
+    }
+  }
+
   if (resumo.jobConcluido) {
     await banco.finalizarJob(
       jobId,

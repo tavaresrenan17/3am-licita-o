@@ -78,6 +78,66 @@ export class OllamaEmbedder implements Embedder {
   }
 }
 
+export interface OpcoesOpenAI {
+  apiKey?: string;
+  url?: string;
+  modelo?: string;
+  versao?: string;
+  fetchImpl?: typeof fetch;
+}
+
+export class OpenAIEmbedder implements Embedder {
+  readonly modelo: string;
+  readonly versao: string;
+  readonly dimensoes = DIMENSOES;
+  private readonly apiKey: string;
+  private readonly url: string;
+  private readonly buscar: typeof fetch;
+
+  constructor(opcoes: OpcoesOpenAI = {}) {
+    this.apiKey = opcoes.apiKey ?? process.env["OPENAI_API_KEY"] ?? "";
+    this.modelo = opcoes.modelo ?? process.env["EMBEDDING_MODELO"] ?? "text-embedding-3-small";
+    this.versao = opcoes.versao ?? "openai-v1";
+    this.url = opcoes.url ?? "https://api.openai.com/v1";
+    this.buscar = opcoes.fetchImpl ?? fetch;
+  }
+
+  async embed(textos: string[]): Promise<Float32Array[]> {
+    if (textos.length === 0) return [];
+    if (!this.apiKey) throw new Error("Chave de API da OpenAI não configurada");
+
+    const resposta = await this.buscar(`${this.url}/embeddings`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${this.apiKey}`,
+      },
+      body: JSON.stringify({
+        model: this.modelo,
+        input: textos,
+        dimensions: this.dimensoes,
+      }),
+    });
+
+    if (!resposta.ok) {
+      throw new Error(`OpenAI embeddings respondeu HTTP ${resposta.status}`);
+    }
+
+    const corpo = (await resposta.json()) as {
+      data?: Array<{ embedding: number[]; index: number }>;
+    };
+    const dados = corpo.data ?? [];
+    dados.sort((a, b) => a.index - b.index);
+
+    return dados.map((item) => {
+      if (item.embedding.length !== this.dimensoes) {
+        throw new ErroDimensao(this.dimensoes, item.embedding.length);
+      }
+      return Float32Array.from(item.embedding);
+    });
+  }
+}
+
 /**
  * Embedder determinístico para teste: mesmo texto, mesmo vetor, sem rede.
  * Não tem significado semântico e não serve para medir relevância.
@@ -100,4 +160,11 @@ export class EmbedderFalso implements Embedder {
       return v;
     });
   }
+}
+
+export function obterEmbedderPadrao(): Embedder {
+  if (process.env["EMBEDDING_PROVEDOR"] === "openai" && process.env["OPENAI_API_KEY"]) {
+    return new OpenAIEmbedder();
+  }
+  return new OllamaEmbedder();
 }

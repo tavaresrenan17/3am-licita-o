@@ -1,12 +1,17 @@
 import { Link } from "@tanstack/react-router";
 import {
   CalendarClock,
+  Check,
   ExternalLink,
   FileText,
   MapPin,
   MessageSquarePlus,
   MoreVertical,
+  Search,
+  Send,
+  Sparkles,
   Star,
+  XCircle,
 } from "lucide-react";
 import type { LicitacaoDTO } from "@/lib/dto";
 import { brl, dataBR, diasRestantes } from "@/lib/format";
@@ -95,28 +100,113 @@ export function LicitacaoCard({
                   <MoreVertical className="size-3.5" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem asChild>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuItem asChild className="cursor-pointer font-medium">
                   <Link to="/licitacoes/$id" params={{ id: l.id }}>
-                    Abrir ficha completa
+                    <ExternalLink className="mr-2 size-3.5 text-primary" /> Abrir ficha completa
                   </Link>
                 </DropdownMenuItem>
                 {l.url_pncp && (
-                  <DropdownMenuItem asChild>
+                  <DropdownMenuItem asChild className="cursor-pointer">
                     <a href={l.url_pncp} target="_blank" rel="noopener noreferrer">
-                      <ExternalLink className="mr-2 size-3.5" /> Ver no PNCP
+                      <ExternalLink className="mr-2 size-3.5 text-muted-foreground" /> Ver no PNCP
                     </a>
                   </DropdownMenuItem>
                 )}
                 <DropdownMenuSeparator />
-                {(Object.keys(STATUS_INTERNO_LABEL) as StatusInterno[]).map((s) => (
-                  <DropdownMenuItem key={s} onClick={() => onSetStatus(l.id, s)}>
-                    Marcar como {STATUS_INTERNO_LABEL[s].toLowerCase()}
-                  </DropdownMenuItem>
-                ))}
+
+                <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  Classificar Oportunidade
+                </div>
+
+                <DropdownMenuItem
+                  onClick={() => onSetStatus(l.id, "interessante")}
+                  className={cn(
+                    "cursor-pointer text-xs flex items-center justify-between",
+                    l.status_interno === "interessante" &&
+                      "bg-emerald-500/15 font-semibold text-emerald-400",
+                  )}
+                >
+                  <span className="flex items-center gap-2">
+                    <Star className="size-3.5 fill-emerald-400 text-emerald-400" />
+                    <span>Interessante</span>
+                  </span>
+                  {l.status_interno === "interessante" && (
+                    <Check className="size-3.5 text-emerald-400" />
+                  )}
+                </DropdownMenuItem>
+
+                <DropdownMenuItem
+                  onClick={() => onSetStatus(l.id, "em_analise")}
+                  className={cn(
+                    "cursor-pointer text-xs flex items-center justify-between",
+                    l.status_interno === "em_analise" &&
+                      "bg-amber-500/15 font-semibold text-amber-400",
+                  )}
+                >
+                  <span className="flex items-center gap-2">
+                    <Search className="size-3.5 text-amber-400" />
+                    <span>Em Análise</span>
+                  </span>
+                  {l.status_interno === "em_analise" && (
+                    <Check className="size-3.5 text-amber-400" />
+                  )}
+                </DropdownMenuItem>
+
+                <DropdownMenuItem
+                  onClick={() => onSetStatus(l.id, "descartada")}
+                  className={cn(
+                    "cursor-pointer text-xs flex items-center justify-between",
+                    l.status_interno === "descartada" &&
+                      "bg-rose-500/15 font-semibold text-rose-400",
+                  )}
+                >
+                  <span className="flex items-center gap-2">
+                    <XCircle className="size-3.5 text-rose-400" />
+                    <span>Descartada</span>
+                  </span>
+                  {l.status_interno === "descartada" && (
+                    <Check className="size-3.5 text-rose-400" />
+                  )}
+                </DropdownMenuItem>
+
+                <DropdownMenuItem
+                  onClick={() => onSetStatus(l.id, "proposta_enviada")}
+                  className={cn(
+                    "cursor-pointer text-xs flex items-center justify-between",
+                    l.status_interno === "proposta_enviada" &&
+                      "bg-purple-500/15 font-semibold text-purple-400",
+                  )}
+                >
+                  <span className="flex items-center gap-2">
+                    <Send className="size-3.5 text-purple-400" />
+                    <span>Proposta Enviada</span>
+                  </span>
+                  {l.status_interno === "proposta_enviada" && (
+                    <Check className="size-3.5 text-purple-400" />
+                  )}
+                </DropdownMenuItem>
+
+                <DropdownMenuItem
+                  onClick={() => onSetStatus(l.id, "nova")}
+                  className={cn(
+                    "cursor-pointer text-xs flex items-center justify-between text-muted-foreground",
+                    l.status_interno === "nova" && "bg-muted font-semibold text-foreground",
+                  )}
+                >
+                  <span className="flex items-center gap-2">
+                    <Sparkles className="size-3.5 text-sky-400" />
+                    <span>Redefinir como Nova</span>
+                  </span>
+                  {l.status_interno === "nova" && (
+                    <Check className="size-3.5 text-sky-400" />
+                  )}
+                </DropdownMenuItem>
+
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => onAbrirObs(l.id)}>
-                  <MessageSquarePlus className="mr-2 size-3.5" /> Observação rápida
+
+                <DropdownMenuItem onClick={() => onAbrirObs(l.id)} className="cursor-pointer">
+                  <MessageSquarePlus className="mr-2 size-3.5 text-muted-foreground" /> Observação rápida
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>

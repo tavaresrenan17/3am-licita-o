@@ -65,3 +65,38 @@ describe("EmbedderFalso", () => {
     expect(a).toHaveLength(DIMENSOES);
   });
 });
+
+describe("OpenAIEmbedder", () => {
+  it("envia parâmetros corretos com dimensões 1024", async () => {
+    let corpoEnviado: unknown = null;
+    let authHeader: string | null = null;
+    const { OpenAIEmbedder } = await import("./embedder");
+    const e = new OpenAIEmbedder({
+      apiKey: "chave-teste",
+      fetchImpl: async (_url, init) => {
+        authHeader = (init?.headers as Record<string, string>)?.["authorization"] ?? null;
+        corpoEnviado = JSON.parse(String((init as RequestInit).body));
+        return respostaJson({
+          data: [{ embedding: vetor(DIMENSOES), index: 0 }],
+        });
+      },
+    });
+    const r = await e.embed(["consulta"]);
+    expect(r).toHaveLength(1);
+    expect(r[0]).toBeInstanceOf(Float32Array);
+    expect(authHeader).toBe("Bearer chave-teste");
+    expect((corpoEnviado as { dimensions: number }).dimensions).toBe(DIMENSOES);
+  });
+
+  it("recusa dimensão incorreta", async () => {
+    const { OpenAIEmbedder } = await import("./embedder");
+    const e = new OpenAIEmbedder({
+      apiKey: "chave-teste",
+      fetchImpl: async () =>
+        respostaJson({
+          data: [{ embedding: vetor(512), index: 0 }],
+        }),
+    });
+    await expect(e.embed(["consulta"])).rejects.toBeInstanceOf(ErroDimensao);
+  });
+});

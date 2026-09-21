@@ -71,6 +71,13 @@ describe("descrever", () => {
     const d = DEFINICOES.find((x) => x.chave === "valor_min")!;
     expect(d.descrever("50000")).toContain("50.000");
   });
+
+  it("status_interno sai formatado com rotulo legivel", () => {
+    const d = DEFINICOES.find((x) => x.chave === "status_interno")!;
+    expect(d.descrever("interessante")).toBe("Status: Interessante");
+    expect(d.descrever("em_analise")).toBe("Status: Em análise");
+    expect(d.descrever("descartada")).toBe("Status: Descartada");
+  });
 });
 
 describe("definicoesDoGrupo", () => {

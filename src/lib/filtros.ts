@@ -11,7 +11,13 @@
  * e o teste de cobertura falha se alguém esquecer.
  */
 import { brl, dataBR, diaBR } from "./format";
-import { filtrosVazios, type FiltrosLicitacoes, type OrdenacaoCampo } from "./types";
+import {
+  STATUS_INTERNO_LABEL,
+  filtrosVazios,
+  type FiltrosLicitacoes,
+  type OrdenacaoCampo,
+  type StatusInterno,
+} from "./types";
 
 export type GrupoFiltro = "prazo" | "documentos" | "fluxo" | "local" | "valor";
 
@@ -126,7 +132,7 @@ export const DEFINICOES: readonly DefinicaoFiltro[] = [
     rotulo: "Status interno",
     grupo: "fluxo",
     tipo: "opcoes",
-    descrever: (v) => `Status: ${v}`,
+    descrever: (v) => `Status: ${STATUS_INTERNO_LABEL[v as StatusInterno] || v}`,
   },
   {
     chave: "recomendadas",

@@ -242,3 +242,73 @@ export interface ProgressoSyncDTO {
   } | null;
   percentual: number | null;
 }
+
+export interface FonteEvidenciaDTO {
+  id: string;
+  documentoId: string;
+  nome: string;
+  tipo: string;
+  ordem: number;
+  trecho: string;
+}
+
+export interface CoberturaAnaliseDTO {
+  estado: "completa" | "parcial" | "indisponivel";
+  ativos: number;
+  disponiveis: number;
+  falhos: number;
+  pendentes: number;
+}
+
+export interface AnaliseLicitacaoDTO {
+  licitacaoId: string;
+  estado: "nunca" | "processando" | "pronta" | "erro";
+  resultado: {
+    veredito: "favoravel" | "atencao" | "desfavoravel" | "insuficiente";
+    confianca: "alta" | "media" | "baixa";
+    resumoExecutivo: string;
+    pontosImportantes: Array<{
+      titulo: string;
+      descricao: string;
+      severidade?: string;
+      fonteIds: string[];
+    }>;
+    pontosAtencao?: Array<{
+      titulo: string;
+      descricao: string;
+      severidade?: string;
+      fonteIds: string[];
+    }>;
+    itensNaoImportantes?: Array<{
+      titulo: string;
+      descricao: string;
+      severidade?: string;
+      fonteIds: string[];
+    }>;
+    prazos: Array<{
+      titulo: string;
+      descricao: string;
+      severidade?: string;
+      fonteIds: string[];
+    }>;
+    requisitos: Array<{
+      titulo: string;
+      descricao: string;
+      severidade?: string;
+      fonteIds: string[];
+    }>;
+    riscos: Array<{
+      titulo: string;
+      descricao: string;
+      severidade?: string;
+      fonteIds: string[];
+    }>;
+    proximosPassos: string[];
+  } | null;
+  fontes: FonteEvidenciaDTO[];
+  cobertura: CoberturaAnaliseDTO;
+  modelo: string | null;
+  erro: string | null;
+  geradoEm: string | null;
+  atualizadoEm: string;
+}

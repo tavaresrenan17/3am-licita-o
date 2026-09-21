@@ -159,6 +159,24 @@ describe("R01/R03 — falhas HTTP", () => {
     } catch (erro) {
       expect(erro).toBeInstanceOf(FalhaTransitoriaPNCP);
       expect((erro as FalhaTransitoriaPNCP).falhas.timeouts).toBe(3);
+      expect((erro as FalhaTransitoriaPNCP).message).toContain("Tempo limite esgotado");
+    }
+  });
+
+  it("trata 504 Gateway Time-out com mensagem amigável e contabiliza falha 5xx", async () => {
+    const html504 = new Response("<html><body><h1>504 Gateway Time-out</h1></body></html>", {
+      status: 504,
+      headers: { "content-type": "text/html" },
+    });
+    const opts = base(fetchFalso([html504]), { tentativasMax: 1 });
+
+    try {
+      await buscarPagina("proposta", params, opts);
+      expect.unreachable("a consulta deveria falhar");
+    } catch (erro) {
+      expect(erro).toBeInstanceOf(FalhaTransitoriaPNCP);
+      expect((erro as FalhaTransitoriaPNCP).falhas.erros5xx).toBe(1);
+      expect((erro as FalhaTransitoriaPNCP).message).toContain("504 Gateway Time-out");
     }
   });
 

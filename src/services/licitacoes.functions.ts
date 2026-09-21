@@ -8,6 +8,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import type {
+  AnaliseLicitacaoDTO,
   CoberturaDocumentosDTO,
   CoberturaIncrementalDTO,
   DetalheDTO,
@@ -532,3 +533,94 @@ export const coberturaIncrementalFn = createServerFn({ method: "POST" }).handler
   const repo = await getRepo();
   return (await repo.diagnosticoCobertura()) as unknown as CoberturaIncrementalDTO;
 });
+
+const idParamSchema = z.object({
+  id: z.string().uuid(),
+});
+
+const gerarAnaliseSchema = z.object({
+  id: z.string().uuid(),
+  forcar: z.boolean().default(false),
+});
+
+export const obterAnaliseLicitacaoFn = createServerFn({ method: "POST" })
+  .validator((d: unknown) => idParamSchema.parse(d))
+  .handler(async ({ data }): Promise<AnaliseLicitacaoDTO> => {
+    const { repositorioAnalise } = await import("./analise/repositorio.analise.server");
+    const analise = await repositorioAnalise.obterAnalise(data.id);
+    if (!analise) {
+      return {
+        licitacaoId: data.id,
+        estado: "nunca",
+        resultado: null,
+        fontes: [],
+        cobertura: {
+          estado: "indisponivel",
+          ativos: 0,
+          disponiveis: 0,
+          falhos: 0,
+          pendentes: 0,
+        },
+        modelo: null,
+        erro: null,
+        geradoEm: null,
+        atualizadoEm: new Date().toISOString(),
+      };
+    }
+    return {
+      licitacaoId: analise.licitacaoId,
+      estado: analise.estado,
+      resultado: analise.resultado as unknown as AnaliseLicitacaoDTO["resultado"],
+      fontes: (analise.fontes ?? []) as unknown as AnaliseLicitacaoDTO["fontes"],
+      cobertura: (analise.cobertura ?? {
+        estado: "indisponivel",
+        ativos: 0,
+        disponiveis: 0,
+        falhos: 0,
+        pendentes: 0,
+      }) as unknown as AnaliseLicitacaoDTO["cobertura"],
+      modelo: analise.modelo,
+      erro: analise.erro,
+      geradoEm: analise.geradoEm,
+      atualizadoEm: analise.atualizadoEm,
+    };
+  });
+
+export const gerarAnaliseLicitacaoFn = createServerFn({ method: "POST" })
+  .validator((d: unknown) => gerarAnaliseSchema.parse(d))
+  .handler(async ({ data }): Promise<AnaliseLicitacaoDTO> => {
+    const { executarAnaliseLicitacao } = await import("./analise/orquestrador.server");
+    const linha = await executarAnaliseLicitacao({
+      licitacaoId: data.id,
+      forcar: data.forcar,
+    });
+    return {
+      licitacaoId: linha.licitacaoId,
+      estado: linha.estado,
+      resultado: linha.resultado as unknown as AnaliseLicitacaoDTO["resultado"],
+      fontes: (linha.fontes ?? []) as unknown as AnaliseLicitacaoDTO["fontes"],
+      cobertura: (linha.cobertura ?? {
+        estado: "indisponivel",
+        ativos: 0,
+        disponiveis: 0,
+        falhos: 0,
+        pendentes: 0,
+      }) as unknown as AnaliseLicitacaoDTO["cobertura"],
+      modelo: linha.modelo,
+      erro: linha.erro,
+      geradoEm: linha.geradoEm,
+      atualizadoEm: linha.atualizadoEm,
+    };
+  });
+
+export const sincronizarDocumentosLicitacaoFn = createServerFn({ method: "POST" })
+  .validator((d: unknown) => z.object({ id: z.string().uuid() }).parse(d))
+  .handler(async ({ data }) => {
+    const { sincronizarArquivosLicitacaoSobDemanda } = await import(
+      "./documentos/otimizador.server"
+    );
+    return sincronizarArquivosLicitacaoSobDemanda(data.id, {
+      concorrencia: 4,
+      maxArquivos: 6,
+    });
+  });
