@@ -6,7 +6,6 @@
  * Ollama, Groq, OpenRouter, etc.).
  */
 
-import { obterMemoriaGuiaTecnico2026 } from "./guiaTecnico2026";
 
 export interface OpcoesGeradorChat {
   url?: string;
@@ -40,14 +39,14 @@ export class GeradorChatOpenAI implements GeradorChat {
       this.url = analiseUrl;
       this.modelo =
         analiseModelo ??
-        (analiseUrl.includes("generativelanguage") ? "gemini-3.6-flash" : "gpt-4o-mini");
+        (analiseUrl.includes("generativelanguage") ? "gemini-3.5-flash-lite" : "gpt-4o-mini");
       this.apiKey = analiseKey ?? geminiKey ?? openAiKey;
     } else if (
       geminiKey &&
       (!openAiKey || process.env["ANALISE_PROVEDOR"] === "gemini" || analiseKey === geminiKey)
     ) {
       this.url = "https://generativelanguage.googleapis.com/v1beta/openai";
-      this.modelo = analiseModelo ?? "gemini-3.6-flash";
+      this.modelo = analiseModelo ?? "gemini-3.5-flash-lite";
       this.apiKey = geminiKey;
     } else {
       this.url = process.env["OPENAI_API_URL"] ?? "https://api.openai.com/v1";
@@ -77,24 +76,23 @@ export class GeradorChatOpenAI implements GeradorChat {
 
     const sinal = AbortSignal.timeout(this.timeoutMs);
 
-    let resposta: Response;
-    try {
-      resposta = await this.buscar(endpoint, {
+    const systemContent = [
+      "Você é o consultor sênior de inteligência técnica em licitações e contratações públicas brasileiras (Lei nº 14.133/2021 consolidada, atualizada para 2026 pelo Decreto nº 12.807/2025 e jurisprudência pacificada do TCU).",
+      "Sua missão é auditar os documentos oficiais do certame para defender a segurança jurídica, as margens comerciais e a saúde de caixa da empresa fornecedora/construtora.",
+      "Estruture a análise com rigor cirúrgico e responda exclusivamente em formato JSON válido conforme solicitado.",
+    ].join("\n\n");
+
+    const enviarRequisicao = async (modeloRequisicao: string, targetEndpoint = endpoint, targetHeaders = headers) => {
+      return this.buscar(targetEndpoint, {
         method: "POST",
-        headers,
+        headers: targetHeaders,
         signal: sinal,
         body: JSON.stringify({
-          model: this.modelo,
+          model: modeloRequisicao,
           messages: [
             {
               role: "system",
-              content: [
-                "Você é o consultor sênior de inteligência técnica em licitações e contratações públicas brasileiras (Lei nº 14.133/2021 consolidada, atualizada para 2026 pelo Decreto nº 12.807/2025 e jurisprudência pacificada do TCU).",
-                "Sua missão é auditar os documentos oficiais do certame para defender a segurança jurídica, as margens comerciais e a saúde de caixa da empresa fornecedora/construtora.",
-                "Utilize a seguinte base doutrinária e jurisprudencial especializada como memória de raciocínio:",
-                obterMemoriaGuiaTecnico2026(),
-                "Estruture a análise com rigor cirúrgico e responda exclusivamente em formato JSON válido conforme solicitado.",
-              ].join("\n\n"),
+              content: systemContent,
             },
             {
               role: "user",
@@ -105,6 +103,11 @@ export class GeradorChatOpenAI implements GeradorChat {
           temperature: 0.1,
         }),
       });
+    };
+
+    let resposta: Response;
+    try {
+      resposta = await enviarRequisicao(this.modelo);
     } catch (erro) {
       if (erro instanceof Error && erro.name === "TimeoutError") {
         throw new Error(
@@ -116,38 +119,25 @@ export class GeradorChatOpenAI implements GeradorChat {
       );
     }
 
-    // Tolerância a picos temporários de demanda (503 / 429): aguarda 2s e retenta uma vez
+    // Tolerância a picos temporários de demanda (503 / 429): retenta com modelos alternativos ou backoff
     if (!resposta.ok && (resposta.status === 503 || resposta.status === 429)) {
-      await new Promise((r) => setTimeout(r, 2000));
-      try {
-        resposta = await this.buscar(endpoint, {
-          method: "POST",
-          headers,
-          signal: sinal,
-          body: JSON.stringify({
-            model: this.modelo,
-            messages: [
-              {
-                role: "system",
-                content: [
-                  "Você é o consultor sênior de inteligência técnica em licitações e contratações públicas brasileiras (Lei nº 14.133/2021 consolidada, atualizada para 2026 pelo Decreto nº 12.807/2025 e jurisprudência pacificada do TCU).",
-                  "Sua missão é auditar os documentos oficiais do certame para defender a segurança jurídica, as margens comerciais e a saúde de caixa da empresa fornecedora/construtora.",
-                  "Utilize a seguinte base doutrinária e jurisprudencial especializada como memória de raciocínio:",
-                  obterMemoriaGuiaTecnico2026(),
-                  "Estruture a análise com rigor cirúrgico e responda exclusivamente em formato JSON válido conforme solicitado.",
-                ].join("\n\n"),
-              },
-              {
-                role: "user",
-                content: prompt,
-              },
-            ],
-            response_format: { type: "json_object" },
-            temperature: 0.1,
-          }),
-        });
-      } catch {
-        // prossegue para o tratamento padrão caso a retentativa lance exceção
+      const modelosAlternativos = this.url.includes("generativelanguage")
+        ? ["gemini-3.5-flash-lite", "gemini-flash-lite-latest", "gemini-3.5-flash"].filter(
+            (m) => m !== this.modelo,
+          )
+        : [];
+
+      for (const modeloAlt of [this.modelo, ...modelosAlternativos]) {
+        await new Promise((r) => setTimeout(r, 2000));
+        try {
+          const tentada = await enviarRequisicao(modeloAlt);
+          if (tentada.ok) {
+            resposta = tentada;
+            break;
+          }
+        } catch {
+          // segue tentando próximo modelo da fila de resiliência
+        }
       }
     }
 
@@ -164,35 +154,11 @@ export class GeradorChatOpenAI implements GeradorChat {
         try {
           const fallbackEndpoint =
             "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
-          const fallbackResposta = await this.buscar(fallbackEndpoint, {
-            method: "POST",
-            headers: {
-              "content-type": "application/json",
-              authorization: `Bearer ${geminiKey}`,
-            },
-            signal: sinal,
-            body: JSON.stringify({
-              model: "gemini-3.6-flash",
-              messages: [
-                {
-                  role: "system",
-                  content: [
-                    "Você é o consultor sênior de inteligência técnica em licitações e contratações públicas brasileiras (Lei nº 14.133/2021 consolidada, atualizada para 2026 pelo Decreto nº 12.807/2025 e jurisprudência pacificada do TCU).",
-                    "Sua missão é auditar os documentos oficiais do certame para defender a segurança jurídica, as margens comerciais e a saúde de caixa da empresa fornecedora/construtora.",
-                    "Utilize a seguinte base doutrinária e jurisprudencial especializada como memória de raciocínio:",
-                    obterMemoriaGuiaTecnico2026(),
-                    "Estruture a análise com rigor cirúrgico e responda exclusivamente em formato JSON válido conforme solicitado.",
-                  ].join("\n\n"),
-                },
-                {
-                  role: "user",
-                  content: prompt,
-                },
-              ],
-              response_format: { type: "json_object" },
-              temperature: 0.1,
-            }),
-          });
+          const fallbackHeaders = {
+            "content-type": "application/json",
+            authorization: `Bearer ${geminiKey}`,
+          };
+          const fallbackResposta = await enviarRequisicao("gemini-3.5-flash-lite", fallbackEndpoint, fallbackHeaders);
 
           if (fallbackResposta.ok) {
             const corpoFb = (await fallbackResposta.json()) as {
@@ -206,6 +172,18 @@ export class GeradorChatOpenAI implements GeradorChat {
         } catch {
           // Ignora e continua para o erro original caso o fallback também falhe
         }
+      }
+
+      if (resposta.status === 429) {
+        throw new Error(
+          "Cota de requisições da IA temporariamente atingida (HTTP 429). Por favor, aguarde cerca de 1 minuto antes de tentar novamente.",
+        );
+      }
+
+      if (resposta.status === 503) {
+        throw new Error(
+          "O provedor de IA está com alta demanda temporária (HTTP 503). Por favor, tente novamente em instantes.",
+        );
       }
 
       throw new Error(`Modelo de IA respondeu HTTP ${resposta.status}: ${textoErro.slice(0, 200)}`);
