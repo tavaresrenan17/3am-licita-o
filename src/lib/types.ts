@@ -297,3 +297,33 @@ export const PALAVRAS_CHAVE_PADRAO = [
   "elétrica",
   "hidráulica",
 ];
+
+export interface ItemLicitacao {
+  numeroItem: number;
+  descricao: string;
+  materialOuServico?: string | null;
+  materialOuServicoNome?: string | null;
+  valorUnitarioEstimado: number;
+  valorTotal: number;
+  quantidade: number;
+  unidadeMedida: string;
+  orcamentoSigiloso?: boolean;
+  itemCategoriaId?: number | null;
+  itemCategoriaNome?: string | null;
+  patrimonio?: string | null;
+  codigoRegistroImobiliario?: string | null;
+  criterioJulgamentoId?: number | null;
+  criterioJulgamentoNome?: string | null;
+  situacaoCompraItem?: number | null;
+  situacaoCompraItemNome?: string | null;
+  tipoBeneficio?: number | null;
+  tipoBeneficioNome?: string | null;
+  incentivoProdutivoBasico?: boolean;
+  dataInclusao?: string | null;
+  dataAtualizacao?: string | null;
+  temResultado?: boolean;
+  imagem?: number | null;
+  ncmNbsCodigo?: string | null;
+  ncmNbsDescricao?: string | null;
+  informacaoComplementar?: string | null;
+}

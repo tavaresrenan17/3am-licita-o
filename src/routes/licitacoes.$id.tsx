@@ -17,6 +17,7 @@ import {
   History,
   Info,
   MapPin,
+  Package,
   RefreshCw,
   Scale,
   Search,
@@ -59,6 +60,7 @@ import {
 } from "@/services/api";
 import { ChecklistDocumental, CronogramaLegal } from "@/components/EngenhariaWidgets";
 import { AnaliseLicitacaoSheet } from "@/components/AnaliseLicitacaoSheet";
+import { ItensLicitacaoTab } from "@/components/ItensLicitacaoTab";
 
 export const Route = createFileRoute("/licitacoes/$id")({
   ssr: false,
@@ -479,10 +481,14 @@ function DetalheLicitacao() {
           {/* COLUNA ESQUERDA (2/3): TABS ESTRUTURADAS */}
           <div className="space-y-4 lg:col-span-2">
             <Tabs defaultValue="prazos" className="w-full">
-              <TabsList className="grid w-full grid-cols-3 bg-card border border-border p-1">
+              <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 bg-card border border-border p-1">
                 <TabsTrigger value="prazos" className="gap-1.5 text-xs">
                   <CalendarClock className="size-3.5" />
                   <span>Prazos & Dados</span>
+                </TabsTrigger>
+                <TabsTrigger value="itens" className="gap-1.5 text-xs">
+                  <Package className="size-3.5" />
+                  <span>Itens do Edital</span>
                 </TabsTrigger>
                 <TabsTrigger value="documentos" className="gap-1.5 text-xs">
                   <FileSpreadsheet className="size-3.5" />
@@ -619,7 +625,12 @@ function DetalheLicitacao() {
                 </section>
               </TabsContent>
 
-              {/* ABA 2: DOCUMENTOS, ANEXOS & PEÇAS TÉCNICAS */}
+              {/* ABA 2: ITENS DA CONTRATAÇÃO (PADRÃO PNCP) */}
+              <TabsContent value="itens" className="space-y-4 mt-3">
+                <ItensLicitacaoTab licitacaoId={id} />
+              </TabsContent>
+
+              {/* ABA 3: DOCUMENTOS, ANEXOS & PEÇAS TÉCNICAS */}
               <TabsContent value="documentos" className="space-y-4 mt-3">
                 {/* Checklist de Prontidão Documental para Obras */}
                 <ChecklistDocumental

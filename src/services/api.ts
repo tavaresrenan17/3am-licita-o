@@ -35,6 +35,7 @@ import {
   metricasFn,
   obterAnaliseLicitacaoFn,
   obterConfiguracoesFn,
+  obterItensLicitacaoFn,
   obterLicitacaoFn,
   opcoesFiltrosFn,
   salvarConfiguracoesFn,
@@ -506,5 +507,14 @@ export function useSincronizarDocumentosLicitacao(id: string) {
       await queryClient.invalidateQueries({ queryKey: ["licitacao", id] });
       await queryClient.invalidateQueries({ queryKey: ["analise-licitacao", id] });
     },
+  });
+}
+
+export function useItensLicitacao(id: string, ativo = true) {
+  return useQuery({
+    queryKey: ["itens-licitacao", id],
+    queryFn: () => obterItensLicitacaoFn({ data: { id } }),
+    enabled: ativo && Boolean(id),
+    staleTime: 5 * 60 * 1000,
   });
 }

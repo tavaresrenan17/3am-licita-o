@@ -19,7 +19,7 @@ import type {
   ResumoColetaDocumentosDTO,
   SincronizacaoDTO,
 } from "@/lib/dto";
-import type { StatusInterno } from "@/lib/types";
+import type { ItemLicitacao, StatusInterno } from "@/lib/types";
 
 /* ------------------------------------------------------------- validação --- */
 
@@ -624,3 +624,121 @@ export const sincronizarDocumentosLicitacaoFn = createServerFn({ method: "POST" 
       maxArquivos: 6,
     });
   });
+
+export const obterItensLicitacaoFn = createServerFn({ method: "POST" })
+  .validator((d: unknown) =>
+    z
+      .object({
+        id: z.string().uuid(),
+        pagina: z.number().int().min(1).default(1),
+        tamanhoPagina: z.number().int().min(1).max(100).default(100),
+      })
+      .parse(d),
+  )
+  .handler(
+    async ({
+      data,
+    }): Promise<{ itens: ItemLicitacao[]; total: number; mensagem?: string | null }> => {
+      const repo = await getRepo();
+      const detalhe = await repo.obterLicitacao(data.id);
+      if (!detalhe) return { itens: [], total: 0, mensagem: "Licitação não encontrada." };
+
+      const lic = detalhe.licitacao;
+      const cnpj = String(lic["cnpj_orgao"] ?? "").replace(/\D/g, "").padStart(14, "0");
+      const ano = Number(lic["ano_compra"]);
+      const sequencial = Number(lic["sequencial_compra"]);
+
+      if (!cnpj || !ano || !sequencial) {
+        return {
+          itens: [],
+          total: 0,
+          mensagem:
+            "Esta licitação não possui os identificadores completos (CNPJ, ano ou sequencial) para consulta de itens no PNCP.",
+        };
+      }
+
+      try {
+        const url = `https://pncp.gov.br/api/pncp/v1/orgaos/${cnpj}/compras/${ano}/${sequencial}/itens?pagina=${data.pagina}&tamanhoPagina=${data.tamanhoPagina}`;
+        const res = await fetch(url, {
+          headers: { Accept: "application/json" },
+          signal: AbortSignal.timeout(15_000),
+        });
+
+        if (!res.ok) {
+          if (res.status === 404) {
+            return {
+              itens: [],
+              total: 0,
+              mensagem: "Nenhum item cadastrado no PNCP para esta contratação.",
+            };
+          }
+          return {
+            itens: [],
+            total: 0,
+            mensagem: `O PNCP retornou status HTTP ${res.status} ao consultar os itens.`,
+          };
+        }
+
+        const itensJson = await res.json();
+        if (!Array.isArray(itensJson)) {
+          return { itens: [], total: 0 };
+        }
+
+        const itens: ItemLicitacao[] = itensJson.map((it: Record<string, unknown>) => ({
+          numeroItem: Number(it["numeroItem"] ?? 0),
+          descricao: String(it["descricao"] ?? "").trim(),
+          materialOuServico: it["materialOuServico"] ? String(it["materialOuServico"]) : null,
+          materialOuServicoNome: it["materialOuServicoNome"]
+            ? String(it["materialOuServicoNome"])
+            : null,
+          valorUnitarioEstimado: Number(it["valorUnitarioEstimado"] ?? 0),
+          valorTotal: Number(it["valorTotal"] ?? 0),
+          quantidade: Number(it["quantidade"] ?? 0),
+          unidadeMedida: String(it["unidadeMedida"] ?? "").trim() || "un",
+          orcamentoSigiloso: Boolean(it["orcamentoSigiloso"]),
+          itemCategoriaId:
+            typeof it["itemCategoriaId"] === "number" ? it["itemCategoriaId"] : null,
+          itemCategoriaNome: it["itemCategoriaNome"] ? String(it["itemCategoriaNome"]) : null,
+          patrimonio: it["patrimonio"] ? String(it["patrimonio"]) : null,
+          codigoRegistroImobiliario: it["codigoRegistroImobiliario"]
+            ? String(it["codigoRegistroImobiliario"])
+            : null,
+          criterioJulgamentoId:
+            typeof it["criterioJulgamentoId"] === "number" ? it["criterioJulgamentoId"] : null,
+          criterioJulgamentoNome: it["criterioJulgamentoNome"]
+            ? String(it["criterioJulgamentoNome"])
+            : null,
+          situacaoCompraItem:
+            typeof it["situacaoCompraItem"] === "number" ? it["situacaoCompraItem"] : null,
+          situacaoCompraItemNome: it["situacaoCompraItemNome"]
+            ? String(it["situacaoCompraItemNome"])
+            : null,
+          tipoBeneficio:
+            typeof it["tipoBeneficio"] === "number" ? it["tipoBeneficio"] : null,
+          tipoBeneficioNome: it["tipoBeneficioNome"] ? String(it["tipoBeneficioNome"]) : null,
+          incentivoProdutivoBasico: Boolean(it["incentivoProdutivoBasico"]),
+          dataInclusao: it["dataInclusao"] ? String(it["dataInclusao"]) : null,
+          dataAtualizacao: it["dataAtualizacao"] ? String(it["dataAtualizacao"]) : null,
+          temResultado: Boolean(it["temResultado"]),
+          imagem: typeof it["imagem"] === "number" ? it["imagem"] : null,
+          ncmNbsCodigo: it["ncmNbsCodigo"] ? String(it["ncmNbsCodigo"]) : null,
+          ncmNbsDescricao: it["ncmNbsDescricao"] ? String(it["ncmNbsDescricao"]) : null,
+          informacaoComplementar: it["informacaoComplementar"]
+            ? String(it["informacaoComplementar"])
+            : null,
+        }));
+
+        return {
+          itens,
+          total: itens.length,
+        };
+      } catch (e) {
+        return {
+          itens: [],
+          total: 0,
+          mensagem:
+            e instanceof Error ? e.message : "Falha ao conectar com a API de itens do PNCP.",
+        };
+      }
+    },
+  );
