@@ -18,6 +18,7 @@ import { brl, dataBR, diasRestantes } from "@/lib/format";
 import { STATUS_INTERNO_LABEL, type StatusInterno } from "@/lib/types";
 import { ScoreBadge, StatusInternoBadge, StatusPncpBadge } from "@/components/data-bits";
 import { StatusDocumentosBadge } from "@/components/StatusDocumentosBadge";
+import { DistanceBadge } from "@/components/geo/DistanceBadge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import {
@@ -226,15 +227,18 @@ export function LicitacaoCard({
         </div>
 
         {/* Órgão e Localização */}
-        <div className="mt-2.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+        <div className="mt-2.5 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
           <MapPin className="size-3.5 shrink-0 text-primary" />
-          <span className="truncate font-medium text-foreground/85" title={l.orgao}>
+          <span className="truncate max-w-[200px] font-medium text-foreground/85" title={l.orgao}>
             {l.orgao}
           </span>
           <span className="shrink-0 text-muted-foreground/60">·</span>
           <span className="shrink-0 font-medium">
             {l.municipio ?? "—"}/{l.uf ?? "—"}
           </span>
+          {l.distancia_km !== undefined && l.distancia_km !== null && (
+            <DistanceBadge distanciaKm={l.distancia_km} className="ml-0.5" />
+          )}
         </div>
 
         {/* Objeto */}

@@ -74,6 +74,11 @@ import { useTriagemTeclado } from "@/hooks/useTriagemTeclado";
 import { Checkbox } from "@/components/ui/checkbox";
 import { BarraAcoesLote } from "@/components/BarraAcoesLote";
 import { StatusDocumentosBadge } from "@/components/StatusDocumentosBadge";
+import { DistanceBadge } from "@/components/geo/DistanceBadge";
+import { FiltroRaioGeografico } from "@/components/geo/FiltroRaioGeografico";
+import { ORIGENS_PREDEFINIDAS, ORIGEM_PADRAO } from "@/lib/geo/cidades";
+import { filtrarLicitaçõesPorRaio } from "@/lib/geo/haversine";
+import type { OrigemOpcao } from "@/lib/geo/tipos";
 import {
   useAtualizarInterno,
   useConfiguracoes,
@@ -139,6 +144,8 @@ const buscaSchema = z.object({
   nao_analisadas: boolUrl,
   recomendadas: boolUrl,
   apenas_abertas: boolUrl,
+  raio: z.coerce.number().optional().catch(undefined),
+  origem: textoUrl,
   ordenar: z
     .enum(["data_limite_proposta", "valor_estimado", "data_publicacao", "score_aderencia"])
     .optional()
@@ -343,6 +350,16 @@ function LicitacoesSalvas() {
     busca.ordenar ?? "data_limite_proposta",
   );
   const [direcao, setDirecao] = useState<"asc" | "desc">(busca.direcao ?? "asc");
+  const [raioKm, setRaioKm] = useState<number>(() => busca.raio ?? 0);
+  const [origemSelecionada, setOrigemSelecionada] = useState<OrigemOpcao>(() => {
+    if (busca.origem) {
+      const encontrada = ORIGENS_PREDEFINIDAS.find(
+        (o) => o.id === busca.origem || o.nome.toLowerCase() === busca.origem?.toLowerCase(),
+      );
+      if (encontrada) return encontrada;
+    }
+    return ORIGEM_PADRAO;
+  });
   const [pagina, setPagina] = useState(1);
   const [obsAberta, setObsAberta] = useState<string | null>(null);
   const [obsTexto, setObsTexto] = useState("");
@@ -402,7 +419,10 @@ function LicitacoesSalvas() {
   // portanto, o ouvinte de `keydown` registrado uma vez em vez de a cada
   // render. Não havia vazamento nem registro duplo antes (a limpeza do efeito é
   // garantida), só churn; o comentário anterior contava metade da história.
-  const itens = useMemo(() => consulta.data?.itens ?? [], [consulta.data]);
+  const itens = useMemo(() => {
+    const listaBruta = consulta.data?.itens ?? [];
+    return filtrarLicitaçõesPorRaio(listaBruta, origemSelecionada, raioKm);
+  }, [consulta.data?.itens, origemSelecionada, raioKm]);
   const total = consulta.data?.total ?? 0;
   const totalPaginas = consulta.data?.totalPaginas ?? 1;
   // A tela não pode prometer semântica que não está ligada: o texto do campo
@@ -591,13 +611,16 @@ function LicitacoesSalvas() {
   // lista de oito campos que deixava `?recomendadas=true&categoria=Obras` mais
   // "Com edital" somarem quatro filtros e o contador exibir zero — e o contador
   // é quem decide se os botões "Limpar filtros" existem.
-  const filtrosAtivos = contarFiltrosAtivos(filtros, UF_INICIAL);
+  // Contado a partir das DEFINICOES, mais o filtro de raio geográfico se ativo
+  const filtrosAtivos =
+    contarFiltrosAtivos(filtros, UF_INICIAL) + (raioKm > 0 ? 1 : 0);
 
   const limparTudo = () => {
     // Limpa as escolhas do usuário, preservando as invariantes do catálogo:
     // escopo inicial em SP e somente oportunidades abertas com prazo.
     setFiltros({ ...filtrosVazios, uf: UF_INICIAL });
     setTermo("");
+    setRaioKm(0);
     setPagina(1);
   };
 
@@ -608,6 +631,13 @@ function LicitacoesSalvas() {
     { chave: "uf-base", label: filtros.uf || UF_INICIAL },
     { chave: "abertas", label: "Em aberto" },
   ];
+  if (raioKm > 0) {
+    chipsAtivos.push({
+      chave: "raio_km",
+      label: `📍 Raio: até ${raioKm} km (${origemSelecionada.nome})`,
+      limpar: () => setRaioKm(0),
+    });
+  }
   for (const def of DEFINICOES) {
     const valor = filtros[def.chave];
     // `uf` já aparece como chip base; repetir seria ruído.
@@ -629,11 +659,12 @@ function LicitacoesSalvas() {
     // poluir o histórico do navegador a cada tecla. `paramsDaBusca` percorre a
     // forma autoritativa dos filtros, e o `buscaSchema` lá em cima aceita todas
     // as chaves: o link agora chega inteiro do outro lado.
-    const url = `${window.location.origin}/licitacoes?${paramsDaBusca(
-      filtros,
-      ordenarPor,
-      direcao,
-    ).toString()}`;
+    const urlParams = paramsDaBusca(filtros, ordenarPor, direcao);
+    if (raioKm > 0) {
+      urlParams.set("raio", String(raioKm));
+      urlParams.set("origem", origemSelecionada.id);
+    }
+    const url = `${window.location.origin}/licitacoes?${urlParams.toString()}`;
 
     // Fora de contexto seguro (um deploy de LAN por http, por exemplo)
     // `navigator.clipboard` é `undefined`, e ler `.writeText` dele lançaria
@@ -1013,6 +1044,17 @@ function LicitacoesSalvas() {
 
         {filtrosExpandidos && (
           <div className="mt-2.5 grid gap-2.5 border-t border-border/70 pt-2.5 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="col-span-full">
+              <FiltroRaioGeografico
+                origemSelecionada={origemSelecionada}
+                raioKm={raioKm}
+                onOrigemChange={setOrigemSelecionada}
+                onRaioChange={setRaioKm}
+                onLimparFiltro={() => setRaioKm(0)}
+                totalNoAlcance={raioKm > 0 ? itens.length : undefined}
+              />
+            </div>
+
             <ComboFiltro
               label="Modalidade"
               value={filtros.modalidade}
@@ -1502,12 +1544,17 @@ function LicitacoesSalvas() {
                               >
                                 {objeto}
                               </span>
-                              <span
-                                className="mt-1 block truncate text-[11px] text-muted-foreground"
-                                title={`${l.orgao} · ${l.municipio ?? "—"} / ${l.uf ?? "—"}`}
-                              >
-                                {l.orgao} · {l.municipio ?? "—"} / {l.uf ?? "—"}
-                              </span>
+                              <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
+                                <span
+                                  className="truncate max-w-[280px]"
+                                  title={`${l.orgao} · ${l.municipio ?? "—"} / ${l.uf ?? "—"}`}
+                                >
+                                  {l.orgao} · {l.municipio ?? "—"} / {l.uf ?? "—"}
+                                </span>
+                                {l.distancia_km !== undefined && l.distancia_km !== null && (
+                                  <DistanceBadge distanciaKm={l.distancia_km} />
+                                )}
+                              </div>
                               {l.origem_semantica && l.trecho && (
                                 // O trecho é o que fez este resultado aparecer:
                                 // sem mostrá-lo, um acerto semântico parece

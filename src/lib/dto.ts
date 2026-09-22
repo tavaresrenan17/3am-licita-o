@@ -20,6 +20,8 @@ export interface LicitacaoDTO {
   unidade_nome: string | null;
   municipio: string | null;
   uf: string | null;
+  /** Distância em quilômetros calculada via Haversine até a cidade de origem/sede. */
+  distancia_km?: number | null;
   objeto: string;
   /** Nulo quando o PNCP não divulga o valor. Nunca zero por conveniência. */
   valor_estimado: number | null;
