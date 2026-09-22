@@ -65,6 +65,11 @@ export interface ConsultaUI {
   direcao: "asc" | "desc";
   pagina: number;
   itensPorPagina: number;
+  /**
+   * Origem (código IBGE) e raio em km. Com raio 0 a origem só serve para o
+   * banco devolver `distancia_km`; acima de 0 ele filtra antes de paginar.
+   */
+  geo?: { origemIbge: string; raioKm: number };
 }
 
 /** Remove filtros vazios: o servidor só recebe o que de fato restringe. */
@@ -82,6 +87,10 @@ function limparFiltros(f: FiltrosLicitacoes): Record<string, string | boolean> {
 
 export function useLicitacoes(consulta: ConsultaUI) {
   const filtros = limparFiltros(consulta.filtros);
+  if (consulta.geo) {
+    filtros["origem_ibge"] = consulta.geo.origemIbge;
+    if (consulta.geo.raioKm > 0) filtros["raio_km"] = String(Math.round(consulta.geo.raioKm));
+  }
   return useQuery<ResultadoBuscaDTO>({
     queryKey: [
       "licitacoes",

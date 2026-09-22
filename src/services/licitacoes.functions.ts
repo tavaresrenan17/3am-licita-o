@@ -46,6 +46,10 @@ const filtrosSchema = z
     nao_analisadas: z.boolean(),
     recomendadas: z.boolean(),
     apenas_abertas: z.boolean(),
+    // Raio geográfico: o banco resolve a origem pelo código IBGE e filtra
+    // antes de paginar. Origem sem raio só devolve `distancia_km`.
+    origem_ibge: z.string().regex(/^\d{7}$/),
+    raio_km: z.string().regex(/^\d{1,4}$/),
   })
   .partial();
 
@@ -127,6 +131,8 @@ function paraDTO(l: Linha): LicitacaoDTO {
     // Só a busca híbrida preenche estes dois; no lexical eles não vêm.
     trecho: s(l["trecho"]),
     origem_semantica: Boolean(l["origem_semantica"]),
+    // Só vem quando a consulta leva `origem_ibge`.
+    distancia_km: n(l["distancia_km"]),
     informacao_complementar: s(l["informacao_complementar"]),
     processo: s(l["processo"]),
     srp: typeof l["srp"] === "boolean" ? (l["srp"] as boolean) : null,

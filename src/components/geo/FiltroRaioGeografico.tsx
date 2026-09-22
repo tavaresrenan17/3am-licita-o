@@ -21,7 +21,7 @@ interface FiltroRaioGeograficoProps {
   onOrigemChange: (origem: OrigemOpcao) => void;
   onRaioChange: (novoRaioKm: number) => void;
   onLimparFiltro: () => void;
-  totalNoAlcance?: number;
+  totalNoAlcance?: number | undefined;
   className?: string;
 }
 
@@ -38,6 +38,11 @@ export const FiltroRaioGeografico: React.FC<FiltroRaioGeograficoProps> = ({
   className,
 }) => {
   const raioAtivo = raioKm > 0;
+  // O raio agora é consulta ao banco. Arrastar mostra o valor na hora, mas só
+  // soltar o controle dispara a busca — senão cada passo de 10 km viraria uma
+  // requisição.
+  const [raioArrastando, setRaioArrastando] = React.useState<number | null>(null);
+  const raioExibido = raioArrastando ?? raioKm;
 
   return (
     <div
@@ -63,7 +68,7 @@ export const FiltroRaioGeografico: React.FC<FiltroRaioGeograficoProps> = ({
               )}
             </h4>
             <p className="text-[11px] text-muted-foreground">
-              Filtre oportunidades pela distância rodoviária/aérea da sua sede ou filial.
+              Filtre oportunidades pela distância em linha reta da sua sede ou filial.
             </p>
           </div>
         </div>
@@ -132,7 +137,7 @@ export const FiltroRaioGeografico: React.FC<FiltroRaioGeograficoProps> = ({
                   : "bg-muted text-muted-foreground",
               )}
             >
-              {raioKm === 0 ? "Sem limite (Nacional)" : `Até ${raioKm} km`}
+              {raioExibido === 0 ? "Sem limite (Nacional)" : `Até ${raioExibido} km`}
             </span>
           </div>
 
@@ -140,8 +145,12 @@ export const FiltroRaioGeografico: React.FC<FiltroRaioGeograficoProps> = ({
             min={0}
             max={500}
             step={10}
-            value={[raioKm]}
-            onValueChange={(val) => onRaioChange(val[0] ?? 0)}
+            value={[raioExibido]}
+            onValueChange={(val) => setRaioArrastando(val[0] ?? 0)}
+            onValueCommit={(val) => {
+              setRaioArrastando(null);
+              onRaioChange(val[0] ?? 0);
+            }}
             className="py-1 cursor-pointer"
           />
 

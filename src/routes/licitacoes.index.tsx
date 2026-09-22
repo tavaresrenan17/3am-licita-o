@@ -77,7 +77,6 @@ import { InputMoeda } from "@/components/ui/InputMoeda";
 import { DistanceBadge } from "@/components/geo/DistanceBadge";
 import { FiltroRaioGeografico } from "@/components/geo/FiltroRaioGeografico";
 import { ORIGENS_PREDEFINIDAS, ORIGEM_PADRAO } from "@/lib/geo/cidades";
-import { filtrarLicitaçõesPorRaio } from "@/lib/geo/haversine";
 import type { OrigemOpcao } from "@/lib/geo/tipos";
 import {
   useAtualizarInterno,
@@ -363,6 +362,16 @@ function LicitacoesSalvas() {
     return ORIGEM_PADRAO;
   });
   const [pagina, setPagina] = useState(1);
+  // O raio é filtro de servidor como os outros: mudar a origem ou o alcance
+  // muda o conjunto, então a página volta para a primeira.
+  const mudarRaio = useCallback((km: number) => {
+    setRaioKm(km);
+    setPagina(1);
+  }, []);
+  const mudarOrigem = useCallback((origem: OrigemOpcao) => {
+    setOrigemSelecionada(origem);
+    setPagina(1);
+  }, []);
   const [obsAberta, setObsAberta] = useState<string | null>(null);
   const [obsTexto, setObsTexto] = useState("");
   const [modoVisualizacao, setModoVisualizacao] = useState<"tabela" | "cards">(() => {
@@ -414,6 +423,10 @@ function LicitacoesSalvas() {
     direcao,
     pagina,
     itensPorPagina,
+    // A origem vai sempre, para o banco devolver a distância de cada linha; o
+    // raio só filtra quando é maior que zero. Filtrar aqui no navegador deixava
+    // a paginação e o total sem raio (medido em 22/09: metade sumia).
+    geo: { origemIbge: origemSelecionada.id, raioKm },
   });
 
   // `?? []` criaria um array novo a cada render. Junto com o `mutate` estável
@@ -426,12 +439,10 @@ function LicitacoesSalvas() {
   const moverParaAlexandria = useMoverParaAlexandria();
 
   // Licitações alocadas em Alexandria ficam visíveis SOMENTE em Alexandria
-  const itens = useMemo(() => {
-    const listaSemAlexandria = (consulta.data?.itens ?? []).filter(
-      (l) => !idsAlexandriaSet.has(l.id),
-    );
-    return filtrarLicitaçõesPorRaio(listaSemAlexandria, origemSelecionada, raioKm);
-  }, [consulta.data?.itens, idsAlexandriaSet, origemSelecionada, raioKm]);
+  const itens = useMemo(
+    () => (consulta.data?.itens ?? []).filter((l) => !idsAlexandriaSet.has(l.id)),
+    [consulta.data?.itens, idsAlexandriaSet],
+  );
   const total = consulta.data?.total ?? 0;
   const totalPaginas = consulta.data?.totalPaginas ?? 1;
   // A tela não pode prometer semântica que não está ligada: o texto do campo
@@ -556,8 +567,8 @@ function LicitacoesSalvas() {
   // para uma licitação que o usuário nunca viu, e a página 2 tem os mesmos 25
   // itens da página 1 — o efeito que só olhava `tamanho` não percebia nada.
   const chaveLista = useMemo(
-    () => JSON.stringify([filtros, ordenarPor, direcao, pagina]),
-    [filtros, ordenarPor, direcao, pagina],
+    () => JSON.stringify([filtros, ordenarPor, direcao, pagina, raioKm, origemSelecionada.id]),
+    [filtros, ordenarPor, direcao, pagina, raioKm, origemSelecionada.id],
   );
 
   const { indice } = useTriagemTeclado({
@@ -645,7 +656,7 @@ function LicitacoesSalvas() {
     chipsAtivos.push({
       chave: "raio_km",
       label: `📍 Raio: até ${raioKm} km (${origemSelecionada.nome})`,
-      limpar: () => setRaioKm(0),
+      limpar: () => mudarRaio(0),
     });
   }
   for (const def of DEFINICOES) {
@@ -1058,10 +1069,10 @@ function LicitacoesSalvas() {
               <FiltroRaioGeografico
                 origemSelecionada={origemSelecionada}
                 raioKm={raioKm}
-                onOrigemChange={setOrigemSelecionada}
-                onRaioChange={setRaioKm}
-                onLimparFiltro={() => setRaioKm(0)}
-                totalNoAlcance={raioKm > 0 ? itens.length : undefined}
+                onOrigemChange={mudarOrigem}
+                onRaioChange={mudarRaio}
+                onLimparFiltro={() => mudarRaio(0)}
+                totalNoAlcance={raioKm > 0 ? total : undefined}
               />
             </div>
 
