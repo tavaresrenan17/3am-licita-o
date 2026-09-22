@@ -17,6 +17,8 @@ import type { LicitacaoDTO } from "@/lib/dto";
 import { brl, dataBR, diasRestantes } from "@/lib/format";
 import { STATUS_INTERNO_LABEL, type StatusInterno } from "@/lib/types";
 import { ScoreBadge, StatusInternoBadge, StatusPncpBadge } from "@/components/data-bits";
+import { StatusDocumentosBadge } from "@/components/StatusDocumentosBadge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -33,12 +35,14 @@ export function LicitacaoCard({
   onTogglePrioridade,
   onAbrirObs,
   selecionada,
+  onToggleSelecionar,
 }: {
   licitacao: LicitacaoDTO;
   onSetStatus: (id: string, status: StatusInterno) => void;
   onTogglePrioridade: (id: string, atual: boolean) => void;
   onAbrirObs: (id: string) => void;
   selecionada?: boolean;
+  onToggleSelecionar?: (id: string) => void;
 }) {
   const dias = l.data_limite_proposta ? diasRestantes(l.data_limite_proposta) : null;
   const objeto =
@@ -66,6 +70,14 @@ export function LicitacaoCard({
         {/* Top bar do Card: Status e Ações */}
         <div className="flex items-center justify-between gap-2">
           <div className="flex flex-wrap items-center gap-1.5">
+            {onToggleSelecionar && (
+              <Checkbox
+                checked={selecionada}
+                onCheckedChange={() => onToggleSelecionar(l.id)}
+                aria-label={`Selecionar licitação ${l.objeto}`}
+                className="mr-0.5 size-4"
+              />
+            )}
             <StatusInternoBadge status={l.status_interno} />
             {l.status_pncp && <StatusPncpBadge status={l.status_pncp} />}
           </div>
@@ -293,15 +305,7 @@ export function LicitacaoCard({
           </div>
 
           <div className="flex items-center gap-2">
-            {l.documentos_total !== undefined && l.documentos_total > 0 && (
-              <span
-                className="inline-flex items-center gap-1 text-[11px] text-muted-foreground"
-                title={`${l.documentos_total} documentos anexados`}
-              >
-                <FileText className="size-3 text-muted-foreground" />
-                <span>{l.documentos_total}</span>
-              </span>
-            )}
+            <StatusDocumentosBadge estado={l.documentos_estado} total={l.documentos_total} />
 
             <Button asChild variant="outline" size="sm" className="h-7 px-2.5 text-[11px]">
               <Link to="/licitacoes/$id" params={{ id: l.id }}>

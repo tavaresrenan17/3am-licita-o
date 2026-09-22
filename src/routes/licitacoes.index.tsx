@@ -71,12 +71,16 @@ import {
 } from "@/lib/filtros";
 import { ATALHOS, type AcaoTriagem } from "@/lib/teclado";
 import { useTriagemTeclado } from "@/hooks/useTriagemTeclado";
+import { Checkbox } from "@/components/ui/checkbox";
+import { BarraAcoesLote } from "@/components/BarraAcoesLote";
+import { StatusDocumentosBadge } from "@/components/StatusDocumentosBadge";
 import {
   useAtualizarInterno,
   useConfiguracoes,
   useLicitacoes,
   useModalidades,
   useOpcoesFiltros,
+  useSincronizarDocumentosLote,
 } from "@/services/api";
 
 /**
@@ -407,6 +411,53 @@ function LicitacoesSalvas() {
   const buscaDegradou = consulta.data?.degradou === true;
 
   const [ajudaAberta, setAjudaAberta] = useState(false);
+  const [selecionadas, setSelecionadas] = useState<Set<string>>(new Set());
+  const sincronizarLote = useSincronizarDocumentosLote();
+
+  const toggleSelecionada = useCallback((id: string) => {
+    setSelecionadas((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const toggleTodasVisiveis = useCallback(() => {
+    const todosIds = itens.map((l) => l.id);
+    const todasSelecionadas = todosIds.length > 0 && todosIds.every((id) => selecionadas.has(id));
+    setSelecionadas((prev) => {
+      const next = new Set(prev);
+      if (todasSelecionadas) {
+        todosIds.forEach((id) => next.delete(id));
+      } else {
+        todosIds.forEach((id) => next.add(id));
+      }
+      return next;
+    });
+  }, [itens, selecionadas]);
+
+  const limparSelecao = useCallback(() => setSelecionadas(new Set()), []);
+
+  const handleSincronizarLote = async () => {
+    const idsArray = Array.from(selecionadas);
+    if (idsArray.length === 0) return;
+
+    toast.info(`Iniciando download dos documentos de ${idsArray.length} licitação(ões)...`);
+    try {
+      const res = await sincronizarLote.mutateAsync(idsArray);
+      toast.success(
+        `${res.processadas} licitação(ões) processadas (${res.totalExtraidos} documentos prontos)!`,
+      );
+      limparSelecao();
+      navigate({
+        to: "/alexandria",
+        search: { ids: idsArray.join(",") } as any,
+      });
+    } catch (err) {
+      toast.error(`Falha ao sincronizar lote: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  };
 
   // Uma porta só para classificar e priorizar, usada pelo menu e pelo teclado.
   // Quando o teclado chamava `mutate` direto, ele gravava sem histórico e sem
@@ -1325,7 +1376,8 @@ function LicitacoesSalvas() {
               <LicitacaoCard
                 key={l.id}
                 licitacao={l}
-                selecionada={i === indice}
+                selecionada={selecionadas.has(l.id) || i === indice}
+                onToggleSelecionar={toggleSelecionada}
                 onSetStatus={setStatus}
                 onTogglePrioridade={togglePrioridade}
                 onAbrirObs={(id) => {
@@ -1344,6 +1396,15 @@ function LicitacoesSalvas() {
             <table role="grid" className="w-full min-w-[1120px] table-fixed text-xs">
               <thead className="bg-secondary text-muted-foreground border-b border-border">
                 <tr role="row" className="border-b border-border">
+                  <th className="h-11 w-10 px-3 py-0 text-center font-medium">
+                    <Checkbox
+                      checked={
+                        itens.length > 0 && itens.every((l) => selecionadas.has(l.id))
+                      }
+                      onCheckedChange={toggleTodasVisiveis}
+                      aria-label="Selecionar todas as licitações da página"
+                    />
+                  </th>
                   {visivel("objeto") && (
                     <th className="h-11 px-4 py-0 text-left font-medium">Oportunidade</th>
                   )}
@@ -1414,10 +1475,20 @@ function LicitacoesSalvas() {
                         // A seleção precisa ser visível sem depender de cor
                         // sozinha: o anel marca a linha para quem navega por
                         // teclado sem tirar a mão do j/k.
-                        i === indice && "bg-accent/60 ring-1 ring-inset ring-primary/40",
+                        (selecionadas.has(l.id) || i === indice) && "bg-accent/60 ring-1 ring-inset ring-primary/40",
                       )}
                       onClick={() => navigate({ to: "/licitacoes/$id", params: { id: l.id } })}
                     >
+                      <td
+                        className="w-10 px-3 py-0 text-center"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <Checkbox
+                          checked={selecionadas.has(l.id)}
+                          onCheckedChange={() => toggleSelecionada(l.id)}
+                          aria-label={`Selecionar licitação ${objeto}`}
+                        />
+                      </td>
                       {visivel("objeto") && (
                         <td className="px-4 py-3">
                           <div className="flex items-start gap-2">
@@ -1514,15 +1585,11 @@ function LicitacoesSalvas() {
                         </td>
                       )}
                       {visivel("docs") && (
-                        <td
-                          className="num h-12 px-3 py-0 text-center"
-                          title={
-                            l.documentos_estado === "pendente"
-                              ? "Documentos ainda não coletados"
-                              : undefined
-                          }
-                        >
-                          {l.documentos_estado === "pendente" ? "—" : l.documentos_total}
+                        <td className="h-12 px-3 py-0 text-center">
+                          <StatusDocumentosBadge
+                            estado={l.documentos_estado}
+                            total={l.documentos_total}
+                          />
                         </td>
                       )}
                       <td
@@ -1769,6 +1836,14 @@ function LicitacoesSalvas() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <BarraAcoesLote
+        selecionadasCount={selecionadas.size}
+        onSincronizar={handleSincronizarLote}
+        onDesmarcar={limparSelecao}
+        onIrParaAlexandria={() => navigate({ to: "/alexandria" })}
+        isSincronizando={sincronizarLote.isPending}
+      />
     </AppShell>
   );
 }
