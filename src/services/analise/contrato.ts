@@ -51,6 +51,42 @@ export const itemCitavelSchema = z
   })
   .strict();
 
+export const parecerEngenheiroSchema = z
+  .object({
+    decisao: z.enum(["go", "go_com_ressalvas", "no_go"]).optional(),
+    titulo: z.string().trim().optional(),
+    justificativa: z.string().trim().optional(),
+    atratividadeComercial: z.enum(["alta", "media", "baixa"]).optional(),
+    complexidadeOperacional: z.enum(["baixa", "media", "alta", "critica"]).optional(),
+  })
+  .strict();
+
+export const engenhariaCustosSchema = z
+  .object({
+    regimeExecucao: z.string().trim().optional(),
+    alertaLinha75: z.string().trim().optional(),
+    alertaLinha85: z.string().trim().optional(),
+    bdiSugerido: z.string().trim().optional(),
+    reajusteRegra: z.string().trim().optional(),
+  })
+  .strict();
+
+export const engenhariaHabilitacaoSchema = z
+  .object({
+    parcelasRelevantes: z.array(z.string().trim()).optional(),
+    catExigida: z.string().trim().optional(),
+    pegadinhasHabilitacao: z.array(z.string().trim()).optional(),
+  })
+  .strict();
+
+export const estrategiaImpugnacaoSchema = z
+  .object({
+    pontosImpugnar: z.array(z.string().trim()).optional(),
+    esclarecimentos: z.array(z.string().trim()).optional(),
+    documentosUrgentes: z.array(z.string().trim()).optional(),
+  })
+  .strict();
+
 export const analiseResultadoSchema = z
   .object({
     veredito: z.enum(["favoravel", "atencao", "desfavoravel", "insuficiente"]),
@@ -63,12 +99,20 @@ export const analiseResultadoSchema = z
     requisitos: z.array(itemCitavelSchema),
     riscos: z.array(itemCitavelSchema),
     proximosPassos: z.array(z.string().trim().min(1)),
+    parecerEngenheiro: parecerEngenheiroSchema.optional(),
+    engenhariaCustos: engenhariaCustosSchema.optional(),
+    engenhariaHabilitacao: engenhariaHabilitacaoSchema.optional(),
+    estrategiaImpugnacao: estrategiaImpugnacaoSchema.optional(),
   })
   .strict();
 
 export type Severidade = z.infer<typeof severidadeSchema>;
 export type ItemCitavel = z.infer<typeof itemCitavelSchema>;
 export type AnaliseResultado = z.infer<typeof analiseResultadoSchema>;
+export type ParecerEngenheiro = z.infer<typeof parecerEngenheiroSchema>;
+export type EngenhariaCustos = z.infer<typeof engenhariaCustosSchema>;
+export type EngenhariaHabilitacao = z.infer<typeof engenhariaHabilitacaoSchema>;
+export type EstrategiaImpugnacao = z.infer<typeof estrategiaImpugnacaoSchema>;
 
 export interface FonteConhecida {
   id: string;

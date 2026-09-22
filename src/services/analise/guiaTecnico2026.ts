@@ -312,9 +312,37 @@ export const BENEFICIOS_ME_EPP_LEI_COMPLEMENTAR_123 = {
   regularizacaoFiscalTardia: "Possibilidade de regularizar certidões fiscais e trabalhistas vencidas em até 5 dias úteis após ser declarada vencedora.",
 } as const;
 
+export const DOUTRINA_ENGENHEIRO_SENIOR = {
+  parecerDecisorio:
+    "A análise de um edital de engenharia por um especialista não foca em rituais burocráticos irrelevantes. Foca na viabilidade de execução, risco de prejuízo financeiro, suficiência de acervo técnico e armadilhas que podem causar rescisão ou glosas.",
+  habilitacaoTecnicaOperacionalEProfissional: [
+    "Súmula TCU 263: Exigência de capacidade técnico-operacional e técnico-profissional deve se limitar às parcelas de maior relevância e valor significativo (mínimo 4% do valor total).",
+    "Teto de Quantitativos: A jurisprudência pacificada do TCU limita as exigências de atestado a no máximo 50% dos quantitativos da obra, salvo complexidade ímpar formalmente justificada.",
+    "Vedação de Vínculo Prévio: O edital NÃO pode exigir que o engenheiro responsável técnico pertença ao quadro permanente na data da licitação; basta declaração de contratação futura ou contrato de prestação de serviços (Acórdão TCU 2.297/2005).",
+    "Registro no CREA de Atestado da Empresa: O registro de atestado de pessoa jurídica no CREA/CAU é ilegal. Atestado de capacidade operacional pertence à empresa contratada, emitido pelo contratante (Acórdão TCU 1.547/2021).",
+  ],
+  engenhariaDeCustosBdiEPlanilha: [
+    "Composição Analítica do BDI: O BDI deve ser justificado item a item conforme o Acórdão TCU 2.622/2013 (Administração Central, Seguros, Garantia, Risco, Custos Financeiros, Tributos e Lucro).",
+    "Vedação de Bitributação no BDI: Custos diretos (como administração local, mobilização/desmobilização, canteiro e EPIs) devem estar na planilha de custos diretos, NUNCA no BDI.",
+    "Regime de Empreitada: No Preço Global, o risco de erro de quantitativo do projeto básico é do construtor; no Preço Unitário, a remuneração é estritamente pelo medido em campo.",
+    "Linha dos 75% (Inexequibilidade Presumida): Proposta com valor inferior a 75% do orçamento da Administração presume-se inexequível (Art. 59, §4º e Acórdão TCU 465/2024), exigindo prova documental analítica de composição de custos.",
+    "Linha dos 85% (Impacto de Caixa Violento): Proposta vencedora com valor inferior a 85% impõe aporte de garantia adicional correspondente à diferença entre 85% e o valor ofertado (Art. 59, §5º) — drena o capital de giro da construtora!",
+  ],
+  canteiroVistoriaECronograma: [
+    "Vistoria Técnica (Regra de Ouro Art. 63, IV): É direito do licitante substituir a visita ao canteiro por declaração formal assinada pelo responsável técnico de que conhece o local e condições de execução.",
+    "Vistoria com Data e Hora Única: Marcar dia e hora comum para todos os licitantes é ilegal e indício severo de direcionamento/conluio (Súmula TCU 273).",
+    "Cronograma Físico-Financeiro Realista: Deve prever etapas coerentes com a curva ABC da obra. A medição da administração local deve ser proporcional ao avanço financeiro global da obra, e não paga em valor fixo mensal.",
+    "Reajuste Anual Obrigatório: É obrigatória a previsão clara de data-base (vinculada à data do orçamento de referência da licitação) e do índice oficial setorial (INCC/FGV para edificações, SICRO/DNIT para rodoviárias, IPCA para serviços gerais), conforme Art. 25, §7º da Lei 14.133.",
+  ],
+  matrizDeAlocacaoDeRiscos: [
+    "O engenheiro deve ler cada linha da matriz de riscos: interferências subterrâneas (adutoras, redes elétricas), licenças ambientais pendentes, desapropriações pendentes e variações geológicas.",
+    "Se o edital transfere o risco geológico ou de desapropriação para a construtora sem projeto executivo maduro, a licitação possui risco altíssimo de litígio e deve ser impugnada.",
+  ],
+} as const;
+
 /**
  * Retorna uma síntese densa em markdown com todas as regras do Guia Técnico 2026
- * pronta para ser injetada no contexto da IA em prompts e memórias de auditoria.
+ * e Doutrina do Engenheiro Sênior de Licitações pronta para ser injetada no prompt.
  */
 export function obterMemoriaGuiaTecnico2026(): string {
   return `
@@ -326,38 +354,36 @@ Valores atualizados pelo Decreto nº 12.807/2025 (vigentes em 2026):
 - Obras/Serviços de Grande Vulto: a partir de R$ 261.968.421,04 (Art. 6º, XXII - exige matriz de riscos, compliance e seguro até 30%)
 - Contrato verbal / pronto pagamento: até R$ 13.098,41 (Art. 95, §2º)
 
-CRITÉRIOS FUNDAMENTAIS PARA ANÁLISE DO EDITAL:
-1. PONTOS DE ATENÇÃO E RISCOS CRÍTICOS:
-- Certidões: CRF do FGTS com validade curta de 30 dias (vilão nº 1 de inabilitação, art. 68, IV).
-- Obras e Engenharia:
-  * Linha dos 75%: Proposta abaixo de 75% do orçamento da Administração presume-se inexequível (art. 59, §4º e Acórdão TCU 465/2024). Exige comprovação analítica.
-  * Linha dos 85%: Proposta abaixo de 85% impõe GARANTIA ADICIONAL OBRIGATÓRIA no valor da diferença até 85% (art. 59, §5º) - impacto imediato no fluxo de caixa!
-  * Vistoria Técnica: Exigência de visita obrigatória sem alternativa de declaração do responsável técnico é ILEGAL (art. 63, IV).
-  * Visto em Conselho Regional local: Exigível apenas para assinar contrato, nunca como filtro de habilitação.
-- Prazos fatais:
-  * Impugnação / Pedido de Esclarecimento: Até 3 dias úteis antes da abertura (art. 164).
-  * Recurso: 3 dias úteis com manifestação de intenção IMEDIATA na sessão (art. 165).
-  * Eficácia contratual: Publicação no PNCP em até 20 dias úteis (art. 94).
-  * Atraso de pagamento > 2 meses autoriza suspensão da execução (art. 137, §2º).
-- Cláusula de reajuste: Ausência de índice oficial e data-base é ilegalidade atacável (art. 25, §7º).
+I. DIRETRIZES FUNDAMENTAIS DO ENGENHEIRO SÊNIOR DE OBRAS:
+1. DECISÃO GO / NO-GO (VALE A PENA ENTRAR?):
+- Avaliar a atratividade do certame, margem de risco operacional e saúde financeira do órgão contratante.
+- Evitar certames com armadilhas que induzam a prejuízo certo, atraso crônico de pagamento ou rescisão unilateral.
 
-2. CHECKLIST DE ILEGALIDADES E EXIGÊNCIAS ABUSIVAS (PASSÍVEIS DE IMPUGNAÇÃO):
-- Rol de habilitação é estritamente taxativo (arts. 62 a 70; Acórdão TCU 1.467/2022).
-- Vedações expressas: Faturamento mínimo anterior (art. 69, §2º), índices de rentabilidade/lucratividade, capital social acima de 10% do estimado (art. 69, §4º), índices contábeis incomuns sem justificativa (Súmulas TCU 275 e 289).
-- Atestados: É vedado exigir quantitativo >= 100% do licitado ou em parcelas irrelevantes (Súmula TCU 263).
-- Proibido exigir posse/propriedade prévia de maquinário ou filial local no certame (art. 9º, I e art. 67).
-- Proibido exigir certificações ISO, selos ou programas de compliance prévios à homologação (Súmula TCU 272; art. 25, §4º).
-- Proibido exigir CTPS ou vínculo societário prévio do responsável técnico (Acórdão TCU 2.297/2005).
+2. HABILITAÇÃO TÉCNICA (ATESTADOS, CAT, CREA/CAU):
+- Súmula TCU 263: Exigência de capacidade técnico-operacional (empresa) e profissional (engenheiro) restrita a parcelas de maior relevância e valor significativo (mínimo 4%).
+- Teto de Quantitativos: O edital NUNCA pode exigir mais de 50% dos quantitativos da obra em atestados.
+- É ILEGAL exigir que a empresa registre seu atestado de capacidade técnica no CREA (o CREA registra ART/CAT do engenheiro, não da PJ - Acórdão TCU 1.547/2021).
+- É ILEGAL exigir vínculo empregatício prévio do responsável técnico antes da homologação (Acórdão TCU 2.297/2005).
 
-3. O QUE NÃO É IMPORTANTE / DISPENSÁVEL (RITUAIS OBSOLETOS):
+3. ENGENHARIA DE CUSTOS, PLANILHA, BDI E FLUXO DE CAIXA:
+- BDI Analítico (Acórdão TCU 2.622/2013): Não aceitar percentual fechado sem memória. Vedar bitributação (itens de custo direto inseridos no BDI).
+- Regime: Empreitada por Preço Global (risco de quantitativo é do construtor) vs Preço Unitário (paga o executado medido).
+- Linha dos 75% (Inexequibilidade Art. 59, §4º e Acórdão 465/2024): Descontos abaixo de 75% impõem comprovação analítica detalhada de custos.
+- Linha dos 85% (Garantia Adicional Cumulativa Art. 59, §5º): Desconto abaixo de 85% impõe garantia adicional em dinheiro/seguro da diferença até 85%. Drena o caixa da empresa!
+- Reajuste Inflacionário (Art. 25, §7º): Deve constar data-base (data do orçamento de referência) e índice setorial claro (INCC, SICRO, IPCA). Sem reajuste anual a licitação é ilegal.
+
+4. CANTEIRO, VISTORIA TÉCNICA E OPERAÇÃO:
+- Vistoria Técnica: É direito líquido e certo substituir a visita presencial por declaração formal de conhecimento do local assinada pelo responsável técnico (Art. 63, IV).
+- Vistoria em data/hora única é indício gravíssimo de direcionamento e deve ser impugnada (Súmula TCU 273).
+- Cronograma Físico-Financeiro: Administração local deve ser paga proporcionalmente à evolução física da obra, sem adiantamentos indevidos.
+
+5. MATRIZ DE ALOCAÇÃO DE RISCOS:
+- Auditar se o órgão transferiu ilegalmente riscos de licenciamento ambiental, desapropriação ou interferências de concessionárias para a construtora sem remuneração compatível.
+
+6. RITUAIS DISPENSÁVEIS / IRRELEVANTES:
 - Reconhecimento de firma e autenticação em cartório (dispensados pela Lei nº 13.726/2018).
-- Impressão e anexação de certidões que o órgão pode consultar online (SICAF, FGTS, CNDT).
-- Declarações avulsas em papel que já foram prestadas via sistema eletrônico.
-- Cláusulas e rituais protocolares da Lei 14.133 que não impõem ônus diferenciado ou risco à construtora.
-
-4. PONTOS IMPORTANTES E DIFERENCIAIS:
-- Benefícios ME/EPP: itens exclusivos até R$ 80.000,00, cota reservada de 25%, empate ficto de 5% no pregão (LC 123/2006).
-- Regime de execução: distinção clara entre preço unitário (risco de quantitativo da Administração), global (risco do licitante) e contratação integrada (matriz de risco mandatória).
-- Regras de reajuste (art. 25, §7º) e prorrogação de vigência (automática para escopo; até 10 anos para contínuos).
+- Impressão de certidões que o órgão pode obter online.
+- Declarações protocolares genéricas que não geram risco de inabilitação.
 `.trim();
 }
+

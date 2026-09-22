@@ -14,6 +14,11 @@ import {
   RotateCw,
   ShieldAlert,
   Sparkles,
+  Award,
+  Coins,
+  Compass,
+  Swords,
+  AlertCircle,
 } from "lucide-react";
 import {
   Sheet,
@@ -37,6 +42,7 @@ import {
 import { useAnaliseLicitacao, useGerarAnaliseLicitacao } from "@/services/api";
 import { formatarApresentacaoAnalise } from "@/services/analise/apresentacao";
 import { dataHoraBR } from "@/lib/format";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
 interface AnaliseLicitacaoSheetProps {
@@ -282,12 +288,76 @@ export function AnaliseLicitacaoSheet({
                     </Alert>
                   )}
 
+                  {/* CARD DESTAQUE: PARECER DO ENGENHEIRO CHEFE (GO / NO-GO) */}
+                  {resultado.parecerEngenheiro && (
+                    <Card className="border-indigo-500/40 bg-gradient-to-br from-indigo-500/[0.08] via-purple-500/[0.04] to-background shadow-md">
+                      <CardHeader className="pb-2.5">
+                        <div className="flex items-center justify-between flex-wrap gap-2">
+                          <div className="flex items-center gap-2">
+                            <div className="p-1.5 rounded-lg bg-indigo-500/20 text-indigo-400">
+                              <Compass className="h-4 w-4" />
+                            </div>
+                            <span className="text-xs font-bold uppercase tracking-wider text-indigo-400">
+                              Decisão do Engenheiro Chefe (Go / No-Go)
+                            </span>
+                          </div>
+                          <Badge
+                            className={cn(
+                              "text-xs px-2.5 py-0.5 font-bold uppercase tracking-wide",
+                              resultado.parecerEngenheiro.decisao === "go"
+                                ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
+                                : resultado.parecerEngenheiro.decisao === "go_com_ressalvas"
+                                  ? "bg-amber-500/20 text-amber-300 border-amber-500/40"
+                                  : "bg-rose-500/20 text-rose-300 border-rose-500/40",
+                            )}
+                          >
+                            {resultado.parecerEngenheiro.decisao === "go"
+                              ? "🟢 GO — Recomendado Disputar"
+                              : resultado.parecerEngenheiro.decisao === "go_com_ressalvas"
+                                ? "🟡 GO COM RESSALVAS — Disputar com Cautela"
+                                : "🔴 NO-GO — Alto Risco / Desfavorável"}
+                          </Badge>
+                        </div>
+                        {resultado.parecerEngenheiro.titulo && (
+                          <CardTitle className="text-base font-bold text-foreground mt-1.5">
+                            {resultado.parecerEngenheiro.titulo}
+                          </CardTitle>
+                        )}
+                      </CardHeader>
+                      <CardContent className="space-y-3 pt-0">
+                        {resultado.parecerEngenheiro.justificativa && (
+                          <p className="text-xs leading-relaxed text-foreground/90 font-medium">
+                            {resultado.parecerEngenheiro.justificativa}
+                          </p>
+                        )}
+                        <div className="flex flex-wrap items-center gap-4 text-xs pt-2 border-t border-border/40">
+                          {resultado.parecerEngenheiro.atratividadeComercial && (
+                            <span className="text-muted-foreground">
+                              Atratividade Comercial:{" "}
+                              <strong className="text-foreground capitalize font-semibold">
+                                {resultado.parecerEngenheiro.atratividadeComercial}
+                              </strong>
+                            </span>
+                          )}
+                          {resultado.parecerEngenheiro.complexidadeOperacional && (
+                            <span className="text-muted-foreground">
+                              Complexidade Operacional:{" "}
+                              <strong className="text-foreground capitalize font-semibold">
+                                {resultado.parecerEngenheiro.complexidadeOperacional}
+                              </strong>
+                            </span>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+
                   {/* Card Resumo Executivo */}
                   <Card className="border-primary/20 bg-primary/[0.02]">
                     <CardHeader className="pb-2">
                       <CardTitle className="text-sm font-semibold flex items-center gap-2 text-primary">
                         <FileText className="h-4 w-4" />
-                        Resumo Executivo
+                        Resumo Executivo do Engenheiro
                       </CardTitle>
                     </CardHeader>
                     <CardContent>
@@ -296,6 +366,168 @@ export function AnaliseLicitacaoSheet({
                       </p>
                     </CardContent>
                   </Card>
+
+                  {/* BLOCO ESPECIAL: ENGENHARIA DE CUSTOS, BDI & ALERTA DE CAIXA */}
+                  {resultado.engenhariaCustos && (
+                    <div className="rounded-xl border border-amber-500/40 bg-amber-500/[0.03] p-4 space-y-3">
+                      <div className="flex items-center gap-2">
+                        <div className="p-1.5 rounded-md bg-amber-500/15 text-amber-400">
+                          <Coins className="h-4 w-4" />
+                        </div>
+                        <div>
+                          <h4 className="text-sm font-bold text-amber-400 tracking-tight">
+                            💰 Engenharia de Custos, BDI & Alerta de Caixa
+                          </h4>
+                          <p className="text-[11px] text-muted-foreground">
+                            Regime de execução, limites legais de inexequibilidade e garantia adicional.
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="grid gap-2 text-xs sm:grid-cols-2">
+                        {resultado.engenhariaCustos.regimeExecucao && (
+                          <div className="p-2.5 rounded-lg border border-border/50 bg-card/80 space-y-0.5">
+                            <span className="text-[10px] text-muted-foreground uppercase font-bold">Regime de Execução</span>
+                            <p className="font-semibold text-foreground">{resultado.engenhariaCustos.regimeExecucao}</p>
+                          </div>
+                        )}
+                        {resultado.engenhariaCustos.bdiSugerido && (
+                          <div className="p-2.5 rounded-lg border border-border/50 bg-card/80 space-y-0.5">
+                            <span className="text-[10px] text-muted-foreground uppercase font-bold">BDI Referencial</span>
+                            <p className="font-semibold text-foreground">{resultado.engenhariaCustos.bdiSugerido}</p>
+                          </div>
+                        )}
+                        {resultado.engenhariaCustos.alertaLinha75 && (
+                          <div className="p-2.5 rounded-lg border border-rose-500/30 bg-rose-500/10 space-y-0.5 sm:col-span-2">
+                            <span className="text-[10px] text-rose-400 uppercase font-bold flex items-center gap-1">
+                              <AlertTriangle className="size-3" /> Linha dos 75% (Inexequibilidade Art. 59 §4º)
+                            </span>
+                            <p className="text-foreground/90">{resultado.engenhariaCustos.alertaLinha75}</p>
+                          </div>
+                        )}
+                        {resultado.engenhariaCustos.alertaLinha85 && (
+                          <div className="p-2.5 rounded-lg border border-amber-500/30 bg-amber-500/10 space-y-0.5 sm:col-span-2">
+                            <span className="text-[10px] text-amber-400 uppercase font-bold flex items-center gap-1">
+                              <ShieldAlert className="size-3" /> Linha dos 85% (Garantia Adicional de Caixa Art. 59 §5º)
+                            </span>
+                            <p className="text-foreground/90">{resultado.engenhariaCustos.alertaLinha85}</p>
+                          </div>
+                        )}
+                        {resultado.engenhariaCustos.reajusteRegra && (
+                          <div className="p-2.5 rounded-lg border border-border/50 bg-card/80 space-y-0.5 sm:col-span-2">
+                            <span className="text-[10px] text-muted-foreground uppercase font-bold">Reajuste Inflacionário Anual (Art. 25 §7º)</span>
+                            <p className="text-foreground/90">{resultado.engenhariaCustos.reajusteRegra}</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* BLOCO ESPECIAL: QUALIFICAÇÃO TÉCNICA & CAT/CREA (SÚMULA TCU 263) */}
+                  {resultado.engenhariaHabilitacao && (
+                    <div className="rounded-xl border border-sky-500/40 bg-sky-500/[0.03] p-4 space-y-3">
+                      <div className="flex items-center gap-2">
+                        <div className="p-1.5 rounded-md bg-sky-500/15 text-sky-400">
+                          <Award className="h-4 w-4" />
+                        </div>
+                        <div>
+                          <h4 className="text-sm font-bold text-sky-400 tracking-tight">
+                            🏆 Qualificação Técnica & CAT/CREA (Súmula TCU 263)
+                          </h4>
+                          <p className="text-[11px] text-muted-foreground">
+                            Atestados de capacidade operacional e profissional, parcelas de maior relevância e armadilhas.
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="space-y-2 text-xs">
+                        {resultado.engenhariaHabilitacao.catExigida && (
+                          <div className="p-2.5 rounded-lg border border-border/50 bg-card/80 space-y-1">
+                            <span className="text-[10px] text-sky-400 uppercase font-bold">Exigência de Acervo Técnico (CAT)</span>
+                            <p className="text-foreground/90">{resultado.engenhariaHabilitacao.catExigida}</p>
+                          </div>
+                        )}
+                        {resultado.engenhariaHabilitacao.parcelasRelevantes && resultado.engenhariaHabilitacao.parcelasRelevantes.length > 0 && (
+                          <div className="p-2.5 rounded-lg border border-border/50 bg-card/80 space-y-1">
+                            <span className="text-[10px] text-muted-foreground uppercase font-bold">Parcelas de Maior Relevância e Valor Significativo</span>
+                            <ul className="list-disc pl-4 space-y-0.5 text-muted-foreground">
+                              {resultado.engenhariaHabilitacao.parcelasRelevantes.map((parc, i) => (
+                                <li key={i} className="text-foreground/90">{parc}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                        {resultado.engenhariaHabilitacao.pegadinhasHabilitacao && resultado.engenhariaHabilitacao.pegadinhasHabilitacao.length > 0 && (
+                          <div className="p-2.5 rounded-lg border border-rose-500/30 bg-rose-500/10 space-y-1">
+                            <span className="text-[10px] text-rose-400 uppercase font-bold flex items-center gap-1">
+                              <AlertTriangle className="size-3" /> Armadilhas de Habilitação Detectadas no Edital
+                            </span>
+                            <ul className="list-disc pl-4 space-y-0.5 text-rose-200">
+                              {resultado.engenhariaHabilitacao.pegadinhasHabilitacao.map((peg, i) => (
+                                <li key={i}>{peg}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* BLOCO ESPECIAL: ESTRATÉGIA DE COMBATE & IMPUGNAÇÃO PREVENTIVA */}
+                  {resultado.estrategiaImpugnacao && (
+                    <div className="rounded-xl border border-indigo-500/40 bg-indigo-500/[0.03] p-4 space-y-3">
+                      <div className="flex items-center gap-2">
+                        <div className="p-1.5 rounded-md bg-indigo-500/15 text-indigo-400">
+                          <Swords className="h-4 w-4" />
+                        </div>
+                        <div>
+                          <h4 className="text-sm font-bold text-indigo-400 tracking-tight">
+                            ⚔️ Estratégia de Combate & Impugnação Preventiva
+                          </h4>
+                          <p className="text-[11px] text-muted-foreground">
+                            Ilegalidades atacáveis antes da sessão (prazo fatal de 3 dias úteis) e documentos urgentes.
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="space-y-2 text-xs">
+                        {resultado.estrategiaImpugnacao.pontosImpugnar && resultado.estrategiaImpugnacao.pontosImpugnar.length > 0 && (
+                          <div className="p-2.5 rounded-lg border border-rose-500/30 bg-rose-500/10 space-y-1">
+                            <span className="text-[10px] text-rose-400 uppercase font-bold flex items-center gap-1">
+                              <AlertCircle className="size-3" /> Pontos com Fundamento para Impugnação Prévia (Art. 164)
+                            </span>
+                            <ul className="list-disc pl-4 space-y-0.5 text-rose-200">
+                              {resultado.estrategiaImpugnacao.pontosImpugnar.map((imp, i) => (
+                                <li key={i}>{imp}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                        {resultado.estrategiaImpugnacao.esclarecimentos && resultado.estrategiaImpugnacao.esclarecimentos.length > 0 && (
+                          <div className="p-2.5 rounded-lg border border-border/50 bg-card/80 space-y-1">
+                            <span className="text-[10px] text-muted-foreground uppercase font-bold">Pedidos de Esclarecimento Sugeridos</span>
+                            <ul className="list-disc pl-4 space-y-0.5 text-muted-foreground">
+                              {resultado.estrategiaImpugnacao.esclarecimentos.map((esc, i) => (
+                                <li key={i} className="text-foreground/90">{esc}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                        {resultado.estrategiaImpugnacao.documentosUrgentes && resultado.estrategiaImpugnacao.documentosUrgentes.length > 0 && (
+                          <div className="p-2.5 rounded-lg border border-amber-500/30 bg-amber-500/10 space-y-1">
+                            <span className="text-[10px] text-amber-400 uppercase font-bold flex items-center gap-1">
+                              <Clock className="size-3" /> Documentação Crítica a Providenciar Imediatamente
+                            </span>
+                            <ul className="list-disc pl-4 space-y-0.5 text-amber-200">
+                              {resultado.estrategiaImpugnacao.documentosUrgentes.map((doc, i) => (
+                                <li key={i}>{doc}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
 
                   {/* SEÇÃO 1: PONTOS DE ATENÇÃO & RISCOS CRÍTICOS (MÁXIMA PRIORIDADE) */}
                   {pontosAtencao.length > 0 && (
