@@ -625,6 +625,168 @@ export const sincronizarDocumentosLicitacaoFn = createServerFn({ method: "POST" 
     });
   });
 
+export interface ResultadoLoteLicitacao {
+  id: string;
+  ok: boolean;
+  totalCatalogados?: number;
+  extraidos?: number;
+  erros?: string[];
+}
+
+export const sincronizarDocumentosLicitacoesLoteFn = createServerFn({ method: "POST" })
+  .validator((d: unknown) => z.object({ ids: z.array(z.string().uuid()) }).parse(d))
+  .handler(async ({ data }) => {
+    const { sincronizarArquivosLicitacaoSobDemanda } = await import(
+      "./documentos/otimizador.server"
+    );
+    const resultados: ResultadoLoteLicitacao[] = [];
+    let totalExtraidos = 0;
+
+    for (const id of data.ids) {
+      try {
+        const res = await sincronizarArquivosLicitacaoSobDemanda(id, {
+          concorrencia: 3,
+          maxArquivos: 6,
+        });
+        totalExtraidos += res.extraidos;
+        resultados.push({
+          id,
+          ok: true,
+          totalCatalogados: res.totalCatalogados,
+          extraidos: res.extraidos,
+          erros: res.erros,
+        });
+      } catch (err) {
+        resultados.push({
+          id,
+          ok: false,
+          totalCatalogados: 0,
+          extraidos: 0,
+          erros: [err instanceof Error ? err.message : String(err)],
+        });
+      }
+    }
+
+    return {
+      sucesso: true,
+      processadas: resultados.length,
+      totalExtraidos,
+      resultados,
+    };
+  });
+
+export interface DocumentoBaixadoAlexandria {
+  id: string;
+  nome: string;
+  tipo_documento: string;
+  chars: number;
+  paginas: number;
+  url: string | null;
+}
+
+export interface LicitacaoAlexandriaDTO extends LicitacaoDTO {
+  documentos_baixados: DocumentoBaixadoAlexandria[];
+  analise_estado?: "nao_analisada" | "processando" | "pronta" | "erro";
+  analise_resumo?: string | null;
+}
+
+export const obterLicitacoesAlexandriaFn = createServerFn({ method: "POST" })
+  .validator((d: unknown) =>
+    z
+      .object({
+        ids: z.array(z.string().uuid()).optional(),
+        busca: z.string().optional(),
+        statusInterno: z.string().optional(),
+      })
+      .optional()
+      .parse(d),
+  )
+  .handler(async ({ data }): Promise<LicitacaoAlexandriaDTO[]> => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    // Buscar licitações com documentos_estado completo ou nos IDs selecionados
+    let query = supabaseAdmin
+      .from("licitacoes")
+      .select(`
+        *,
+        documentos_estado (estado),
+        documentos_licitacao (
+          id, nome, tipo_documento, url, ativo,
+          documentos_arquivo (estado, chars, paginas)
+        )
+      `)
+      .order("data_encerramento_proposta", { ascending: true, nullsFirst: false });
+
+    if (data?.ids && data.ids.length > 0) {
+      query = query.in("id", data.ids);
+    } else {
+      query = query.not("documentos_estado", "is", null);
+    }
+
+    if (data?.statusInterno && data.statusInterno !== "todos") {
+      query = query.eq("status_interno", data.statusInterno);
+    }
+
+    const { data: linhas, error } = await query.limit(100);
+    if (error) {
+      console.error("Erro ao buscar licitações em Alexandria:", error);
+      return [];
+    }
+
+    const licitacaoIds = (linhas ?? []).map((l: Record<string, unknown>) => String(l["id"]));
+    let mapaAnalises = new Map<string, Record<string, unknown>>();
+    if (licitacaoIds.length > 0) {
+      const { data: analises } = await supabaseAdmin
+        .from("licitacoes_analises")
+        .select("licitacao_id, estado, resultado")
+        .in("licitacao_id", licitacaoIds);
+      mapaAnalises = new Map(
+        (analises ?? []).map((a: Record<string, unknown>) => [String(a["licitacao_id"]), a]),
+      );
+    }
+
+    const filtradas = (linhas ?? []).filter((l: Record<string, unknown>) => {
+      if (data?.busca && data.busca.trim()) {
+        const termo = data.busca.toLowerCase();
+        const texto = `${l["objeto"]} ${l["orgao"]} ${l["municipio"]} ${l["numero_controle_pncp"]}`.toLowerCase();
+        if (!texto.includes(termo)) return false;
+      }
+      return true;
+    });
+
+    return filtradas.map((l: Record<string, unknown>) => {
+      const docs = ((l["documentos_licitacao"] as Array<Record<string, unknown>>) ?? []).filter(
+        (d) => d["ativo"] !== false,
+      );
+      const docsBaixados: DocumentoBaixadoAlexandria[] = docs
+        .filter((d) => Array.isArray(d["documentos_arquivo"]) && d["documentos_arquivo"].length > 0)
+        .map((d) => {
+          const arq = (d["documentos_arquivo"] as Array<Record<string, unknown>>)[0] ?? {};
+          return {
+            id: String(d["id"]),
+            nome: String(d["nome"] ?? "Documento"),
+            tipo_documento: String(d["tipo_documento"] ?? "outro"),
+            chars: Number(arq["chars"] ?? 0),
+            paginas: Number(arq["paginas"] ?? 1),
+            url: d["url"] ? String(d["url"]) : null,
+          };
+        });
+
+      const analise = mapaAnalises.get(String(l["id"]));
+      const resultadoAnalise = analise?.["resultado"] as Record<string, unknown> | undefined;
+
+      const baseDTO = paraDTO(l);
+      return {
+        ...baseDTO,
+        documentos_total: docs.length,
+        documentos_estado: docsBaixados.length > 0 ? "completo" : baseDTO.documentos_estado,
+        documentos_baixados: docsBaixados,
+        analise_estado: (analise?.["estado"] as LicitacaoAlexandriaDTO["analise_estado"]) ?? "nao_analisada",
+        analise_resumo: (resultadoAnalise?.["resumo"] as string | undefined) ?? null,
+      };
+    });
+  });
+
 export const obterItensLicitacaoFn = createServerFn({ method: "POST" })
   .validator((d: unknown) =>
     z

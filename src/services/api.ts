@@ -40,6 +40,8 @@ import {
   opcoesFiltrosFn,
   salvarConfiguracoesFn,
   sincronizarDocumentosLicitacaoFn,
+  sincronizarDocumentosLicitacoesLoteFn,
+  obterLicitacoesAlexandriaFn,
   statusSincronizacaoFn,
 } from "@/services/licitacoes.functions";
 
@@ -516,5 +518,31 @@ export function useItensLicitacao(id: string, ativo = true) {
     queryFn: () => obterItensLicitacaoFn({ data: { id } }),
     enabled: ativo && Boolean(id),
     staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useSincronizarDocumentosLote() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (ids: string[]) => sincronizarDocumentosLicitacoesLoteFn({ data: { ids } }),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["licitacoes"] }),
+        queryClient.invalidateQueries({ queryKey: ["metricas"] }),
+        queryClient.invalidateQueries({ queryKey: ["licitacoes-alexandria"] }),
+      ]);
+    },
+  });
+}
+
+export function useLicitacoesAlexandria(params?: {
+  ids?: string[];
+  busca?: string;
+  statusInterno?: string;
+}) {
+  return useQuery({
+    queryKey: ["licitacoes-alexandria", params],
+    queryFn: () => obterLicitacoesAlexandriaFn({ data: params }),
+    staleTime: 60 * 1000,
   });
 }

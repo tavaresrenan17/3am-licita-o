@@ -303,5 +303,17 @@ export async function sincronizarArquivosLicitacaoSobDemanda(
     await Promise.allSettled(promessas);
   }
 
+  // 6. Atualizar estado geral dos documentos para a licitação
+  try {
+    const novoEstado = resultado.extraidos > 0 ? "completo" : resultado.erros.length > 0 ? "erro" : "completo";
+    await client.from("documentos_estado").upsert({
+      licitacao_id: licitacaoId,
+      estado: novoEstado,
+      atualizado_em: new Date().toISOString(),
+    });
+  } catch (errEstado) {
+    console.warn("Falha ao atualizar documentos_estado:", errEstado);
+  }
+
   return resultado;
 }
