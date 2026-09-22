@@ -61,4 +61,53 @@ describe("Gestão e Movimentação de Licitações em Alexandria", () => {
     const visiveisGerais = todasLicitacoes.filter((l) => !idsEmAlexandria.has(l.id));
     expect(visiveisGerais.map((l) => l.id)).toEqual(["lic-1", "lic-2"]);
   });
+
+  it("garante que documentos baixados são mapeados corretamente mesmo com documentos_arquivo 1:1 objeto ou array", () => {
+    const rawDocumentosLicitacao = [
+      {
+        id: "doc-1",
+        nome: "Edital Concorrência Taubaté",
+        tipo_documento: "edital",
+        url: "https://pncp.gov.br/arquivo/1",
+        ativo: true,
+        documentos_arquivo: {
+          chars: 192254,
+          paginas: 59,
+          estado: "extraido",
+        },
+      },
+      {
+        id: "doc-2",
+        nome: "Termo de Referência",
+        tipo_documento: "anexo",
+        url: "https://pncp.gov.br/arquivo/2",
+        ativo: true,
+        documentos_arquivo: null,
+      },
+    ];
+
+    const docsBaixados = rawDocumentosLicitacao
+      .filter((d) => d.ativo !== false)
+      .map((d) => {
+        const arqRaw = d.documentos_arquivo;
+        const arq = Array.isArray(arqRaw)
+          ? ((arqRaw[0] as Record<string, unknown>) ?? {})
+          : ((arqRaw as Record<string, unknown>) ?? {});
+        return {
+          id: d.id,
+          nome: d.nome,
+          tipo_documento: d.tipo_documento,
+          chars: Number(arq["chars"] ?? 0),
+          paginas: Number(arq["paginas"] ?? 1),
+          url: d.url,
+        };
+      });
+
+    expect(docsBaixados).toHaveLength(2);
+    expect(docsBaixados[0].chars).toBe(192254);
+    expect(docsBaixados[0].paginas).toBe(59);
+    expect(docsBaixados[1].chars).toBe(0);
+    expect(docsBaixados[1].paginas).toBe(1);
+    expect(docsBaixados[0].url).toBe("https://pncp.gov.br/arquivo/1");
+  });
 });

@@ -41,6 +41,8 @@ import {
   useAnalisarComIa,
   useRemoverDeAlexandria,
 } from "@/services/api";
+import { AnaliseLicitacaoSheet } from "@/components/AnaliseLicitacaoSheet";
+import type { LicitacaoAlexandriaDTO } from "@/services/licitacoes.functions";
 
 const alexandriaBuscaSchema = z.object({
   ids: z.string().optional(),
@@ -76,6 +78,7 @@ function AlexandriaPage() {
   const atualizarInterno = useAtualizarInterno();
   const analisarIa = useAnalisarComIa();
   const [analisandoId, setAnalisandoId] = useState<string | null>(null);
+  const [licitacaoAnaliseAberta, setLicitacaoAnaliseAberta] = useState<LicitacaoAlexandriaDTO | null>(null);
 
   const handleMudarStatus = (id: string, novoStatus: StatusInterno) => {
     atualizarInterno.mutate(
@@ -417,17 +420,26 @@ function AlexandriaPage() {
                   <div className="mt-4 flex flex-wrap items-center justify-between gap-3 pt-2">
                     <div className="flex items-center gap-2">
                       {l.analise_estado === "pronta" ? (
-                        <div className="flex items-center gap-1.5 text-xs text-purple-400 bg-purple-500/10 border border-purple-500/20 px-2.5 py-1 rounded-md">
-                          <CheckCircle2 className="size-3.5" />
-                          <span>Análise de IA Pronta</span>
-                        </div>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setLicitacaoAnaliseAberta(l)}
+                          className="h-8 gap-1.5 text-xs bg-purple-500/15 border-purple-500/40 text-purple-300 hover:bg-purple-500/25 hover:text-purple-100 font-semibold cursor-pointer shadow-xs transition-all"
+                          title="Abrir painel completo de Análise de IA desta licitação"
+                        >
+                          <CheckCircle2 className="size-3.5 text-purple-400" />
+                          <span>Ver Análise de IA (Salva)</span>
+                        </Button>
                       ) : (
                         <Button
+                          type="button"
                           size="sm"
                           variant="outline"
                           disabled={emAnalise}
-                          onClick={() => handleAnalisarComIa(l.id)}
+                          onClick={() => setLicitacaoAnaliseAberta(l)}
                           className="h-8 gap-1.5 text-xs border-purple-500/40 text-purple-400 hover:bg-purple-500/10 cursor-pointer"
+                          title="Abrir painel para executar e visualizar a Análise de IA"
                         >
                           {emAnalise ? (
                             <>
@@ -478,6 +490,18 @@ function AlexandriaPage() {
           </div>
         )}
       </div>
+
+      {licitacaoAnaliseAberta && (
+        <AnaliseLicitacaoSheet
+          licitacaoId={licitacaoAnaliseAberta.id}
+          aberto={Boolean(licitacaoAnaliseAberta)}
+          onOpenChange={(aberto) => {
+            if (!aberto) setLicitacaoAnaliseAberta(null);
+          }}
+          objeto={licitacaoAnaliseAberta.objeto}
+          orgao={licitacaoAnaliseAberta.orgao}
+        />
+      )}
     </AppShell>
   );
 }

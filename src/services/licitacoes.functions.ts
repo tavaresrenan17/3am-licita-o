@@ -795,19 +795,20 @@ export const obterLicitacoesAlexandriaFn = createServerFn({ method: "POST" })
       const docs = ((l["documentos_licitacao"] as Array<Record<string, unknown>>) ?? []).filter(
         (d) => d["ativo"] !== false,
       );
-      const docsBaixados: DocumentoBaixadoAlexandria[] = docs
-        .filter((d) => Array.isArray(d["documentos_arquivo"]) && d["documentos_arquivo"].length > 0)
-        .map((d) => {
-          const arq = (d["documentos_arquivo"] as Array<Record<string, unknown>>)[0] ?? {};
-          return {
-            id: String(d["id"]),
-            nome: String(d["nome"] ?? "Documento"),
-            tipo_documento: String(d["tipo_documento"] ?? "outro"),
-            chars: Number(arq["chars"] ?? 0),
-            paginas: Number(arq["paginas"] ?? 1),
-            url: d["url"] ? String(d["url"]) : null,
-          };
-        });
+      const docsBaixados: DocumentoBaixadoAlexandria[] = docs.map((d) => {
+        const arqRaw = d["documentos_arquivo"];
+        const arq = Array.isArray(arqRaw)
+          ? ((arqRaw[0] as Record<string, unknown>) ?? {})
+          : ((arqRaw as Record<string, unknown>) ?? {});
+        return {
+          id: String(d["id"]),
+          nome: String(d["nome"] ?? "Documento"),
+          tipo_documento: String(d["tipo_documento"] ?? "outro"),
+          chars: Number(arq["chars"] ?? 0),
+          paginas: Number(arq["paginas"] ?? 1),
+          url: d["url"] ? String(d["url"]) : null,
+        };
+      });
 
       const analise = mapaAnalises.get(String(l["id"]));
       const resultadoAnalise = analise?.["resultado"] as Record<string, unknown> | undefined;
