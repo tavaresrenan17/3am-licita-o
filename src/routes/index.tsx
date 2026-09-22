@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import {
   AlarmClock,
@@ -17,6 +18,7 @@ import {
   Sparkles,
   Star,
   TrendingUp,
+  X,
 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { EmptyState, ScoreBadge, StatusInternoBadge } from "@/components/data-bits";
@@ -86,6 +88,7 @@ function Dashboard() {
 
   const sync = m?.ultima_sync ?? null;
   const catalogoAtualizado = sincronizacaoEstaAtualizada(sync?.status, sync?.finalizado_em);
+  const [avisoDescartado, setAvisoDescartado] = useState(false);
 
   return (
     <AppShell
@@ -122,7 +125,7 @@ function Dashboard() {
         )}
 
         {/* Alerta se o catálogo estiver desatualizado */}
-        {!isLoading && !isError && !catalogoAtualizado && (
+        {!isLoading && !isError && !catalogoAtualizado && !avisoDescartado && (
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-500/40 bg-amber-500/10 p-3.5 text-xs text-amber-400">
             <div className="flex items-start gap-2.5">
               <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-400" />
@@ -135,9 +138,20 @@ function Dashboard() {
                 </p>
               </div>
             </div>
-            <Button asChild variant="outline" size="sm" className="h-7 text-xs border-amber-500/40 text-amber-300 hover:bg-amber-500/20">
-              <Link to="/sincronizacao">Sincronizar Agora</Link>
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button asChild variant="outline" size="sm" className="h-7 text-xs border-amber-500/40 text-amber-300 hover:bg-amber-500/20">
+                <Link to="/sincronizacao">Sincronizar Agora</Link>
+              </Button>
+              <button
+                type="button"
+                onClick={() => setAvisoDescartado(true)}
+                title="Fechar aviso"
+                aria-label="Fechar aviso de atualização"
+                className="inline-flex size-7 cursor-pointer items-center justify-center rounded-lg text-amber-400/70 hover:bg-amber-500/20 hover:text-amber-200 transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-amber-400"
+              >
+                <X className="size-4" />
+              </button>
+            </div>
           </div>
         )}
 
