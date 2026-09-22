@@ -6,6 +6,7 @@ import {
   HardHat,
   Keyboard,
   LayoutDashboard,
+  Library,
   RefreshCw,
   Search,
   Sparkles,
@@ -70,6 +71,11 @@ export function CommandPalette({
             <Table2 className="mr-2.5 size-4 text-primary" />
             <span>Catálogo de Licitações</span>
             <CommandShortcut>G L</CommandShortcut>
+          </CommandItem>
+          <CommandItem onSelect={() => irPara("/alexandria")}>
+            <Library className="mr-2.5 size-4 text-primary" />
+            <span>Alexandria — Acervo & Análise</span>
+            <CommandShortcut>G A</CommandShortcut>
           </CommandItem>
           <CommandItem onSelect={() => irPara("/sincronizacao")}>
             <RefreshCw className="mr-2.5 size-4 text-primary" />

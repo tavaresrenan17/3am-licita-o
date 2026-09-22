@@ -8,6 +8,7 @@ import {
   ArrowLeft,
   Search,
   Keyboard,
+  Library,
   type LucideIcon,
 } from "lucide-react";
 import { useState, useEffect, type ReactNode } from "react";
@@ -21,6 +22,7 @@ import { AtalhosModal } from "@/components/AtalhosModal";
 const NAV: { to: string; label: string; icon: LucideIcon }[] = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
   { to: "/licitacoes", label: "Licitações", icon: Table2 },
+  { to: "/alexandria", label: "Alexandria", icon: Library },
   { to: "/sincronizacao", label: "Sincronização PNCP", icon: RefreshCw },
 ];
 
