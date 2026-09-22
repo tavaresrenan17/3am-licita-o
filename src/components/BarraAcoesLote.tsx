@@ -54,7 +54,7 @@ export function BarraAcoesLote({
         ) : (
           <>
             <Download className="size-3.5" />
-            <span>Sincronizar Documentos</span>
+            <span>Sincronizar & Mover para Alexandria</span>
           </>
         )}
       </Button>

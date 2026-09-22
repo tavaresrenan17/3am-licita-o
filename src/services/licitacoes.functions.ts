@@ -667,12 +667,43 @@ export const sincronizarDocumentosLicitacoesLoteFn = createServerFn({ method: "P
       }
     }
 
+    // Aloca automaticamente as licitações sincronizadas no acervo de Alexandria
+    try {
+      const { adicionarLicitacoesAlexandriaServidor } = await import("./alexandria.storage.server");
+      await adicionarLicitacoesAlexandriaServidor(data.ids);
+    } catch (e) {
+      console.error("Falha ao alocar licitações em Alexandria:", e);
+    }
+
     return {
       sucesso: true,
       processadas: resultados.length,
       totalExtraidos,
       resultados,
     };
+  });
+
+export const obterIdsAlexandriaFn = createServerFn({ method: "POST" }).handler(
+  async (): Promise<string[]> => {
+    const { obterIdsAlexandriaServidor } = await import("./alexandria.storage.server");
+    return obterIdsAlexandriaServidor();
+  },
+);
+
+export const moverParaAlexandriaFn = createServerFn({ method: "POST" })
+  .validator((d: unknown) => z.object({ ids: z.array(z.string().uuid()) }).parse(d))
+  .handler(async ({ data }): Promise<{ ok: boolean; movidos: number }> => {
+    const { adicionarLicitacoesAlexandriaServidor } = await import("./alexandria.storage.server");
+    await adicionarLicitacoesAlexandriaServidor(data.ids);
+    return { ok: true, movidos: data.ids.length };
+  });
+
+export const removerDeAlexandriaFn = createServerFn({ method: "POST" })
+  .validator((d: unknown) => z.object({ ids: z.array(z.string().uuid()) }).parse(d))
+  .handler(async ({ data }): Promise<{ ok: boolean; removidos: number }> => {
+    const { removerLicitacoesAlexandriaServidor } = await import("./alexandria.storage.server");
+    await removerLicitacoesAlexandriaServidor(data.ids);
+    return { ok: true, removidos: data.ids.length };
   });
 
 export interface DocumentoBaixadoAlexandria {
@@ -703,8 +734,19 @@ export const obterLicitacoesAlexandriaFn = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }): Promise<LicitacaoAlexandriaDTO[]> => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { obterIdsAlexandriaServidor } = await import("./alexandria.storage.server");
 
-    // Buscar licitações com documentos_estado completo ou nos IDs selecionados
+    // Coleta IDs registrados em Alexandria
+    const idsPersistidos = await obterIdsAlexandriaServidor();
+    const idsCombinados = Array.from(
+      new Set([...idsPersistidos, ...(data?.ids ?? [])]),
+    );
+
+    // Regra mandatória: em Alexandria aparecem SOMENTE as licitações que foram movidas para lá
+    if (idsCombinados.length === 0) {
+      return [];
+    }
+
     let query = supabaseAdmin
       .from("licitacoes")
       .select(`
@@ -715,19 +757,14 @@ export const obterLicitacoesAlexandriaFn = createServerFn({ method: "POST" })
           documentos_arquivo (estado, chars, paginas)
         )
       `)
+      .in("id", idsCombinados)
       .order("data_encerramento_proposta", { ascending: true, nullsFirst: false });
-
-    if (data?.ids && data.ids.length > 0) {
-      query = query.in("id", data.ids);
-    } else {
-      query = query.not("documentos_estado", "is", null);
-    }
 
     if (data?.statusInterno && data.statusInterno !== "todos") {
       query = query.eq("status_interno", data.statusInterno);
     }
 
-    const { data: linhas, error } = await query.limit(100);
+    const { data: linhas, error } = await query.limit(200);
     if (error) {
       console.error("Erro ao buscar licitações em Alexandria:", error);
       return [];

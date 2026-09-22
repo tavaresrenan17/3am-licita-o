@@ -86,6 +86,8 @@ import {
   useModalidades,
   useOpcoesFiltros,
   useSincronizarDocumentosLote,
+  useIdsAlexandria,
+  useMoverParaAlexandria,
 } from "@/services/api";
 
 /**
@@ -419,10 +421,17 @@ function LicitacoesSalvas() {
   // portanto, o ouvinte de `keydown` registrado uma vez em vez de a cada
   // render. Não havia vazamento nem registro duplo antes (a limpeza do efeito é
   // garantida), só churn; o comentário anterior contava metade da história.
+  const { data: idsAlexandriaArray = [] } = useIdsAlexandria();
+  const idsAlexandriaSet = useMemo(() => new Set(idsAlexandriaArray), [idsAlexandriaArray]);
+  const moverParaAlexandria = useMoverParaAlexandria();
+
+  // Licitações alocadas em Alexandria ficam visíveis SOMENTE em Alexandria
   const itens = useMemo(() => {
-    const listaBruta = consulta.data?.itens ?? [];
-    return filtrarLicitaçõesPorRaio(listaBruta, origemSelecionada, raioKm);
-  }, [consulta.data?.itens, origemSelecionada, raioKm]);
+    const listaSemAlexandria = (consulta.data?.itens ?? []).filter(
+      (l) => !idsAlexandriaSet.has(l.id),
+    );
+    return filtrarLicitaçõesPorRaio(listaSemAlexandria, origemSelecionada, raioKm);
+  }, [consulta.data?.itens, idsAlexandriaSet, origemSelecionada, raioKm]);
   const total = consulta.data?.total ?? 0;
   const totalPaginas = consulta.data?.totalPaginas ?? 1;
   // A tela não pode prometer semântica que não está ligada: o texto do campo
@@ -463,11 +472,12 @@ function LicitacoesSalvas() {
     const idsArray = Array.from(selecionadas);
     if (idsArray.length === 0) return;
 
-    toast.info(`Iniciando download dos documentos de ${idsArray.length} licitação(ões)...`);
+    toast.info(`Iniciando download e transferência de ${idsArray.length} licitação(ões) para Alexandria...`);
     try {
       const res = await sincronizarLote.mutateAsync(idsArray);
+      await moverParaAlexandria.mutateAsync(idsArray);
       toast.success(
-        `${res.processadas} licitação(ões) processadas (${res.totalExtraidos} documentos prontos)!`,
+        `${res.processadas} licitação(ões) movida(s) para Alexandria (${res.totalExtraidos} documentos prontos)!`,
       );
       limparSelecao();
       navigate({

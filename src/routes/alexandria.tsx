@@ -16,6 +16,8 @@ import {
   Star,
   CheckCircle2,
   AlertCircle,
+  Undo2,
+  ArchiveRestore,
 } from "lucide-react";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -37,6 +39,7 @@ import {
   useLicitacoesAlexandria,
   useAtualizarInterno,
   useAnalisarComIa,
+  useRemoverDeAlexandria,
 } from "@/services/api";
 
 const alexandriaBuscaSchema = z.object({
@@ -108,6 +111,20 @@ function AlexandriaPage() {
       toast.error(`Erro ao disparar IA: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
       setAnalisandoId(null);
+    }
+  };
+
+  const removerAlexandria = useRemoverDeAlexandria();
+
+  const handleRemoverDeAlexandria = async (id: string) => {
+    try {
+      await removerAlexandria.mutateAsync([id]);
+      toast.success("Licitação removida de Alexandria e devolvida à aba Licitações.");
+      refetch();
+    } catch (err) {
+      toast.error(
+        `Falha ao remover de Alexandria: ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
   };
 
@@ -434,6 +451,19 @@ function AlexandriaPage() {
                     </div>
 
                     <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleRemoverDeAlexandria(l.id)}
+                        disabled={removerAlexandria.isPending}
+                        className="h-8 text-xs gap-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10 cursor-pointer transition-colors"
+                        title="Remover de Alexandria e devolver para a aba Licitações"
+                      >
+                        <Undo2 className="size-3.5" />
+                        <span>Remover de Alexandria</span>
+                      </Button>
+
                       <Button asChild variant="outline" size="sm" className="h-8 text-xs gap-1.5">
                         <Link to="/licitacoes/$id" params={{ id: l.id }}>
                           <span>Abrir Ficha Completa</span>

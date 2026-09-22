@@ -42,6 +42,9 @@ import {
   sincronizarDocumentosLicitacaoFn,
   sincronizarDocumentosLicitacoesLoteFn,
   obterLicitacoesAlexandriaFn,
+  obterIdsAlexandriaFn,
+  moverParaAlexandriaFn,
+  removerDeAlexandriaFn,
   statusSincronizacaoFn,
 } from "@/services/licitacoes.functions";
 
@@ -566,6 +569,96 @@ export function useAnalisarComIa() {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["licitacao", id] }),
         queryClient.invalidateQueries({ queryKey: ["analise-licitacao", id] }),
+        queryClient.invalidateQueries({ queryKey: ["licitacoes-alexandria"] }),
+      ]);
+    },
+  });
+}
+
+const LOCAL_STORAGE_ALEXANDRIA_KEY = "3am_licitacoes_alexandria_ids";
+
+export function getLocalIdsAlexandria(): string[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(LOCAL_STORAGE_ALEXANDRIA_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function setLocalIdsAlexandria(ids: string[]) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(LOCAL_STORAGE_ALEXANDRIA_KEY, JSON.stringify(Array.from(new Set(ids))));
+    window.dispatchEvent(new Event("alexandria-storage-change"));
+  } catch {
+    // ignora
+  }
+}
+
+export function useIdsAlexandria() {
+  return useQuery({
+    queryKey: ["ids-alexandria"],
+    queryFn: async () => {
+      try {
+        const idsServidor = await obterIdsAlexandriaFn();
+        const idsLocal = getLocalIdsAlexandria();
+        const unificados = Array.from(new Set([...idsServidor, ...idsLocal]));
+        setLocalIdsAlexandria(unificados);
+        return unificados;
+      } catch {
+        return getLocalIdsAlexandria();
+      }
+    },
+    staleTime: 30 * 1000,
+  });
+}
+
+export function useMoverParaAlexandria() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (ids: string[]) => {
+      const atuais = getLocalIdsAlexandria();
+      const proximos = Array.from(new Set([...atuais, ...ids]));
+      setLocalIdsAlexandria(proximos);
+      try {
+        await moverParaAlexandriaFn({ data: { ids } });
+      } catch {
+        // segue com local
+      }
+      return ids;
+    },
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["ids-alexandria"] }),
+        queryClient.invalidateQueries({ queryKey: ["licitacoes"] }),
+        queryClient.invalidateQueries({ queryKey: ["metricas"] }),
+        queryClient.invalidateQueries({ queryKey: ["licitacoes-alexandria"] }),
+      ]);
+    },
+  });
+}
+
+export function useRemoverDeAlexandria() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (ids: string[]) => {
+      const atuais = new Set(getLocalIdsAlexandria());
+      for (const id of ids) atuais.delete(id);
+      setLocalIdsAlexandria(Array.from(atuais));
+      try {
+        await removerDeAlexandriaFn({ data: { ids } });
+      } catch {
+        // segue com local
+      }
+      return ids;
+    },
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["ids-alexandria"] }),
+        queryClient.invalidateQueries({ queryKey: ["licitacoes"] }),
+        queryClient.invalidateQueries({ queryKey: ["metricas"] }),
         queryClient.invalidateQueries({ queryKey: ["licitacoes-alexandria"] }),
       ]);
     },
