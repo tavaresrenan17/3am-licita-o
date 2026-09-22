@@ -29,17 +29,32 @@ export class GeradorChatOpenAI implements GeradorChat {
   private readonly buscar: typeof fetch;
 
   constructor(opcoes: OpcoesGeradorChat = {}) {
-    this.url =
-      opcoes.url ??
-      process.env["ANALISE_API_URL"] ??
-      process.env["OPENAI_API_URL"] ??
-      "https://api.openai.com/v1";
-    this.modelo =
-      opcoes.modelo ??
-      process.env["ANALISE_MODELO"] ??
-      process.env["OPENAI_MODELO"] ??
-      "gpt-4o-mini";
-    this.apiKey = opcoes.apiKey ?? process.env["ANALISE_API_KEY"] ?? process.env["OPENAI_API_KEY"];
+    const analiseUrl = opcoes.url ?? process.env["ANALISE_API_URL"];
+    const analiseModelo = opcoes.modelo ?? process.env["ANALISE_MODELO"];
+    const analiseKey = opcoes.apiKey ?? process.env["ANALISE_API_KEY"];
+
+    const geminiKey = process.env["GEMINI_API_KEY"];
+    const openAiKey = process.env["OPENAI_API_KEY"];
+
+    if (analiseUrl) {
+      this.url = analiseUrl;
+      this.modelo =
+        analiseModelo ??
+        (analiseUrl.includes("generativelanguage") ? "gemini-3.6-flash" : "gpt-4o-mini");
+      this.apiKey = analiseKey ?? geminiKey ?? openAiKey;
+    } else if (
+      geminiKey &&
+      (!openAiKey || process.env["ANALISE_PROVEDOR"] === "gemini" || analiseKey === geminiKey)
+    ) {
+      this.url = "https://generativelanguage.googleapis.com/v1beta/openai";
+      this.modelo = analiseModelo ?? "gemini-3.6-flash";
+      this.apiKey = geminiKey;
+    } else {
+      this.url = process.env["OPENAI_API_URL"] ?? "https://api.openai.com/v1";
+      this.modelo = analiseModelo ?? process.env["OPENAI_MODELO"] ?? "gpt-4o-mini";
+      this.apiKey = analiseKey ?? openAiKey ?? geminiKey;
+    }
+
     this.timeoutMs = opcoes.timeoutMs ?? Number(process.env["ANALISE_TIMEOUT_MS"] ?? 180_000);
     this.buscar = opcoes.fetchImpl ?? fetch;
   }
@@ -101,8 +116,98 @@ export class GeradorChatOpenAI implements GeradorChat {
       );
     }
 
+    // Tolerância a picos temporários de demanda (503 / 429): aguarda 2s e retenta uma vez
+    if (!resposta.ok && (resposta.status === 503 || resposta.status === 429)) {
+      await new Promise((r) => setTimeout(r, 2000));
+      try {
+        resposta = await this.buscar(endpoint, {
+          method: "POST",
+          headers,
+          signal: sinal,
+          body: JSON.stringify({
+            model: this.modelo,
+            messages: [
+              {
+                role: "system",
+                content: [
+                  "Você é o consultor sênior de inteligência técnica em licitações e contratações públicas brasileiras (Lei nº 14.133/2021 consolidada, atualizada para 2026 pelo Decreto nº 12.807/2025 e jurisprudência pacificada do TCU).",
+                  "Sua missão é auditar os documentos oficiais do certame para defender a segurança jurídica, as margens comerciais e a saúde de caixa da empresa fornecedora/construtora.",
+                  "Utilize a seguinte base doutrinária e jurisprudencial especializada como memória de raciocínio:",
+                  obterMemoriaGuiaTecnico2026(),
+                  "Estruture a análise com rigor cirúrgico e responda exclusivamente em formato JSON válido conforme solicitado.",
+                ].join("\n\n"),
+              },
+              {
+                role: "user",
+                content: prompt,
+              },
+            ],
+            response_format: { type: "json_object" },
+            temperature: 0.1,
+          }),
+        });
+      } catch {
+        // prossegue para o tratamento padrão caso a retentativa lance exceção
+      }
+    }
+
     if (!resposta.ok) {
       const textoErro = await resposta.text().catch(() => "");
+
+      // Fallback resiliente: se der HTTP 401 na OpenAI e houver GEMINI_API_KEY válida, executa com Gemini
+      const geminiKey = process.env["GEMINI_API_KEY"];
+      if (
+        resposta.status === 401 &&
+        geminiKey &&
+        !this.url.includes("generativelanguage.googleapis.com")
+      ) {
+        try {
+          const fallbackEndpoint =
+            "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
+          const fallbackResposta = await this.buscar(fallbackEndpoint, {
+            method: "POST",
+            headers: {
+              "content-type": "application/json",
+              authorization: `Bearer ${geminiKey}`,
+            },
+            signal: sinal,
+            body: JSON.stringify({
+              model: "gemini-3.6-flash",
+              messages: [
+                {
+                  role: "system",
+                  content: [
+                    "Você é o consultor sênior de inteligência técnica em licitações e contratações públicas brasileiras (Lei nº 14.133/2021 consolidada, atualizada para 2026 pelo Decreto nº 12.807/2025 e jurisprudência pacificada do TCU).",
+                    "Sua missão é auditar os documentos oficiais do certame para defender a segurança jurídica, as margens comerciais e a saúde de caixa da empresa fornecedora/construtora.",
+                    "Utilize a seguinte base doutrinária e jurisprudencial especializada como memória de raciocínio:",
+                    obterMemoriaGuiaTecnico2026(),
+                    "Estruture a análise com rigor cirúrgico e responda exclusivamente em formato JSON válido conforme solicitado.",
+                  ].join("\n\n"),
+                },
+                {
+                  role: "user",
+                  content: prompt,
+                },
+              ],
+              response_format: { type: "json_object" },
+              temperature: 0.1,
+            }),
+          });
+
+          if (fallbackResposta.ok) {
+            const corpoFb = (await fallbackResposta.json()) as {
+              choices?: Array<{ message?: { content?: string } }>;
+            };
+            const conteudoFb = corpoFb.choices?.[0]?.message?.content;
+            if (conteudoFb && conteudoFb.trim().length > 0) {
+              return conteudoFb;
+            }
+          }
+        } catch {
+          // Ignora e continua para o erro original caso o fallback também falhe
+        }
+      }
+
       throw new Error(`Modelo de IA respondeu HTTP ${resposta.status}: ${textoErro.slice(0, 200)}`);
     }
 

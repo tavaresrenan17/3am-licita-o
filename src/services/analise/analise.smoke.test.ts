@@ -45,5 +45,5 @@ describe("Live Smoke Analise (opt-in)", () => {
     expect(resultado.resumoExecutivo.length).toBeGreaterThan(5);
     expect(["favoravel", "atencao", "desfavoravel", "insuficiente"]).toContain(resultado.veredito);
     expect(["alta", "media", "baixa"]).toContain(resultado.confianca);
-  }, 30000);
+  }, 60_000);
 });
