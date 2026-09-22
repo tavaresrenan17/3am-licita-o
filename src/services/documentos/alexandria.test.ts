@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-describe("Rota Alexandria", () => {
+describe("Rota Alexandria e Parâmetros de Seleção", () => {
   it("valida a estrutura de parâmetros e tipos da tela Alexandria", () => {
     const params = {
       ids: "123,456",

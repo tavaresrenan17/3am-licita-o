@@ -546,3 +546,28 @@ export function useLicitacoesAlexandria(params?: {
     staleTime: 60 * 1000,
   });
 }
+
+export function useAnalisarComIa() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      try {
+        const res = await gerarAnaliseLicitacaoFn({ data: { id, forcar: true } });
+        return { ok: true, data: res, motivo: undefined };
+      } catch (err) {
+        return {
+          ok: false,
+          data: undefined,
+          motivo: err instanceof Error ? err.message : String(err),
+        };
+      }
+    },
+    onSuccess: async (_, id) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["licitacao", id] }),
+        queryClient.invalidateQueries({ queryKey: ["analise-licitacao", id] }),
+        queryClient.invalidateQueries({ queryKey: ["licitacoes-alexandria"] }),
+      ]);
+    },
+  });
+}
