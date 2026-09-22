@@ -64,7 +64,6 @@ import { brl, dataBR, dataHoraBR, diaBR, diasRestantes, numero } from "@/lib/for
 import {
   DEFINICOES,
   contarFiltrosAtivos,
-  definicoesDoGrupo,
   filtrosDaBusca,
   paramsDaBusca,
   presetPrazo,
@@ -74,6 +73,7 @@ import { useTriagemTeclado } from "@/hooks/useTriagemTeclado";
 import { Checkbox } from "@/components/ui/checkbox";
 import { BarraAcoesLote } from "@/components/BarraAcoesLote";
 import { StatusDocumentosBadge } from "@/components/StatusDocumentosBadge";
+import { InputMoeda } from "@/components/ui/InputMoeda";
 import { DistanceBadge } from "@/components/geo/DistanceBadge";
 import { FiltroRaioGeografico } from "@/components/geo/FiltroRaioGeografico";
 import { ORIGENS_PREDEFINIDAS, ORIGEM_PADRAO } from "@/lib/geo/cidades";
@@ -1137,9 +1137,7 @@ function LicitacoesSalvas() {
             </div>
             <div className="space-y-1">
               <Label className="text-[11px] font-medium text-muted-foreground">Valor mínimo</Label>
-              <Input
-                type="number"
-                min="0"
+              <InputMoeda
                 placeholder="R$ 0,00"
                 value={filtros.valor_min}
                 onChange={(e) => set("valor_min", e.target.value)}
@@ -1148,9 +1146,7 @@ function LicitacoesSalvas() {
             </div>
             <div className="space-y-1">
               <Label className="text-[11px] font-medium text-muted-foreground">Valor máximo</Label>
-              <Input
-                type="number"
-                min="0"
+              <InputMoeda
                 placeholder="Sem limite"
                 value={filtros.valor_max}
                 onChange={(e) => set("valor_max", e.target.value)}
@@ -1210,60 +1206,7 @@ function LicitacoesSalvas() {
               </div>
             </div>
 
-            {/* --- documentos: "só as que têm edital" é provavelmente o filtro
-                mais útil do sistema, e não existia na tela --- */}
-            <div className="space-y-1">
-              <Label className="text-[11px] font-medium text-muted-foreground">Documentos</Label>
-              <div className="flex flex-col gap-1 pt-1">
-                {definicoesDoGrupo("documentos").map((def) => (
-                  <label key={def.chave} className="flex items-center gap-1.5 text-xs">
-                    <input
-                      type="checkbox"
-                      className="size-3.5"
-                      checked={Boolean(filtros[def.chave])}
-                      onChange={(e) => set(def.chave, e.target.checked as never)}
-                    />
-                    {def.rotulo}
-                  </label>
-                ))}
-              </div>
-            </div>
 
-            {/* --- meu fluxo: `prioridade` é três estados ("", "sim", "nao"),
-                não booleano — desmarcar volta para "" (indiferente), nunca
-                para "nao" --- */}
-            <div className="space-y-1">
-              <Label className="text-[11px] font-medium text-muted-foreground">Meu fluxo</Label>
-              <div className="flex flex-col gap-1 pt-1">
-                <label className="flex items-center gap-1.5 text-xs">
-                  <input
-                    type="checkbox"
-                    className="size-3.5"
-                    checked={Boolean(filtros.recomendadas)}
-                    onChange={(e) => set("recomendadas", e.target.checked)}
-                  />
-                  Só recomendadas
-                </label>
-                <label className="flex items-center gap-1.5 text-xs">
-                  <input
-                    type="checkbox"
-                    className="size-3.5"
-                    checked={Boolean(filtros.nao_analisadas)}
-                    onChange={(e) => set("nao_analisadas", e.target.checked)}
-                  />
-                  Só não analisadas
-                </label>
-                <label className="flex items-center gap-1.5 text-xs">
-                  <input
-                    type="checkbox"
-                    className="size-3.5"
-                    checked={filtros.prioridade === "sim"}
-                    onChange={(e) => set("prioridade", e.target.checked ? "sim" : "")}
-                  />
-                  Só prioritárias
-                </label>
-              </div>
-            </div>
 
             {/* --- entrada no catálogo --- */}
             <div className="space-y-1">

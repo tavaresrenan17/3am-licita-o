@@ -3,7 +3,6 @@ import { useEffect, useState } from "react";
 import {
   AlertTriangle,
   CheckCircle2,
-  FileText,
   History,
   Info,
   Loader2,
@@ -21,7 +20,6 @@ import { UFS } from "@/lib/types";
 import type { SincronizacaoDTO } from "@/lib/dto";
 import { dataBR, dataHoraBR, duracao, numero } from "@/lib/format";
 import {
-  useColetaDocumentos,
   useConfiguracoes,
   useModalidades,
   useSincronizacaoPNCP,
@@ -101,14 +99,6 @@ function SincronizacaoPage() {
     cobertura: coberturaIncremental,
     interromper,
   } = useSincronizacaoPNCP();
-  const {
-    rodando: docsRodando,
-    erro: docsErro,
-    progresso: docsProgresso,
-    cobertura: coberturaQuery,
-    iniciar: coletarDocs,
-    interromper: pararDocs,
-  } = useColetaDocumentos();
 
   const [ufs, setUfs] = useState<string[]>(["SP"]);
   const [mods, setMods] = useState<number[]>([]);
@@ -141,18 +131,6 @@ function SincronizacaoPage() {
   const decorrido = job
     ? (job.finalizado_em ? Date.parse(job.finalizado_em) : agora) - Date.parse(job.inicio_em)
     : 0;
-
-  const cobertura = coberturaQuery.data ?? null;
-  // O que falta é sobre as elegíveis, não sobre o catálogo inteiro: licitação
-  // sem os três identificadores nunca vai sair da fila, e contá-la deixaria a
-  // barra parada em 90% para sempre.
-  const faltamDocs = cobertura
-    ? Math.max(0, cobertura.elegiveis - cobertura.completas - cobertura.com_erro)
-    : 0;
-  const percentualDocs =
-    cobertura && cobertura.elegiveis > 0
-      ? Math.round((cobertura.completas / cobertura.elegiveis) * 100)
-      : 0;
 
   const alternar = <T,>(lista: T[], item: T): T[] =>
     lista.includes(item) ? lista.filter((x) => x !== item) : [...lista, item];
@@ -203,7 +181,8 @@ function SincronizacaoPage() {
         )
       }
     >
-      <div className="grid gap-3 lg:grid-cols-3">
+      <div className="space-y-4">
+        <div className="grid gap-3 lg:grid-cols-3">
         <section className="space-y-3 lg:col-span-2">
           <div className="rounded-lg border border-border bg-card p-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
@@ -512,103 +491,6 @@ function SincronizacaoPage() {
               </p>
             )}
           </div>
-
-          <div className="rounded-lg border border-border bg-card p-4">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div>
-                <h2 className="flex items-center gap-1.5 text-sm font-semibold">
-                  <FileText className="size-4 text-primary" /> Coleta de documentos
-                </h2>
-                <p className="mt-0.5 text-[11px] text-muted-foreground">
-                  Busca os metadados de editais, projetos e orçamentos de cada licitação já salva.
-                  Fila própria: roda depois da sincronização e pode ser retomada a qualquer momento.
-                </p>
-              </div>
-              {docsRodando ? (
-                <Button size="sm" variant="outline" onClick={pararDocs}>
-                  <Square className="mr-1 size-3.5" /> Interromper
-                </Button>
-              ) : (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={coletarDocs}
-                  disabled={rodando || faltamDocs === 0}
-                >
-                  <RefreshCw className="mr-1 size-3.5" />
-                  {faltamDocs === 0 ? "Documentos em dia" : `Coletar (${numero(faltamDocs)})`}
-                </Button>
-              )}
-            </div>
-
-            {cobertura ? (
-              <>
-                <div className="mt-3 flex items-center gap-3">
-                  <Progress value={percentualDocs} className="h-2" />
-                  <span className="num shrink-0 text-xs text-muted-foreground">
-                    {percentualDocs}%
-                  </span>
-                </div>
-
-                <dl className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
-                  {[
-                    [
-                      "Coletadas",
-                      `${numero(cobertura.completas)} / ${numero(cobertura.elegiveis)}`,
-                    ],
-                    ["Documentos", numero(cobertura.documentos_total)],
-                    ["Com edital", numero(cobertura.com_edital)],
-                    [
-                      "Projeto/orçamento",
-                      `${numero(cobertura.com_projeto)} / ${numero(cobertura.com_orcamento)}`,
-                    ],
-                  ].map(([rotulo, valor]) => (
-                    <div key={rotulo}>
-                      <dt className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                        {rotulo}
-                      </dt>
-                      <dd className="num text-sm">{valor}</dd>
-                    </div>
-                  ))}
-                </dl>
-
-                {/* Licitação sem os três identificadores não tem URL possível em
-                    `/arquivos`: dizer isso evita que a barra pareça travada. */}
-                {cobertura.licitacoes_total > cobertura.elegiveis && (
-                  <p className="mt-2 text-[11px] text-muted-foreground">
-                    {numero(cobertura.licitacoes_total - cobertura.elegiveis)} licitação(ões) sem
-                    CNPJ, ano ou sequencial no cabeçalho ficam fora da coleta: a rota de documentos
-                    exige os três identificadores.
-                  </p>
-                )}
-
-                {cobertura.com_erro > 0 && (
-                  <p className="mt-2 flex items-start gap-1.5 text-[11px] text-muted-foreground">
-                    <AlertTriangle className="mt-0.5 size-3 shrink-0" />
-                    {numero(cobertura.com_erro)} licitação(ões) com falha na coleta. A fila tenta de
-                    novo automaticamente depois de algumas horas.
-                  </p>
-                )}
-              </>
-            ) : (
-              <p className="mt-3 text-xs text-muted-foreground">Carregando cobertura…</p>
-            )}
-
-            {docsProgresso && (
-              <p className="num mt-3 text-[11px] text-muted-foreground">
-                {numero(docsProgresso.licitacoesProcessadas)} licitações ·{" "}
-                {numero(docsProgresso.documentosGravados)} documentos ·{" "}
-                {numero(docsProgresso.semDocumentos)} sem anexo no PNCP ·{" "}
-                {duracao(docsProgresso.duracaoMs)}
-              </p>
-            )}
-
-            {docsErro && (
-              <p className="mt-2 flex items-start gap-1.5 text-[11px] text-destructive">
-                <AlertTriangle className="mt-0.5 size-3 shrink-0" /> {docsErro}
-              </p>
-            )}
-          </div>
         </section>
 
         <section className="rounded-lg border border-border bg-card p-4">
@@ -764,6 +646,7 @@ function SincronizacaoPage() {
           </div>
         </section>
       </div>
-    </AppShell>
-  );
+    </div>
+  </AppShell>
+);
 }

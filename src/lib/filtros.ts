@@ -163,14 +163,14 @@ export const DEFINICOES: readonly DefinicaoFiltro[] = [
     rotulo: "Valor mínimo",
     grupo: "valor",
     tipo: "moeda",
-    descrever: (v) => `A partir de ${brl(Number(v))}`,
+    descrever: (v) => `A partir de ${brl(v as string)}`,
   },
   {
     chave: "valor_max",
     rotulo: "Valor máximo",
     grupo: "valor",
     tipo: "moeda",
-    descrever: (v) => `Até ${brl(Number(v))}`,
+    descrever: (v) => `Até ${brl(v as string)}`,
   },
   {
     chave: "modalidade",

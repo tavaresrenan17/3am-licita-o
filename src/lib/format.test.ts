@@ -1,5 +1,35 @@
 import { describe, expect, it } from "vitest";
-import { dataBR, sincronizacaoEstaAtualizada } from "./format";
+import { brl, dataBR, formatarMoedaBRL, parseMoeda, sincronizacaoEstaAtualizada } from "./format";
+
+describe("formatarMoedaBRL e parseMoeda", () => {
+  it("formata números inteiros e decimais com padrão R$ 000.000.000,00", () => {
+    expect(formatarMoedaBRL(1000000)).toBe("R$ 1.000.000,00");
+    expect(formatarMoedaBRL(50000.5)).toBe("R$ 50.000,50");
+    expect(formatarMoedaBRL("50000")).toBe("R$ 50.000,00");
+    expect(formatarMoedaBRL("1000000")).toBe("R$ 1.000.000,00");
+    expect(formatarMoedaBRL("1.000.000,00")).toBe("R$ 1.000.000,00");
+  });
+
+  it("converte strings monetárias variadas para número", () => {
+    expect(parseMoeda("R$ 1.000.000,00")).toBe(1000000);
+    expect(parseMoeda("1.000.000,00")).toBe(1000000);
+    expect(parseMoeda("1000000")).toBe(1000000);
+    expect(parseMoeda("50000,50")).toBe(50000.5);
+    expect(parseMoeda("50000.50")).toBe(50000.5);
+    expect(parseMoeda("")).toBeNull();
+    expect(parseMoeda(null)).toBeNull();
+    expect(parseMoeda(undefined)).toBeNull();
+  });
+
+  it("brl devolve 'Não informado' para valores vazios/nulos e formata corretamente", () => {
+    expect(brl(null)).toBe("Não informado");
+    expect(brl(undefined)).toBe("Não informado");
+    expect(brl("")).toBe("Não informado");
+    expect(brl(0)).toBe("R$ 0,00");
+    expect(brl(120684000)).toBe("R$ 120.684.000,00");
+    expect(brl("120684000")).toBe("R$ 120.684.000,00");
+  });
+});
 
 describe("sincronizacaoEstaAtualizada", () => {
   const agora = Date.parse("2026-09-16T15:00:00.000Z");

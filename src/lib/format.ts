@@ -1,15 +1,71 @@
+/**
+ * Converte qualquer valor em número monetário (BRL ou decimal).
+ * Suporta formatos como:
+ * - "R$ 1.000.000,00" -> 1000000
+ * - "1.000.000,00" -> 1000000
+ * - "1000000" -> 1000000
+ * - "1000,50" -> 1000.5
+ * - "1000.50" -> 1000.5
+ * - 1000 -> 1000
+ */
+export const parseMoeda = (v: number | string | null | undefined): number | null => {
+  if (v === null || v === undefined || v === "") return null;
+  if (typeof v === "number") return Number.isNaN(v) ? null : v;
+  const str = String(v).trim();
+  if (!str) return null;
+  const limpo = str.replace(/[^\d.,]/g, "");
+  if (!limpo) return null;
+  if (limpo.includes(",")) {
+    const normalizado = limpo.replace(/\./g, "").replace(",", ".");
+    const n = Number(normalizado);
+    return Number.isNaN(n) ? null : n;
+  }
+  const partes = limpo.split(".");
+  if (partes.length > 2) {
+    const n = Number(limpo.replace(/\./g, ""));
+    return Number.isNaN(n) ? null : n;
+  }
+  if (partes.length === 2 && partes[1].length === 3) {
+    const n = Number(limpo.replace(/\./g, ""));
+    return Number.isNaN(n) ? null : n;
+  }
+  const n = Number(limpo);
+  return Number.isNaN(n) ? null : n;
+};
+
+/**
+ * Formata um valor monetário para o padrão oficial BRL: R$ 000.000.000,00
+ * Garante espaço simples e formato com vírgula para centavos.
+ * Se o valor for vazio/nulo, devolve string vazia ("").
+ */
+export const formatarMoedaBRL = (v: number | string | null | undefined): string => {
+  const num = parseMoeda(v);
+  if (num === null) return "";
+  return new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })
+    .format(num)
+    .replace(/\u00a0/g, " ");
+};
+
 // Valores em R$ sempre completos, com centavos (ex.: R$ 120.684.000,00).
-// Nulo significa valor não divulgado pelo PNCP (inclusive orçamento sigiloso):
+// Nulo ou não informado significa valor não divulgado pelo PNCP (inclusive orçamento sigiloso):
 // mostrar isso é diferente de mostrar R$ 0,00.
-export const brl = (v: number | null | undefined) =>
-  v === null || v === undefined
-    ? "Não informado"
-    : new Intl.NumberFormat("pt-BR", {
-        style: "currency",
-        currency: "BRL",
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-      }).format(v);
+export const brl = (v: number | string | null | undefined): string => {
+  const num = parseMoeda(v);
+  if (num === null) return "Não informado";
+  return new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })
+    .format(num)
+    .replace(/\u00a0/g, " ");
+};
 
 /**
  * Data ISO no formato brasileiro, ou "—" quando não dá para formatar.
