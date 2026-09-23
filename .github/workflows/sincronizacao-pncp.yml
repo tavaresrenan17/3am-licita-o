@@ -3,6 +3,10 @@ name: Sincronização PNCP
 on:
   schedule:
     # UTC: incremental a cada 3 h, exceto a janela reservada à carga diária.
+    # O agendador do GitHub não é pontual: de 18 a 23/09/2026 disparou 3 a 6 dos
+    # 8 horários por dia, com 1,5 a 3 h de atraso (a diária das 06:47 UTC rodou
+    # entre 12:03 e 13:21 UTC). Por isso cada execução tem janela longa: se um
+    # horário é pulado, a execução anterior ainda está sondando o PNCP.
     - cron: "17 0,3,9,12,15,18,21 * * *"
     # 06:47 UTC = 03:47 em São Paulo. Minutos diferentes evitam a fila da hora cheia.
     - cron: "47 6 * * *"
@@ -29,16 +33,19 @@ jobs:
   incremental:
     if: github.event.schedule == '17 0,3,9,12,15,18,21 * * *' || (github.event_name == 'workflow_dispatch' && inputs.modo == 'incremental')
     runs-on: ubuntu-latest
-    timeout-minutes: 80
+    timeout-minutes: 170
     env:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-      SYNC_MAX_RUNTIME_MS: "4200000"
+      # 2 h 40 min: tempo de esperar o PNCP voltar, que em 23/09/2026 ficou fora
+      # por horas e voltou em janelas de 1,5 a 4 min. Repositório público não
+      # paga minutos do Actions.
+      SYNC_MAX_RUNTIME_MS: "9600000"
     steps:
       - name: Baixar projeto
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: Configurar Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
@@ -62,9 +69,9 @@ jobs:
       SYNC_MAX_RUNTIME_MS: "9000000"
     steps:
       - name: Baixar projeto
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: Configurar Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
