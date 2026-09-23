@@ -65,6 +65,8 @@ async function main() {
 
   const repo = await import("../src/services/pncp/repositorio.server");
   const { executarTick } = await import("../src/services/pncp/worker.server");
+  const { decidirProximoTick, fonteSegueInstavel, LIMITE_TICKS_FALHOS_SEM_JANELA } =
+    await import("../src/services/pncp/conducao");
   const planner = await import("../src/services/pncp/planner");
 
   const cfg = await repo.obterConfiguracoes();
@@ -147,6 +149,12 @@ async function main() {
   const total = { paginas: 0, recebidos: 0, novos: 0, atualizados: 0, naoAdmitidos: 0 };
   const inicio = Date.now();
   const limiteExecucaoMs = Number(process.env["SYNC_MAX_RUNTIME_MS"] ?? 0);
+  // Com janela do agendador (SYNC_MAX_RUNTIME_MS), quem limita é a janela: o
+  // PNCP volta por poucos minutos de cada vez, e sondar até o fim dela é o que
+  // pega essas voltas. Execução manual desiste depois de uns 15 min de fonte fora.
+  const limiteTicksFalhos =
+    limiteExecucaoMs > 0 ? Number.POSITIVE_INFINITY : LIMITE_TICKS_FALHOS_SEM_JANELA;
+  let fonteInstavel = false;
 
   try {
     // Teto de segurança: nunca laçar indefinidamente atrás de um conjunto que
@@ -167,7 +175,9 @@ async function main() {
         // contra o PNCP continua vindo de `intervaloPartidaMs`.
         orcamentoMs: 600_000,
         reservaMs: 90_000,
+        fonteInstavel,
       });
+      fonteInstavel = fonteSegueInstavel(resumo, fonteInstavel);
 
       total.paginas += resumo.paginasAplicadas;
       total.recebidos += resumo.recebidos;
@@ -192,24 +202,37 @@ async function main() {
       );
       if (resumo.erros.length > 0) log(`  primeiro erro: ${resumo.erros[0]}`);
 
-      if (resumo.jobConcluido) {
+      const decisao = decidirProximoTick(resumo, {
+        falhasSeguidas: ticksErroSeguidos,
+        limiteFalhas: limiteTicksFalhos,
+        restanteJanelaMs:
+          limiteExecucaoMs > 0
+            ? limiteExecucaoMs - (Date.now() - inicio)
+            : Number.POSITIVE_INFINITY,
+      });
+
+      if (decisao.acao === "concluir") {
         concluido = true;
         break;
       }
+      if (decisao.acao === "pausar") {
+        motivo = decisao.motivo;
+        manterParaRetomada = true;
+        log(`Encerrando: ${decisao.motivo}. Rodar de novo retoma daqui.`);
+        break;
+      }
 
-      if (resumo.paginasAplicadas > 0) {
-        ticksErroSeguidos = 0;
-      } else if (resumo.erros.length > 0) {
-        ticksErroSeguidos++;
-        if (ticksErroSeguidos >= 5) {
-          motivo = `Fonte instável após 5 tentativas: ${resumo.erros[0] ?? "falha na coleta"}`;
-          manterParaRetomada = true;
-          log("Encerrando: a fonte não respondeu após 5 tentativas seguidas. Rodar de novo retoma daqui.");
-          break;
-        }
-        log(`Aviso: tick sem avanço (${ticksErroSeguidos}/5). Aguardando 5s para o próximo tick...`);
-        await new Promise((r) => setTimeout(r, 5_000));
-        continue;
+      ticksErroSeguidos = decisao.falhasSeguidas;
+      if (decisao.esperaMs > 0) {
+        log(
+          (resumo.metricasApi.requisicoes > 0
+            ? `Aviso: tick sem avanço (${ticksErroSeguidos}` +
+              (Number.isFinite(limiteTicksFalhos) ? `/${limiteTicksFalhos}` : "") +
+              "). "
+            : "Segmentos em espera após falha do PNCP. ") +
+            `Próxima tentativa em ${Math.round(decisao.esperaMs / 1000)}s...`,
+        );
+        await new Promise((r) => setTimeout(r, decisao.esperaMs));
       }
     }
   } catch (e) {

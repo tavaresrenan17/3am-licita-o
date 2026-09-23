@@ -209,6 +209,36 @@ interface LinhaSegmento {
   total_paginas_observado: number | null;
 }
 
+interface EstadoFalhaSegmento {
+  tentativas: number | null;
+  ultimo_erro: string | null;
+}
+
+/**
+ * Falhas SEGUIDAS do segmento e o cooldown que elas merecem.
+ *
+ * `tentativas` conta a sequência atual, não o histórico do job: o merge de uma
+ * página limpa `ultimo_erro` (mas não `tentativas`), então erro nulo significa
+ * que houve página gravada depois da última falha e a sequência recomeça. Sem
+ * isso, a modalidade 6 de SP — 75 páginas — juntava falhas esparsas ao longo do
+ * job e passava a ficar 15 min parada a cada soluço do PNCP (23/09/2026).
+ *
+ * Espera: 15 s, 30 s, depois 1 min fixo. O teto já foi de 15 min e de 5 min,
+ * mas em 23/09/2026 o PNCP voltou por janelas de 1,5 a 4 min (09:18, 12:17,
+ * 14:22, 14:53) e a sondagem espaçada percebia a volta tarde ou nem percebia.
+ * Enquanto a fonte está fora, o worker manda cada página como sonda de uma
+ * tentativa só (`fonteInstavel`), então uma requisição por minuto não pesa.
+ */
+export function proximaFalhaSegmento(anterior: EstadoFalhaSegmento | null): {
+  tentativas: number;
+  esperaMs: number;
+} {
+  const sequenciaAberta = anterior?.ultimo_erro != null;
+  const tentativas = (sequenciaAberta ? (anterior?.tentativas ?? 0) : 0) + 1;
+  const esperaMs = tentativas <= 2 ? 15_000 * tentativas : 60_000;
+  return { tentativas, esperaMs };
+}
+
 export function portaIngestao(): PortaIngestao {
   return {
     async proximoSegmento(jobId: string): Promise<SegmentoPersistido | null> {
@@ -292,18 +322,10 @@ export function portaIngestao(): PortaIngestao {
     async registrarFalhaSegmento(segmentoId, motivo, definitiva): Promise<void> {
       const { data } = await db()
         .from("ingestao_segmentos")
-        .select("tentativas")
+        .select("tentativas, ultimo_erro")
         .eq("id", segmentoId)
         .maybeSingle();
-      const tentativas = ((data as { tentativas?: number } | null)?.tentativas ?? 0) + 1;
-      // Cooldown progressivo: primeira falha 15 s, segunda 30 s, depois
-      // exponencial (60 s, 2 min, 4 min) até o teto de 15 min. O cooldown
-      // anterior de 60 s para a primeira falha causava ciclo morto no
-      // frontend, que desistia antes do segmento voltar à fila.
-      const esperaMs =
-        tentativas <= 2
-          ? 15_000 * tentativas // 15 s, 30 s
-          : Math.min(15 * 60_000, 60_000 * 2 ** Math.min(tentativas - 3, 4)); // 60 s, 2 min, ...
+      const { tentativas, esperaMs } = proximaFalhaSegmento(data as EstadoFalhaSegmento | null);
 
       const { error } = await db()
         .from("ingestao_segmentos")

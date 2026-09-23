@@ -350,7 +350,9 @@ export const iniciarSincronizacaoFn = createServerFn({ method: "POST" })
   });
 
 export const executarTickFn = createServerFn({ method: "POST" })
-  .validator((d: unknown) => z.object({ jobId: z.string().uuid() }).parse(d))
+  .validator((d: unknown) =>
+    z.object({ jobId: z.string().uuid(), fonteInstavel: z.boolean().optional() }).parse(d),
+  )
   .handler(async ({ data }) => {
     const repo = await getRepo();
     const { executarTick } = await getWorker();
@@ -364,6 +366,7 @@ export const executarTickFn = createServerFn({ method: "POST" })
         score_peso_documentos: cfg.score_peso_documentos,
         score_peso_valor: cfg.score_peso_valor,
       },
+      fonteInstavel: data.fonteInstavel ?? false,
     });
 
     // A fronteira de cobertura só avança no fim, e só nas partições que

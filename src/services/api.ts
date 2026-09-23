@@ -22,6 +22,11 @@ import type {
 } from "@/lib/dto";
 import type { FiltrosLicitacoes, OrdenacaoCampo, StatusInterno } from "@/lib/types";
 import {
+  decidirProximoTick,
+  fonteSegueInstavel,
+  LIMITE_TICKS_FALHOS_SEM_JANELA,
+} from "./pncp/conducao";
+import {
   atualizarInternoFn,
   buscarLicitacoesFn,
   coberturaDocumentosFn,
@@ -295,59 +300,42 @@ export function useSincronizacaoPNCP() {
 
         // Teto de segurança: nunca laçar indefinidamente atrás de um conjunto
         // que pode estar mudando na fonte.
-        let ticksCooldownSeguidos = 0;
         let ticksErroSeguidos = 0;
-        const MAX_COOLDOWN_RETRIES = 5;
-        const MAX_ERRO_RETRIES = 5;
+        let fonteInstavel = false;
 
         for (let volta = 0; volta < 300; volta++) {
           if (cancelado.current) break;
 
-          const resumo = await executarTickFn({ data: { jobId } });
+          const resumo = await executarTickFn({ data: { jobId, fonteInstavel } });
+          fonteInstavel = fonteSegueInstavel(resumo, fonteInstavel);
           await atualizarTelas();
 
-          if (resumo.jobConcluido) {
+          // Mesma regra da rotina agendada: esperar o cooldown do segmento não
+          // é falha; só conta o tick que chamou o PNCP e não gravou nada.
+          const decisao = decidirProximoTick(resumo, {
+            falhasSeguidas: ticksErroSeguidos,
+            limiteFalhas: LIMITE_TICKS_FALHOS_SEM_JANELA,
+            restanteJanelaMs: Number.POSITIVE_INFINITY,
+          });
+
+          if (decisao.acao === "concluir") {
             concluido = true;
             break;
           }
-
-          // Tick fez progresso: resetar contadores e continuar.
-          if (resumo.paginasAplicadas > 0) {
-            ticksCooldownSeguidos = 0;
-            ticksErroSeguidos = 0;
-            continue;
+          if (decisao.acao === "pausar") {
+            motivo = decisao.motivo;
+            manterParaRetomada = true;
+            setErro(
+              `Instabilidade temporária no PNCP: ${resumo.erros[0] ?? "falha na coleta"}. A sincronização foi pausada e pode ser retomada.`,
+            );
+            break;
           }
 
-          // Tick sem progresso — distinguir cooldown de falha transitória
-          if (resumo.aguardandoCooldown) {
-            ticksCooldownSeguidos++;
-            if (ticksCooldownSeguidos >= MAX_COOLDOWN_RETRIES) {
-              motivo = "PNCP temporariamente sobrecarregado (cooldown de segurança atingido)";
-              manterParaRetomada = true;
-              setErro(
-                "Fonte sob alta carga. A sincronização foi pausada para preservar o progresso e poderá ser retomada em instantes.",
-              );
-              break;
-            }
-            // Esperar 6 s e tentar outro tick — o cooldown no banco pode ter passado
-            await new Promise((r) => setTimeout(r, 6_000));
-            continue;
-          }
-
-          // Tick sem progresso e com erros: tolerar até MAX_ERRO_RETRIES antes de pausar
-          if (resumo.erros.length > 0) {
-            ticksErroSeguidos++;
-            if (ticksErroSeguidos >= MAX_ERRO_RETRIES) {
-              motivo = `Fonte instável após ${MAX_ERRO_RETRIES} tentativas: ${resumo.erros[0] ?? "falha na coleta"}`;
-              manterParaRetomada = true;
-              setErro(
-                `Instabilidade temporária no PNCP: ${resumo.erros[0] ?? "falha na coleta"}. A sincronização foi pausada e pode ser retomada.`,
-              );
-              break;
-            }
-            // Espera breve para o servidor do PNCP respirar antes da próxima tentativa
-            await new Promise((r) => setTimeout(r, 4_000));
-            continue;
+          ticksErroSeguidos = decisao.falhasSeguidas;
+          // Em fatias, para o botão de interromper não ficar preso num cooldown longo.
+          const fim = Date.now() + decisao.esperaMs;
+          while (!cancelado.current && Date.now() < fim) {
+            await new Promise((r) => setTimeout(r, Math.min(1_000, fim - Date.now())));
           }
 
           if (volta === 299) motivo = "Teto de ciclos do navegador atingido";

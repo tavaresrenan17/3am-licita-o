@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { PALAVRAS_CHAVE_PADRAO } from "@/lib/types";
-import { ErroContratoPNCP, type ResultadoPagina } from "./client.server";
+import { ErroContratoPNCP, type buscarPagina, type ResultadoPagina } from "./client.server";
 import type { ContratacaoPNCP } from "./mapper";
 import {
   executarTick,
@@ -785,5 +785,82 @@ describe("cooldown e resiliência", () => {
     expect(r.aguardandoCooldown).toBe(true);
     expect(r.erros.length).toBeGreaterThan(0);
   });
-});
 
+  it("com a fonte fora, encerra o tick após duas falhas seguidas em vez de varrer todos os segmentos", async () => {
+    // Logs de 21 a 23/09/2026: com o PNCP devolvendo 504, cada tick passava por
+    // 7 ou 8 modalidades, ~76 s cada, antes de desistir — carga inútil sobre
+    // uma fonte que já estava caindo.
+    const { banco } = bancoFalso(["s1", "s2", "s3", "s4", "s5"].map(segmento));
+    const buscar = vi.fn().mockRejectedValue(new Error("HTTP 504"));
+
+    const r = await executarTick("job-1", { banco, cfg, buscar, ...relogio() });
+
+    expect(buscar).toHaveBeenCalledTimes(2);
+    expect(r.paginasAplicadas).toBe(0);
+    expect(r.jobConcluido).toBe(false);
+  });
+
+  it("uma resposta boa entre duas falhas zera a sequência do disjuntor", async () => {
+    const { banco } = bancoFalso(["s1", "s2", "s3", "s4"].map(segmento));
+    const buscar = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("HTTP 504"))
+      .mockResolvedValueOnce(pagina([contratacao(2)], 1))
+      .mockRejectedValueOnce(new Error("HTTP 504"))
+      .mockResolvedValueOnce(pagina([contratacao(4)], 1));
+
+    const r = await executarTick("job-1", { banco, cfg, buscar, ...relogio() });
+
+    expect(buscar).toHaveBeenCalledTimes(4);
+    expect(r.paginasAplicadas).toBe(2);
+  });
+
+  it("com a fonte em falha, a requisição vira sonda de uma tentativa só", async () => {
+    // Com o PNCP fora, três tentativas de 25 s custavam ~77 s por sonda sem
+    // mudar o resultado. Uma basta para saber se ele voltou.
+    const { banco } = bancoFalso([segmento("s1")]);
+    const buscar = vi.fn().mockRejectedValue(new Error("HTTP 502"));
+
+    await executarTick("job-1", { banco, cfg, buscar, fonteInstavel: true, ...relogio() });
+
+    expect(buscar.mock.calls[0]![2]).toMatchObject({ tentativasMax: 1 });
+  });
+
+  it("uma resposta boa tira do modo sonda e as páginas seguintes voltam a ter novas tentativas", async () => {
+    const { banco } = bancoFalso([segmento("s1")]);
+    const buscar = vi.fn<typeof buscarPagina>(async () => pagina([contratacao(1)], 2));
+
+    await executarTick("job-1", { banco, cfg, buscar, fonteInstavel: true, ...relogio() });
+
+    expect(buscar).toHaveBeenCalledTimes(2);
+    expect(buscar.mock.calls[0]![2]).toMatchObject({ tentativasMax: 1 });
+    expect(buscar.mock.calls[1]![2]).not.toHaveProperty("tentativasMax");
+  });
+
+  it("uma falha no meio do tick faz a requisição seguinte sair como sonda", async () => {
+    const { banco } = bancoFalso([segmento("s1"), segmento("s2")]);
+    const buscar = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("HTTP 504"))
+      .mockResolvedValueOnce(pagina([contratacao(2)], 1));
+
+    await executarTick("job-1", { banco, cfg, buscar, ...relogio() });
+
+    expect(buscar.mock.calls[0]![2]).not.toHaveProperty("tentativasMax");
+    expect(buscar.mock.calls[1]![2]).toMatchObject({ tentativasMax: 1 });
+  });
+
+  it("informa quanto falta para o próximo segmento sair do cooldown", async () => {
+    // Quem conduz os ticks precisa desse número para esperar o tempo certo em
+    // vez de desistir depois de poucos segundos.
+    const { banco } = bancoFalso([segmento("s1")]);
+    banco.haSegmentosPendentes = vi.fn(async () => true);
+    banco.proximoCooldown = vi.fn(async () => 14 * 60_000);
+    const buscar = vi.fn().mockRejectedValue(new Error("HTTP 504"));
+
+    const r = await executarTick("job-1", { banco, cfg, buscar, ...relogio() });
+
+    expect(r.aguardandoCooldown).toBe(true);
+    expect(r.proximaTentativaEmMs).toBe(14 * 60_000);
+  });
+});

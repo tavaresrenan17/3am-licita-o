@@ -9,7 +9,8 @@
  * - a rede acontece FORA da transação; o commit é a RPC `pncp_merge_page`;
  * - falha antes do commit não avança checkpoint — a página é relida no próximo tick;
  * - 400/422 é falha de contrato: o segmento morre, o tick continua nos outros;
- * - falha transitória encerra o tick e preserva o progresso já commitado;
+ * - falha transitória adia só aquele segmento; duas seguidas, sem página boa
+ *   entre elas, encerram o tick (a fonte está fora, não é uma modalidade lenta);
  * - registro sem identidade não derruba o lote inteiro.
  */
 import {
@@ -157,6 +158,11 @@ export interface OpcoesTick {
   /** Tempo mínimo que precisa sobrar para tentar mais uma página. */
   reservaMs?: number;
   maxPaginasPorTick?: number;
+  /**
+   * A última chamada ao PNCP, antes deste tick, falhou. Quem conduz os ticks
+   * sabe disso; o worker começa então em modo sonda (ver `sondarComUmaTentativa`).
+   */
+  fonteInstavel?: boolean;
 }
 
 export interface ResumoTick {
@@ -172,6 +178,8 @@ export interface ResumoTick {
   /** true quando o tick parou sem progresso porque todos os segmentos estão
    *  em cooldown após falha transitória. Distingue de "falha real" no frontend. */
   aguardandoCooldown: boolean;
+  /** Ms até o próximo segmento sair do cooldown, quando o tick parou por isso. */
+  proximaTentativaEmMs: number | null;
   erros: string[];
   duracaoMs: number;
   metricasApi: MetricasApiTick;
@@ -210,6 +218,11 @@ const PADRAO = {
   // Concorrência estrita em 1: os testes em tempo real comprovaram que qualquer
   // concorrência simultânea contra o PNCP satura o HikariPool federal e dispara falhas 500.
   concorrenciaMax: 1,
+  // Falhas transitórias seguidas, sem nenhuma página boa entre elas, que
+  // encerram o tick. Uma falha isolada é modalidade lenta e as outras seguem;
+  // duas seguidas é a fonte fora — nos logs de 21 a 23/09/2026 cada tick passava
+  // por 7 ou 8 modalidades, ~76 s cada, contra um PNCP que só devolvia 504.
+  falhasSeguidasParaEncerrar: 2,
   sucessosParaAquecerConcorrencia: 10,
   sucessosParaRestaurarConcorrencia: 10,
 };
@@ -294,6 +307,7 @@ export async function executarTick(jobId: string, opcoes: OpcoesTick): Promise<R
     segmentosConcluidos: 0,
     jobConcluido: false,
     aguardandoCooldown: false,
+    proximaTentativaEmMs: null,
     erros: [],
     duracaoMs: 0,
     metricasApi: {
@@ -480,6 +494,13 @@ export async function executarTick(jobId: string, opcoes: OpcoesTick): Promise<R
   let requisicoesEmVoo = 0;
   const falhosNesteTick = new Set<string>();
   let aguardandoCooldown = false;
+  let falhasTransitoriasSeguidas = 0;
+  // Modo sonda: enquanto a última chamada ao PNCP tiver falhado, cada página sai
+  // com uma única tentativa. Com a fonte fora, as três tentativas de 25 s levavam
+  // ~77 s por sonda sem mudar o resultado (23/09/2026). A sonda é a própria
+  // página seguinte, então, se a fonte voltou, ela já grava. O timeout continua
+  // o mesmo: encurtá-lo impediria de perceber uma fonte lenta mas funcionando.
+  let sondarComUmaTentativa = opcoes.fonteInstavel ?? false;
 
   const processarPagina = async (segmento: SegmentoPersistido): Promise<ResultadoProcessamento> => {
     try {
@@ -495,7 +516,13 @@ export async function executarTick(jobId: string, opcoes: OpcoesTick): Promise<R
           requisicoesEmVoo,
         );
         try {
-          resposta = await buscar(segmento.endpoint, params, { orcamentoMs: restante() });
+          resposta = await buscar(
+            segmento.endpoint,
+            params,
+            sondarComUmaTentativa
+              ? { orcamentoMs: restante(), tentativasMax: 1 }
+              : { orcamentoMs: restante() },
+          );
         } finally {
           requisicoesEmVoo--;
         }
@@ -509,6 +536,7 @@ export async function executarTick(jobId: string, opcoes: OpcoesTick): Promise<R
         );
         resumo.metricasApi.falhasConsecutivas = 0;
         resumo.metricasApi.reiniciarFalhasConsecutivas = true;
+        sondarComUmaTentativa = false;
         somarFalhas(resposta.falhas);
 
         const falhasDaPagina = resposta.falhas
@@ -578,6 +606,7 @@ export async function executarTick(jobId: string, opcoes: OpcoesTick): Promise<R
 
         await medirAdministracaoDb(() => banco.registrarFalhaSegmento(segmento.id, motivo, false));
         falhosNesteTick.add(segmento.id);
+        sondarComUmaTentativa = true;
         resumo.erros.push(`${segmento.id}: ${motivo}`);
         // A falha pertence a este segmento. Ele entra em cooldown no banco e
         // não impede que modalidades independentes continuem neste tick.
@@ -704,6 +733,11 @@ export async function executarTick(jobId: string, opcoes: OpcoesTick): Promise<R
       await tentarFlushMetricas();
     }
     if (resultados.includes("parar")) break;
+    for (const resultado of resultados) {
+      if (resultado === "ok") falhasTransitoriasSeguidas = 0;
+      else if (resultado === "transitoria") falhasTransitoriasSeguidas++;
+    }
+    if (falhasTransitoriasSeguidas >= PADRAO.falhasSeguidasParaEncerrar) break;
   }
 
   await tentarFlushMetricas(true);
@@ -717,6 +751,10 @@ export async function executarTick(jobId: string, opcoes: OpcoesTick): Promise<R
         resumo.aguardandoCooldown = true;
       }
     }
+  }
+
+  if (resumo.aguardandoCooldown && banco.proximoCooldown) {
+    resumo.proximaTentativaEmMs = await medirAdministracaoDb(() => banco.proximoCooldown!(jobId));
   }
 
   if (resumo.jobConcluido) {
