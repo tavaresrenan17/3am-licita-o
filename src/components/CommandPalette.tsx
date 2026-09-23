@@ -12,6 +12,9 @@ import {
   Sparkles,
   Star,
   Table2,
+  Moon,
+  Sun,
+  Monitor,
 } from "lucide-react";
 import {
   CommandDialog,
@@ -24,6 +27,7 @@ import {
   CommandShortcut,
 } from "@/components/ui/command";
 import { diaBR } from "@/lib/format";
+import { useTheme } from "@/lib/theme";
 
 export function CommandPalette({
   open,
@@ -34,6 +38,7 @@ export function CommandPalette({
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const navigate = useNavigate();
+  const { theme, resolvedTheme, setTheme, toggleTheme } = useTheme();
 
   const aberto = open !== undefined ? open : isOpen;
   const setAberto = onOpenChange || setIsOpen;
@@ -155,6 +160,54 @@ export function CommandPalette({
             <Keyboard className="mr-2.5 size-4 text-muted-foreground" />
             <span>Ver Atalhos de Triagem Rápida</span>
             <CommandShortcut>?</CommandShortcut>
+          </CommandItem>
+        </CommandGroup>
+
+        <CommandSeparator />
+
+        <CommandGroup heading="Aparência e Tema">
+          <CommandItem
+            onSelect={() => {
+              toggleTheme();
+              setAberto(false);
+            }}
+          >
+            {resolvedTheme === "dark" ? (
+              <Sun className="mr-2.5 size-4 text-amber-500" />
+            ) : (
+              <Moon className="mr-2.5 size-4 text-primary" />
+            )}
+            <span>Alternar Tema (Atual: {theme === "system" ? "Automático" : theme === "dark" ? "Escuro" : "Claro"})</span>
+          </CommandItem>
+
+          <CommandItem
+            onSelect={() => {
+              setTheme("light");
+              setAberto(false);
+            }}
+          >
+            <Sun className="mr-2.5 size-4 text-amber-500" />
+            <span>Modo Claro</span>
+          </CommandItem>
+
+          <CommandItem
+            onSelect={() => {
+              setTheme("dark");
+              setAberto(false);
+            }}
+          >
+            <Moon className="mr-2.5 size-4 text-primary" />
+            <span>Modo Escuro</span>
+          </CommandItem>
+
+          <CommandItem
+            onSelect={() => {
+              setTheme("system");
+              setAberto(false);
+            }}
+          >
+            <Monitor className="mr-2.5 size-4 text-muted-foreground" />
+            <span>Tema do Sistema (Automático)</span>
           </CommandItem>
         </CommandGroup>
       </CommandList>

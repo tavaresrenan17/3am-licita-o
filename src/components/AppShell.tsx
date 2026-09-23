@@ -18,6 +18,7 @@ import { dataHoraBR, numero } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { CommandPalette } from "@/components/CommandPalette";
 import { AtalhosModal } from "@/components/AtalhosModal";
+import { ThemeToggle, ThemeSegmentedControl } from "@/components/ThemeToggle";
 
 const NAV: { to: string; label: string; icon: LucideIcon }[] = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -136,6 +137,8 @@ export function AppShell({
             >
               <Keyboard className="size-3.5" />
             </button>
+
+            <ThemeToggle />
 
             {acoes}
           </div>
@@ -266,24 +269,40 @@ function Sidebar({ onOpenPalette }: { onOpenPalette: () => void }) {
         })}
       </nav>
 
-      {!recolhida && (
-        <div className="mt-auto space-y-2.5 border-t border-sidebar-border/80 px-4 py-4 text-[11px] text-sidebar-foreground/60">
-          <div className="flex items-center justify-between">
-            <span>Licitações no banco</span>
-            <span className="num font-semibold text-sidebar-foreground">
-              {metricas ? numero(metricas.total) : "—"}
-            </span>
+      <div
+        className={cn(
+          "mt-auto border-t border-sidebar-border/80",
+          recolhida ? "p-2 flex justify-center" : "px-4 py-3",
+        )}
+      >
+        {!recolhida ? (
+          <div className="space-y-2.5 text-[11px] text-sidebar-foreground/60">
+            <div className="flex items-center justify-between">
+              <span>Licitações no banco</span>
+              <span className="num font-semibold text-sidebar-foreground">
+                {metricas ? numero(metricas.total) : "—"}
+              </span>
+            </div>
+            <div>
+              <p>Última sincronização</p>
+              <p className="num text-sidebar-foreground">
+                {sync?.status === "em_andamento"
+                  ? "em andamento…"
+                  : dataHoraBR(sync?.finalizado_em ?? null)}
+              </p>
+            </div>
+            <div className="pt-2 border-t border-sidebar-border/60 space-y-1.5">
+              <span className="text-[11px] font-medium text-sidebar-foreground/80">Tema</span>
+              <ThemeSegmentedControl />
+            </div>
           </div>
-          <div>
-            <p>Última sincronização</p>
-            <p className="num text-sidebar-foreground">
-              {sync?.status === "em_andamento"
-                ? "em andamento…"
-                : dataHoraBR(sync?.finalizado_em ?? null)}
-            </p>
-          </div>
-        </div>
-      )}
+        ) : (
+          <ThemeToggle
+            mode="toggle"
+            className="size-8 border-sidebar-border bg-sidebar-accent/60 text-sidebar-foreground hover:bg-sidebar-accent"
+          />
+        )}
+      </div>
     </aside>
   );
 }
