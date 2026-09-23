@@ -7,13 +7,19 @@ cd /d "%~dp0.."
 set "LOG=%~dp0..\logs"
 if not exist "%LOG%" mkdir "%LOG%"
 
+rem Arquivo proprio, separado da rotina de 3 h: quando o PC acorda depois de
+rem horarios perdidos, as duas tarefas disparam juntas, e dois cmd anexando no
+rem mesmo arquivo com >> disputam o arquivo e um deles perde a saida.
 for /f %%d in ('powershell -NoProfile -Command "Get-Date -Format yyyy-MM-dd"') do set "HOJE=%%d"
-set "ARQ=%LOG%\rotina-%HOJE%.log"
+set "ARQ=%LOG%\diaria-%HOJE%.log"
 
 echo ================================================= >> "%ARQ%"
 echo Reconciliacao diaria iniciada em %DATE% %TIME% >> "%ARQ%"
 echo. >> "%ARQ%"
 echo --- descoberta completa SP / 30 dias --- >> "%ARQ%"
+rem Janela de 1 h 30 min para a coleta; o restante das 4 h da tarefa fica para
+rem documentos e embeddings.
+set "SYNC_MAX_RUNTIME_MS=5400000"
 call npm run sincronizar -- --uf SP --horizonte 30 >> "%ARQ%" 2>&1
 
 rem --------------------------------------------------------------------------

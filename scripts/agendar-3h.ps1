@@ -30,8 +30,11 @@ if ($Remover) {
 if (-not (Test-Path $CmdIncremental)) { throw "Nao encontrei $CmdIncremental" }
 if (-not (Test-Path $CmdCompleta)) { throw "Nao encontrei $CmdCompleta" }
 
-$AcaoIncremental = New-ScheduledTaskAction -Execute "cmd.exe" -Argument "/c `"$CmdIncremental`"" -WorkingDirectory $Raiz
-$AcaoCompleta = New-ScheduledTaskAction -Execute "cmd.exe" -Argument "/c `"$CmdCompleta`"" -WorkingDirectory $Raiz
+# `conhost --headless` roda o cmd sem janela. Com janela visível, fechá-la (ou
+# um Ctrl+C) matava a coleta no meio: os `^C` nos logs e o código 0xC000013A da
+# reconciliação de 23/09/2026 vêm daí.
+$AcaoIncremental = New-ScheduledTaskAction -Execute "conhost.exe" -Argument "--headless cmd.exe /c `"$CmdIncremental`"" -WorkingDirectory $Raiz
+$AcaoCompleta = New-ScheduledTaskAction -Execute "conhost.exe" -Argument "--headless cmd.exe /c `"$CmdCompleta`"" -WorkingDirectory $Raiz
 # 03:17 fica reservado à carga completa iniciada às 03:47. Assim as duas
 # rotinas não disputam a API nem o mesmo job no banco.
 $GatilhosIncrementais = 0, 6, 9, 12, 15, 18, 21 | ForEach-Object {
@@ -60,7 +63,7 @@ Register-ScheduledTask -TaskName $Nome -Action $AcaoIncremental -Trigger $Gatilh
   -Force | Out-Null
 
 Register-ScheduledTask -TaskName $NomeCompleta -Action $AcaoCompleta -Trigger $GatilhoCompleta -Settings $Config `
-  -Description "Reconcilia diariamente as licitacoes abertas de SP para os proximos 30 dias." `
+  -Description "Reconcilia diariamente as licitacoes abertas de SP para os proximos 30 dias. Log em logs\diaria-AAAA-MM-DD.log" `
   -Force | Out-Null
 
 Write-Host "Tarefa registrada: $Nome"

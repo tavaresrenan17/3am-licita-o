@@ -22,6 +22,11 @@ set "ARQ=%LOG%\rotina-%HOJE%.log"
 echo ================================================= >> "%ARQ%"
 echo Rotina incremental iniciada em %DATE% %TIME% >> "%ARQ%"
 
+rem Janela de 2 h 40 min: da tempo de esperar o cooldown dos segmentos quando o
+rem PNCP oscila, em vez de desistir e so tentar de novo no horario seguinte, e
+rem ainda termina antes do proximo disparo.
+set "SYNC_MAX_RUNTIME_MS=9600000"
+
 echo. >> "%ARQ%"
 echo --- incremental SP --- >> "%ARQ%"
 call npm run sincronizar -- incremental --uf SP >> "%ARQ%" 2>&1
