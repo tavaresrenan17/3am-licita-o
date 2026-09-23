@@ -26,7 +26,7 @@ export function BarraAcoesLote({
       data-testid="barra-acoes-lote"
       className={cn(
         "fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 rounded-2xl border border-primary/40 bg-background/95 px-5 py-3 shadow-2xl backdrop-blur-md transition-all duration-300 animate-in fade-in slide-in-from-bottom-5",
-        "border-border/80 ring-1 ring-black/10 dark:ring-white/10",
+        "border-border/80 ring-1 ring-border/60",
         className,
       )}
     >

@@ -7,12 +7,15 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  Copy,
   Download,
   ExternalLink,
   HardHat,
+  Keyboard,
   LayoutGrid,
   List,
   MessageSquarePlus,
+  MoreHorizontal,
   Search,
   Send,
   SlidersHorizontal,
@@ -338,7 +341,8 @@ function LicitacoesSalvas() {
   useEffect(() => {
     const handleSlashKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
-      if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) return;
+      if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)
+        return;
       if (e.key === "/" && !e.ctrlKey && !e.metaKey && !e.altKey) {
         e.preventDefault();
         buscaInputRef.current?.focus();
@@ -375,8 +379,8 @@ function LicitacoesSalvas() {
   const [obsAberta, setObsAberta] = useState<string | null>(null);
   const [obsTexto, setObsTexto] = useState("");
   const [modoVisualizacao, setModoVisualizacao] = useState<"tabela" | "cards">(() => {
-    if (typeof window === "undefined") return "tabela";
-    return (window.localStorage.getItem("3am-modo-visualizacao") as "tabela" | "cards") || "tabela";
+    if (typeof window === "undefined") return "cards";
+    return (window.localStorage.getItem("3am-modo-visualizacao") as "tabela" | "cards") || "cards";
   });
 
   const trocarModoVisualizacao = (modo: "tabela" | "cards") => {
@@ -483,7 +487,9 @@ function LicitacoesSalvas() {
     const idsArray = Array.from(selecionadas);
     if (idsArray.length === 0) return;
 
-    toast.info(`Iniciando download e transferência de ${idsArray.length} licitação(ões) para Alexandria...`);
+    toast.info(
+      `Iniciando download e transferência de ${idsArray.length} licitação(ões) para Alexandria...`,
+    );
     try {
       const res = await sincronizarLote.mutateAsync(idsArray);
       await moverParaAlexandria.mutateAsync(idsArray);
@@ -493,7 +499,7 @@ function LicitacoesSalvas() {
       limparSelecao();
       navigate({
         to: "/alexandria",
-        search: { ids: idsArray.join(",") } as any,
+        search: { ids: idsArray.join(",") },
       });
     } catch (err) {
       toast.error(`Falha ao sincronizar lote: ${err instanceof Error ? err.message : String(err)}`);
@@ -633,8 +639,7 @@ function LicitacoesSalvas() {
   // "Com edital" somarem quatro filtros e o contador exibir zero — e o contador
   // é quem decide se os botões "Limpar filtros" existem.
   // Contado a partir das DEFINICOES, mais o filtro de raio geográfico se ativo
-  const filtrosAtivos =
-    contarFiltrosAtivos(filtros, UF_INICIAL) + (raioKm > 0 ? 1 : 0);
+  const filtrosAtivos = contarFiltrosAtivos(filtros, UF_INICIAL) + (raioKm > 0 ? 1 : 0);
 
   const limparTudo = () => {
     // Limpa as escolhas do usuário, preservando as invariantes do catálogo:
@@ -655,7 +660,7 @@ function LicitacoesSalvas() {
   if (raioKm > 0) {
     chipsAtivos.push({
       chave: "raio_km",
-      label: `📍 Raio: até ${raioKm} km (${origemSelecionada.nome})`,
+      label: `Raio: até ${raioKm} km (${origemSelecionada.nome})`,
       limpar: () => mudarRaio(0),
     });
   }
@@ -762,11 +767,11 @@ function LicitacoesSalvas() {
             className={cn(
               "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-all duration-150 cursor-pointer",
               filtros.status_interno === "interessante"
-                ? "border-emerald-500/70 bg-emerald-500/20 text-emerald-400 font-semibold shadow-xs ring-1 ring-emerald-500/40"
-                : "border-border/80 bg-muted/40 text-muted-foreground hover:border-emerald-500/40 hover:text-emerald-400",
+                ? "border-success/70 bg-success/20 text-success font-semibold shadow-xs ring-1 ring-success/40"
+                : "border-border/80 bg-muted/40 text-muted-foreground hover:border-success/40 hover:text-success",
             )}
           >
-            <Star className="size-3 fill-emerald-400 text-emerald-400" />
+            <Star className="size-3 fill-success text-success" />
             <span>Interessantes</span>
           </button>
 
@@ -780,11 +785,11 @@ function LicitacoesSalvas() {
             className={cn(
               "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-all duration-150 cursor-pointer",
               filtros.status_interno === "em_analise"
-                ? "border-amber-500/70 bg-amber-500/20 text-amber-400 font-semibold shadow-xs ring-1 ring-amber-500/40"
-                : "border-border/80 bg-muted/40 text-muted-foreground hover:border-amber-500/40 hover:text-amber-400",
+                ? "border-warning/70 bg-warning/20 text-warning font-semibold shadow-xs ring-1 ring-warning/40"
+                : "border-border/80 bg-muted/40 text-muted-foreground hover:border-warning/40 hover:text-warning",
             )}
           >
-            <Search className="size-3 text-amber-400" />
+            <Search className="size-3 text-warning" />
             <span>Em Análise</span>
           </button>
 
@@ -798,11 +803,11 @@ function LicitacoesSalvas() {
             className={cn(
               "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-all duration-150 cursor-pointer",
               filtros.status_interno === "nova"
-                ? "border-sky-500/70 bg-sky-500/20 text-sky-400 font-semibold shadow-xs ring-1 ring-sky-500/40"
-                : "border-border/80 bg-muted/40 text-muted-foreground hover:border-sky-500/40 hover:text-sky-400",
+                ? "border-info/70 bg-info/20 text-info font-semibold shadow-xs ring-1 ring-info/40"
+                : "border-border/80 bg-muted/40 text-muted-foreground hover:border-info/40 hover:text-info",
             )}
           >
-            <Sparkles className="size-3 text-sky-400" />
+            <Sparkles className="size-3 text-info" />
             <span>Novas</span>
           </button>
 
@@ -816,11 +821,11 @@ function LicitacoesSalvas() {
             className={cn(
               "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-all duration-150 cursor-pointer",
               filtros.status_interno === "descartada"
-                ? "border-rose-500/70 bg-rose-500/20 text-rose-400 font-semibold shadow-xs ring-1 ring-rose-500/40"
-                : "border-border/80 bg-muted/40 text-muted-foreground hover:border-rose-500/40 hover:text-rose-400",
+                ? "border-destructive/70 bg-destructive/20 text-destructive font-semibold shadow-xs ring-1 ring-destructive/40"
+                : "border-border/80 bg-muted/40 text-muted-foreground hover:border-destructive/40 hover:text-destructive",
             )}
           >
-            <XCircle className="size-3 text-rose-400" />
+            <XCircle className="size-3 text-destructive" />
             <span>Descartadas</span>
           </button>
 
@@ -834,11 +839,11 @@ function LicitacoesSalvas() {
             className={cn(
               "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-all duration-150 cursor-pointer",
               filtros.status_interno === "proposta_enviada"
-                ? "border-purple-500/70 bg-purple-500/20 text-purple-400 font-semibold shadow-xs ring-1 ring-purple-500/40"
-                : "border-border/80 bg-muted/40 text-muted-foreground hover:border-purple-500/40 hover:text-purple-400",
+                ? "border-brand/70 bg-brand/20 text-brand font-semibold shadow-xs ring-1 ring-brand/40"
+                : "border-border/80 bg-muted/40 text-muted-foreground hover:border-brand/40 hover:text-brand",
             )}
           >
-            <Send className="size-3 text-purple-400" />
+            <Send className="size-3 text-brand" />
             <span>Propostas Enviadas</span>
           </button>
         </div>
@@ -866,7 +871,7 @@ function LicitacoesSalvas() {
             )}
           >
             <HardHat className="size-3 text-success" />
-            <span>🏗️ Alta Aderência (Obras)</span>
+            <span>Alta Aderência (Obras)</span>
           </button>
 
           <button
@@ -887,7 +892,7 @@ function LicitacoesSalvas() {
                 : "border-border/80 bg-muted/40 text-muted-foreground hover:border-warning/40 hover:text-foreground",
             )}
           >
-            <span>⏱️ Prazos Críticos (≤ 3d)</span>
+            <span>Prazos Críticos (≤ 3d)</span>
           </button>
 
           <button
@@ -908,7 +913,7 @@ function LicitacoesSalvas() {
                 : "border-border/80 bg-muted/40 text-muted-foreground hover:border-primary/40 hover:text-foreground",
             )}
           >
-            <span>💰 Grandes Obras (&gt; R$ 1M)</span>
+            <span>Grandes Obras (&gt; R$ 1M)</span>
           </button>
 
           <button
@@ -948,7 +953,7 @@ function LicitacoesSalvas() {
                 : "border-border/80 bg-muted/40 text-muted-foreground hover:border-info/40 hover:text-foreground",
             )}
           >
-            <span>📄 Com Edital</span>
+            <span>Com Edital</span>
           </button>
         </div>
 
@@ -1000,7 +1005,7 @@ function LicitacoesSalvas() {
           >
             <Sparkles className={cn("size-3.5", consulta.isFetching && "animate-spin")} />
             <span>Buscar</span>
-            <kbd className="ml-1 hidden rounded bg-black/20 px-1 py-0.5 font-mono text-[9px] text-primary-foreground/90 sm:inline-block">
+            <kbd className="ml-1 hidden rounded bg-primary-foreground/20 px-1 py-0.5 font-mono text-[9px] text-primary-foreground/90 sm:inline-block">
               ↵ Enter
             </kbd>
           </Button>
@@ -1030,36 +1035,27 @@ function LicitacoesSalvas() {
           </div>
         </div>
 
-        {/* Indicador de Busca Semântica Vetorial Ativa */}
+        {/* Indicador de Busca Semântica Vetorial Ativa — uma linha só, sem jargão técnico */}
         {filtros.palavra_chave && (
           <div className="mt-2.5 flex flex-wrap items-center gap-2 border-t border-border/40 pt-2 text-xs">
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/40 bg-primary/10 px-2.5 py-0.5 text-[11px] font-medium text-primary">
-              <Sparkles className="size-3 text-primary animate-pulse" />
-              <span>
-                Busca Semântica Vetorial: <strong>"{filtros.palavra_chave}"</strong>
+            <span className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-primary/40 bg-primary/10 px-2.5 py-0.5 text-[11px] font-medium text-primary">
+              <Sparkles className="size-3 shrink-0 text-primary" />
+              <span className="truncate">
+                {modoHibrido ? "Busca semântica com IA" : "Busca por palavra-chave"}:{" "}
+                <strong>"{filtros.palavra_chave}"</strong>
+                {buscaDegradou && (
+                  <span className="text-warning"> · modo textual (semântica indisponível)</span>
+                )}
               </span>
               <button
                 type="button"
                 onClick={limparBusca}
-                className="ml-1 hover:text-foreground cursor-pointer"
+                className="shrink-0 hover:text-foreground cursor-pointer"
                 title="Limpar busca"
               >
                 <X className="size-3" />
               </button>
             </span>
-
-            {modoHibrido && (
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] text-emerald-400 font-medium">
-                <span className="size-1.5 rounded-full bg-emerald-400 animate-ping" />
-                Vetorizado com IA (bge-m3 / pgvector)
-              </span>
-            )}
-
-            {buscaDegradou && (
-              <span className="text-[10px] text-amber-400 font-medium">
-                ℹ️ Modo textual acionado
-              </span>
-            )}
           </div>
         )}
 
@@ -1110,11 +1106,11 @@ function LicitacoesSalvas() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="todos">Todos os status</SelectItem>
-                  <SelectItem value="interessante">⭐ Interessante</SelectItem>
-                  <SelectItem value="em_analise">🔍 Em Análise</SelectItem>
-                  <SelectItem value="nova">🆕 Nova / Não triada</SelectItem>
-                  <SelectItem value="descartada">❌ Descartada</SelectItem>
-                  <SelectItem value="proposta_enviada">📤 Proposta Enviada</SelectItem>
+                  <SelectItem value="interessante">Interessante</SelectItem>
+                  <SelectItem value="em_analise">Em Análise</SelectItem>
+                  <SelectItem value="nova">Nova / Não triada</SelectItem>
+                  <SelectItem value="descartada">Descartada</SelectItem>
+                  <SelectItem value="proposta_enviada">Proposta Enviada</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -1217,8 +1213,6 @@ function LicitacoesSalvas() {
               </div>
             </div>
 
-
-
             {/* --- entrada no catálogo --- */}
             <div className="space-y-1">
               <Label className="text-[11px] font-medium text-muted-foreground">
@@ -1262,44 +1256,46 @@ function LicitacoesSalvas() {
         </div>
       </section>
 
-      <div className="mt-2.5 flex items-center gap-1.5 flex-wrap">
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="h-7 px-2 text-[11px] text-muted-foreground hover:text-foreground"
-          onClick={() => setAjudaAberta((v) => !v)}
-        >
-          Atalhos de triagem (?)
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="h-7 px-2 text-[11px] text-muted-foreground hover:text-foreground"
-          onClick={copiarLink}
-        >
-          Copiar link
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="h-7 px-2.5 text-[11px] text-muted-foreground hover:text-foreground border-border/80 cursor-pointer"
-          onClick={() => {
-            if (itens.length === 0) {
-              toast.error("Nenhuma licitação para exportar.");
-              return;
-            }
-            exportarLicitacoesCsv(itens, `licitacoes-3am-${diaBR().replace(/\//g, "-")}.csv`);
-            toast.success(`${itens.length} licitações exportadas para CSV.`);
-          }}
-          title="Exportar licitações filtradas para arquivo CSV compatível com Excel"
-        >
-          <Download className="mr-1.5 size-3" /> Exportar CSV
-        </Button>
+      <div className="mt-2.5 flex items-center justify-end gap-1.5">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-[11px] text-muted-foreground hover:text-foreground"
+            >
+              <MoreHorizontal className="mr-1 size-3.5" /> Mais
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-56">
+            <DropdownMenuItem
+              onClick={() => setAjudaAberta((v) => !v)}
+              className="cursor-pointer text-xs"
+            >
+              <Keyboard className="mr-2 size-3.5 text-muted-foreground" /> Atalhos de triagem
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={copiarLink} className="cursor-pointer text-xs">
+              <Copy className="mr-2 size-3.5 text-muted-foreground" /> Copiar link desta busca
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={() => {
+                if (itens.length === 0) {
+                  toast.error("Nenhuma licitação para exportar.");
+                  return;
+                }
+                exportarLicitacoesCsv(itens, `licitacoes-3am-${diaBR().replace(/\//g, "-")}.csv`);
+                toast.success(`${itens.length} licitações exportadas para CSV.`);
+              }}
+              className="cursor-pointer text-xs"
+              title="Exportar licitações filtradas para arquivo CSV compatível com Excel"
+            >
+              <Download className="mr-2 size-3.5 text-muted-foreground" /> Exportar CSV
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
 
-        <div className="ml-auto flex items-center gap-0.5 rounded-lg border border-border/80 bg-muted/40 p-0.5">
+        <div className="flex items-center gap-0.5 rounded-lg border border-border/80 bg-muted/40 p-0.5">
           <button
             type="button"
             onClick={() => trocarModoVisualizacao("tabela")}
@@ -1356,9 +1352,15 @@ function LicitacoesSalvas() {
         </p>
       )}
 
-      <section className="mt-3 overflow-hidden rounded-lg border border-border bg-card">
+      <section
+        className={cn(
+          "mt-3",
+          modoVisualizacao === "tabela" &&
+            "overflow-hidden rounded-lg border border-border bg-card",
+        )}
+      >
         {consulta.isLoading ? (
-          <p className="px-4 py-10 text-center text-xs text-muted-foreground">Carregando…</p>
+          <p className="px-1 py-10 text-center text-xs text-muted-foreground">Carregando…</p>
         ) : consulta.isError ? (
           <EmptyState
             titulo="Não foi possível consultar o banco"
@@ -1377,7 +1379,7 @@ function LicitacoesSalvas() {
             }
           />
         ) : modoVisualizacao === "cards" ? (
-          <div className="grid gap-3 p-3.5 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="flex flex-col gap-4">
             {itens.map((l, i) => (
               <LicitacaoCard
                 key={l.id}
@@ -1404,9 +1406,7 @@ function LicitacoesSalvas() {
                 <tr role="row" className="border-b border-border">
                   <th className="h-11 w-10 px-3 py-0 text-center font-medium">
                     <Checkbox
-                      checked={
-                        itens.length > 0 && itens.every((l) => selecionadas.has(l.id))
-                      }
+                      checked={itens.length > 0 && itens.every((l) => selecionadas.has(l.id))}
                       onCheckedChange={toggleTodasVisiveis}
                       aria-label="Selecionar todas as licitações da página"
                     />
@@ -1481,7 +1481,8 @@ function LicitacoesSalvas() {
                         // A seleção precisa ser visível sem depender de cor
                         // sozinha: o anel marca a linha para quem navega por
                         // teclado sem tirar a mão do j/k.
-                        (selecionadas.has(l.id) || i === indice) && "bg-accent/60 ring-1 ring-inset ring-primary/40",
+                        (selecionadas.has(l.id) || i === indice) &&
+                          "bg-accent/60 ring-1 ring-inset ring-primary/40",
                       )}
                       onClick={() => navigate({ to: "/licitacoes/$id", params: { id: l.id } })}
                     >
@@ -1615,13 +1616,13 @@ function LicitacoesSalvas() {
                               className={cn(
                                 "h-7 px-2.5 text-xs font-medium gap-1.5 transition-all cursor-pointer shadow-xs",
                                 l.status_interno === "interessante" &&
-                                  "border-emerald-500/50 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20",
+                                  "border-success/50 bg-success/10 text-success hover:bg-success/20",
                                 l.status_interno === "em_analise" &&
-                                  "border-amber-500/50 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20",
+                                  "border-warning/50 bg-warning/10 text-warning hover:bg-warning/20",
                                 l.status_interno === "descartada" &&
-                                  "border-rose-500/50 bg-rose-500/10 text-rose-400 hover:bg-rose-500/20",
+                                  "border-destructive/50 bg-destructive/10 text-destructive hover:bg-destructive/20",
                                 l.status_interno === "proposta_enviada" &&
-                                  "border-purple-500/50 bg-purple-500/10 text-purple-400 hover:bg-purple-500/20",
+                                  "border-brand/50 bg-brand/10 text-brand hover:bg-brand/20",
                                 l.status_interno === "nova" &&
                                   "border-border/80 hover:bg-muted text-foreground",
                               )}
@@ -1637,7 +1638,8 @@ function LicitacoesSalvas() {
                               }
                               className="cursor-pointer font-medium"
                             >
-                              <ExternalLink className="mr-2 size-3.5 text-primary" /> Abrir ficha completa
+                              <ExternalLink className="mr-2 size-3.5 text-primary" /> Abrir ficha
+                              completa
                             </DropdownMenuItem>
 
                             <DropdownMenuSeparator />
@@ -1651,15 +1653,15 @@ function LicitacoesSalvas() {
                               className={cn(
                                 "cursor-pointer text-xs flex items-center justify-between",
                                 l.status_interno === "interessante" &&
-                                  "bg-emerald-500/15 font-semibold text-emerald-400",
+                                  "bg-success/15 font-semibold text-success",
                               )}
                             >
                               <span className="flex items-center gap-2">
-                                <Star className="size-3.5 fill-emerald-400 text-emerald-400" />
+                                <Star className="size-3.5 fill-success text-success" />
                                 <span>Interessante</span>
                               </span>
                               {l.status_interno === "interessante" && (
-                                <Check className="size-3.5 text-emerald-400" />
+                                <Check className="size-3.5 text-success" />
                               )}
                             </DropdownMenuItem>
 
@@ -1668,15 +1670,15 @@ function LicitacoesSalvas() {
                               className={cn(
                                 "cursor-pointer text-xs flex items-center justify-between",
                                 l.status_interno === "em_analise" &&
-                                  "bg-amber-500/15 font-semibold text-amber-400",
+                                  "bg-warning/15 font-semibold text-warning",
                               )}
                             >
                               <span className="flex items-center gap-2">
-                                <Search className="size-3.5 text-amber-400" />
+                                <Search className="size-3.5 text-warning" />
                                 <span>Em Análise</span>
                               </span>
                               {l.status_interno === "em_analise" && (
-                                <Check className="size-3.5 text-amber-400" />
+                                <Check className="size-3.5 text-warning" />
                               )}
                             </DropdownMenuItem>
 
@@ -1685,15 +1687,15 @@ function LicitacoesSalvas() {
                               className={cn(
                                 "cursor-pointer text-xs flex items-center justify-between",
                                 l.status_interno === "descartada" &&
-                                  "bg-rose-500/15 font-semibold text-rose-400",
+                                  "bg-destructive/15 font-semibold text-destructive",
                               )}
                             >
                               <span className="flex items-center gap-2">
-                                <XCircle className="size-3.5 text-rose-400" />
+                                <XCircle className="size-3.5 text-destructive" />
                                 <span>Descartada</span>
                               </span>
                               {l.status_interno === "descartada" && (
-                                <Check className="size-3.5 text-rose-400" />
+                                <Check className="size-3.5 text-destructive" />
                               )}
                             </DropdownMenuItem>
 
@@ -1702,15 +1704,15 @@ function LicitacoesSalvas() {
                               className={cn(
                                 "cursor-pointer text-xs flex items-center justify-between",
                                 l.status_interno === "proposta_enviada" &&
-                                  "bg-purple-500/15 font-semibold text-purple-400",
+                                  "bg-brand/15 font-semibold text-brand",
                               )}
                             >
                               <span className="flex items-center gap-2">
-                                <Send className="size-3.5 text-purple-400" />
+                                <Send className="size-3.5 text-brand" />
                                 <span>Proposta Enviada</span>
                               </span>
                               {l.status_interno === "proposta_enviada" && (
-                                <Check className="size-3.5 text-purple-400" />
+                                <Check className="size-3.5 text-brand" />
                               )}
                             </DropdownMenuItem>
 
@@ -1723,11 +1725,11 @@ function LicitacoesSalvas() {
                               )}
                             >
                               <span className="flex items-center gap-2">
-                                <Sparkles className="size-3.5 text-sky-400" />
+                                <Sparkles className="size-3.5 text-info" />
                                 <span>Redefinir como Nova</span>
                               </span>
                               {l.status_interno === "nova" && (
-                                <Check className="size-3.5 text-sky-400" />
+                                <Check className="size-3.5 text-info" />
                               )}
                             </DropdownMenuItem>
 
@@ -1770,7 +1772,14 @@ function LicitacoesSalvas() {
         )}
 
         {total > 0 && (
-          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border px-3 py-2.5 text-xs text-muted-foreground">
+          <div
+            className={cn(
+              "flex flex-wrap items-center justify-between gap-2 py-2.5 text-xs text-muted-foreground",
+              modoVisualizacao === "tabela"
+                ? "border-t border-border px-3"
+                : "mt-1 border-t border-border/60 px-1",
+            )}
+          >
             <span className="num">
               Página {Math.min(pagina, totalPaginas)} de {totalPaginas} · {numero(total)} resultados
               {consulta.data?.consultadoEm &&
@@ -1812,7 +1821,9 @@ function LicitacoesSalvas() {
             onChange={(e) => setObsTexto(e.target.value)}
           />
           <div className="space-y-1.5">
-            <p className="text-[11px] font-medium text-muted-foreground">Motivos rápidos (GO / NO-GO):</p>
+            <p className="text-[11px] font-medium text-muted-foreground">
+              Motivos rápidos (GO / NO-GO):
+            </p>
             <div className="flex flex-wrap gap-1">
               {[
                 "Falta Acervo (CAT)",

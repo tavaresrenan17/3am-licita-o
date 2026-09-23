@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
 import {
   buscarArquivos,
+  buscarItens,
   buscarPagina,
   esperaDoRetryAfter,
   ErroContratoPNCP,
@@ -256,5 +257,101 @@ describe("/arquivos — metadados de documentos", () => {
     );
     expect(r.tentativas).toBe(2);
     expect(r.arquivos).toHaveLength(1);
+  });
+});
+
+describe("422 espúrio de período (365 dias)", () => {
+  const paramsAtualizacao = {
+    dataInicial: "20260915",
+    dataFinal: "20260917",
+    codigoModalidadeContratacao: 8,
+    uf: "SP",
+    pagina: 20,
+    tamanhoPagina: 50,
+  };
+  const corpo422 = {
+    message: "Período inicial e final maior que 365 dias.",
+    status: "422",
+  };
+
+  it("repete a requisição quando a janela válida volta com 422 de 365 dias", async () => {
+    const impl = fetchFalso([
+      jsonResp(corpo422, 422),
+      jsonResp({ data: [], numeroPagina: 20, empty: true }),
+    ]);
+    const r = await buscarPagina("atualizacao", paramsAtualizacao, base(impl));
+    expect(r.tentativas).toBe(2);
+  });
+
+  it("esgota as tentativas como falha transitória, não definitiva", async () => {
+    const impl = fetchFalso([
+      jsonResp(corpo422, 422),
+      jsonResp(corpo422, 422),
+      jsonResp(corpo422, 422),
+    ]);
+    await expect(buscarPagina("atualizacao", paramsAtualizacao, base(impl))).rejects.toBeInstanceOf(
+      FalhaTransitoriaPNCP,
+    );
+  });
+
+  it("outro 422 continua sendo falha de contrato definitiva", async () => {
+    const impl = fetchFalso([jsonResp({ message: "Modalidade inválida" }, 422)]);
+    await expect(buscarPagina("atualizacao", paramsAtualizacao, base(impl))).rejects.toBeInstanceOf(
+      ErroContratoPNCP,
+    );
+    expect(impl.mock.calls).toHaveLength(1);
+  });
+
+  it("janela acima de 365 dias é recusada antes da rede", async () => {
+    const impl = fetchFalso([]);
+    await expect(
+      buscarPagina(
+        "atualizacao",
+        { ...paramsAtualizacao, dataInicial: "20250901", dataFinal: "20260917" },
+        base(impl),
+      ),
+    ).rejects.toThrow(/365/);
+    expect(impl.mock.calls).toHaveLength(0);
+  });
+});
+
+describe("/itens — itens da contratação", () => {
+  const item = (n: number) => ({ numeroItem: n, descricao: `Item ${n}` });
+
+  it("pagina até receber uma página incompleta", async () => {
+    const impl = fetchFalso([jsonResp([item(1), item(2)]), jsonResp([item(3)])]);
+    const r = await buscarItens("45132495000140", 2026, 206, { ...base(impl), tamanhoPagina: 2 });
+    expect(r.itens.map((i) => i["numeroItem"])).toEqual([1, 2, 3]);
+    expect(r.completo).toBe(true);
+    const urls = (impl.mock.calls as unknown as [string][]).map((c) => c[0]);
+    expect(urls[0]).toBe(
+      "https://pncp.gov.br/api/pncp/v1/orgaos/45132495000140/compras/2026/206/itens?pagina=1&tamanhoPagina=2",
+    );
+    expect(urls[1]).toContain("pagina=2");
+  });
+
+  it("para no teto de páginas e sinaliza lista incompleta", async () => {
+    const impl = fetchFalso([jsonResp([item(1)]), jsonResp([item(2)])]);
+    const r = await buscarItens("45132495000140", 2026, 206, {
+      ...base(impl),
+      tamanhoPagina: 1,
+      paginasMax: 2,
+    });
+    expect(r.itens).toHaveLength(2);
+    expect(r.completo).toBe(false);
+  });
+
+  it("aceita CNPJ alfanumérico", async () => {
+    const impl = fetchFalso([jsonResp([])]);
+    const r = await buscarItens("12ABC34501DE35", 2026, 1, base(impl));
+    expect(r.itens).toEqual([]);
+  });
+
+  it("timeout vira falha transitória observável", async () => {
+    const abort = Object.assign(new Error("This operation was aborted"), { name: "AbortError" });
+    const impl = fetchFalso([abort, abort]);
+    await expect(buscarItens("45132495000140", 2026, 206, base(impl))).rejects.toBeInstanceOf(
+      FalhaTransitoriaPNCP,
+    );
   });
 });

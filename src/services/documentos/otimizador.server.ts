@@ -179,28 +179,44 @@ export async function sincronizarArquivosLicitacaoSobDemanda(
     .eq("ativo", true);
 
   // 3. Se não houver documentos catalogados, busca no PNCP
+  const errosPncp: string[] = [];
   if (!docsExistentes || docsExistentes.length === 0) {
     const { cnpj_orgao, ano_compra, sequencial_compra } = licitacao;
     if (cnpj_orgao && ano_compra && sequencial_compra) {
       try {
-        const resp = await buscarArquivos(String(cnpj_orgao), Number(ano_compra), Number(sequencial_compra));
+        // Chamada disparada por clique: timeout e tentativas curtos para a tela
+        // responder em segundos quando a base de Integração do PNCP cai.
+        const resp = await buscarArquivos(
+          String(cnpj_orgao),
+          Number(ano_compra),
+          Number(sequencial_compra),
+          { timeoutMs: 15_000, tentativasMax: 2 },
+        );
         if (resp.arquivos && resp.arquivos.length > 0) {
           const mapeamento = mapearArquivos(licitacaoId, resp.arquivos);
-          await client.rpc("pncp_gravar_documentos", {
+          const { error: errGravar } = await client.rpc("pncp_gravar_documentos", {
             p_licitacao_id: licitacaoId,
             p_documentos: mapeamento.linhas,
             p_score: Number(licitacao.score_aderencia ?? 0),
           });
+          if (errGravar) throw new Error(`falha ao gravar documentos: ${errGravar.message}`);
 
           const { data: recarregados } = await client
             .from("documentos_licitacao")
-            .select("id, nome, tipo_documento, tipo_documento_pncp, url, ativo, sequencial_documento")
+            .select(
+              "id, nome, tipo_documento, tipo_documento_pncp, url, ativo, sequencial_documento",
+            )
             .eq("licitacao_id", licitacaoId)
             .eq("ativo", true);
           docsExistentes = recarregados ?? [];
         }
       } catch (errPncp) {
+        // Engolir o erro fazia a tela anunciar "0 arquivo(s) atualizados" como
+        // sucesso enquanto o PNCP estava fora do ar.
         console.warn("Erro ao buscar arquivos no PNCP sob demanda:", errPncp);
+        errosPncp.push(
+          errPncp instanceof Error ? errPncp.message : "Falha ao consultar os documentos no PNCP",
+        );
       }
     }
   }
@@ -227,7 +243,7 @@ export async function sincronizarArquivosLicitacaoSobDemanda(
     totalCatalogados: docs.length,
     processados: 0,
     extraidos: 0,
-    erros: [],
+    erros: errosPncp,
     documentosProntos: [],
   };
 
@@ -305,7 +321,8 @@ export async function sincronizarArquivosLicitacaoSobDemanda(
 
   // 6. Atualizar estado geral dos documentos para a licitação
   try {
-    const novoEstado = resultado.extraidos > 0 ? "completo" : resultado.erros.length > 0 ? "erro" : "completo";
+    const novoEstado =
+      resultado.extraidos > 0 ? "completo" : resultado.erros.length > 0 ? "erro" : "completo";
     await client.from("documentos_estado").upsert({
       licitacao_id: licitacaoId,
       estado: novoEstado,

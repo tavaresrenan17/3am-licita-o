@@ -36,6 +36,8 @@ import {
   obterAnaliseLicitacaoFn,
   obterConfiguracoesFn,
   obterItensLicitacaoFn,
+  obterDadosAdicionaisFn,
+  extrairDadosAdicionaisFn,
   obterLicitacaoFn,
   opcoesFiltrosFn,
   salvarConfiguracoesFn,
@@ -505,8 +507,7 @@ export function useAnaliseLicitacao(id: string, ativo = true) {
 export function useGerarAnaliseLicitacao(id: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (forcar: boolean = false) =>
-      gerarAnaliseLicitacaoFn({ data: { id, forcar } }),
+    mutationFn: (forcar: boolean = false) => gerarAnaliseLicitacaoFn({ data: { id, forcar } }),
     onSuccess: (dados) => {
       queryClient.setQueryData(["analise-licitacao", id], dados);
     },
@@ -520,6 +521,28 @@ export function useSincronizarDocumentosLicitacao(id: string) {
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["licitacao", id] });
       await queryClient.invalidateQueries({ queryKey: ["analise-licitacao", id] });
+    },
+  });
+}
+
+export function useDadosAdicionais(id: string, ativo = true) {
+  return useQuery({
+    queryKey: ["dados-adicionais", id],
+    queryFn: () => obterDadosAdicionaisFn({ data: { id } }),
+    enabled: ativo && Boolean(id),
+    staleTime: 10 * 60 * 1000,
+  });
+}
+
+export function useExtrairDadosAdicionais(id: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (baixarSeFaltar: boolean) =>
+      extrairDadosAdicionaisFn({ data: { id, baixarSeFaltar } }),
+    onSuccess: async (dados) => {
+      queryClient.setQueryData(["dados-adicionais", id], dados);
+      // Baixar documentos para extrair muda a aba de documentos e a da IA.
+      await queryClient.invalidateQueries({ queryKey: ["licitacao", id] });
     },
   });
 }
@@ -599,7 +622,10 @@ export function getLocalIdsAlexandria(): string[] {
 export function setLocalIdsAlexandria(ids: string[]) {
   if (typeof window === "undefined") return;
   try {
-    window.localStorage.setItem(LOCAL_STORAGE_ALEXANDRIA_KEY, JSON.stringify(Array.from(new Set(ids))));
+    window.localStorage.setItem(
+      LOCAL_STORAGE_ALEXANDRIA_KEY,
+      JSON.stringify(Array.from(new Set(ids))),
+    );
     window.dispatchEvent(new Event("alexandria-storage-change"));
   } catch {
     // ignora

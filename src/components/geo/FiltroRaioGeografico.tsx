@@ -47,7 +47,7 @@ export const FiltroRaioGeografico: React.FC<FiltroRaioGeograficoProps> = ({
   return (
     <div
       className={cn(
-        "rounded-xl border border-border/80 bg-card/75 backdrop-blur-md p-4 shadow-sm transition-all dark:bg-card/40",
+        "rounded-xl border border-border/80 bg-card/75 backdrop-blur-md p-4 shadow-sm transition-all",
         raioAtivo && "border-primary/40 ring-1 ring-primary/20",
         className,
       )}
@@ -165,7 +165,7 @@ export const FiltroRaioGeografico: React.FC<FiltroRaioGeograficoProps> = ({
         {/* Presets Rápidos de 1 Clique */}
         <div className="space-y-1.5 sm:col-span-2 lg:col-span-3">
           <Label className="text-[11px] font-medium text-muted-foreground flex items-center gap-1">
-            <Zap className="size-3 text-amber-500" />
+            <Zap className="size-3 text-warning" />
             Atalhos de Raio:
           </Label>
           <div className="flex flex-wrap items-center gap-1">

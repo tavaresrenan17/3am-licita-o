@@ -23,14 +23,14 @@ export function StatusDocumentosBadge({
         title={tot > 0 ? `${tot} documento(s) baixado(s)` : "Documentos baixados"}
         className={cn(
           "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold tracking-wide border",
-          "bg-emerald-500/15 text-emerald-400 border-emerald-500/30 shadow-xs",
+          "bg-success/12 text-success border-success/30 shadow-xs",
           className,
         )}
       >
-        <CheckCircle2 className="size-3 text-emerald-400 shrink-0" />
+        <CheckCircle2 className="size-3 text-success shrink-0" />
         <span>Baixado</span>
         {!compacto && tot > 0 && (
-          <span className="text-emerald-400/80 font-normal">({tot})</span>
+          <span className="text-success/80 font-normal">({tot})</span>
         )}
       </span>
     );
@@ -42,11 +42,11 @@ export function StatusDocumentosBadge({
         title="Baixando e extraindo documentos do PNCP"
         className={cn(
           "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium border",
-          "bg-sky-500/15 text-sky-400 border-sky-500/30 animate-pulse",
+          "bg-info/12 text-info border-info/30 animate-pulse",
           className,
         )}
       >
-        <Loader2 className="size-3 animate-spin shrink-0 text-sky-400" />
+        <Loader2 className="size-3 animate-spin shrink-0 text-info" />
         <span>Baixando…</span>
       </span>
     );
@@ -58,11 +58,11 @@ export function StatusDocumentosBadge({
         title="Erro ao baixar ou extrair documentos"
         className={cn(
           "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium border",
-          "bg-rose-500/15 text-rose-400 border-rose-500/30",
+          "bg-destructive/10 text-destructive border-destructive/30",
           className,
         )}
       >
-        <AlertCircle className="size-3 shrink-0 text-rose-400" />
+        <AlertCircle className="size-3 shrink-0 text-destructive" />
         <span>Erro</span>
       </span>
     );

@@ -84,14 +84,14 @@ export function AppShell({
       <Sidebar onOpenPalette={() => setPaletteOpen(true)} />
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-20 flex flex-wrap items-center justify-between gap-3 border-b border-border/80 bg-background/85 px-5 py-2.5 backdrop-blur-md">
+        <header className="sticky top-0 z-20 flex flex-wrap items-center justify-between gap-3 border-b border-border bg-card px-5 py-2.5 shadow-sm">
           <div className="flex items-center gap-2.5 min-w-0">
             {deveMostrarVoltar && (
               <Button
                 type="button"
                 variant="outline"
                 size="icon"
-                className="size-8 shrink-0 rounded-lg border-border/80 bg-card/60 hover:bg-accent hover:text-foreground text-muted-foreground shadow-xs cursor-pointer"
+                className="size-8 shrink-0 rounded-lg border-border bg-muted/50 hover:bg-accent hover:text-foreground text-muted-foreground shadow-xs cursor-pointer"
                 onClick={handleVoltar}
                 title="Voltar para a página anterior"
                 aria-label="Voltar para a página anterior"
@@ -101,9 +101,9 @@ export function AppShell({
             )}
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <h1 className="truncate text-base font-semibold tracking-tight">{titulo}</h1>
-                <div className="hidden xl:inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-400">
-                  <span className="size-1.5 rounded-full bg-emerald-400 animate-pulse-subtle" />
+                <h1 className="truncate text-base font-semibold tracking-tight text-brand">{titulo}</h1>
+                <div className="hidden xl:inline-flex items-center gap-1.5 rounded-full border border-success/30 bg-success/10 px-2 py-0.5 text-[10px] font-medium text-success">
+                  <span className="size-1.5 rounded-full bg-success animate-pulse-subtle" />
                   <span>PNCP Integrado</span>
                 </div>
               </div>
@@ -117,12 +117,12 @@ export function AppShell({
             <button
               type="button"
               onClick={() => setPaletteOpen(true)}
-              className="hidden sm:inline-flex items-center gap-2 rounded-lg border border-border/80 bg-card/60 px-2.5 py-1.5 text-xs text-muted-foreground transition-all duration-150 hover:border-primary/40 hover:bg-accent hover:text-foreground cursor-pointer"
+              className="hidden sm:inline-flex items-center gap-2 rounded-lg border border-border bg-muted/50 px-2.5 py-1.5 text-xs text-muted-foreground transition-all duration-150 hover:border-primary/40 hover:bg-accent hover:text-foreground cursor-pointer"
               title="Abrir Command Palette (Ctrl+K)"
             >
               <Search className="size-3.5 text-muted-foreground" />
               <span>Buscar comandos...</span>
-              <kbd className="rounded border border-border/80 bg-muted/80 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+              <kbd className="rounded border border-border bg-card px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
                 Ctrl K
               </kbd>
             </button>
@@ -130,7 +130,7 @@ export function AppShell({
             <button
               type="button"
               onClick={() => setAtalhosOpen(true)}
-              className="inline-flex size-8 items-center justify-center rounded-lg border border-border/80 bg-card/60 text-muted-foreground transition-colors hover:border-primary/40 hover:bg-accent hover:text-foreground cursor-pointer"
+              className="inline-flex size-8 items-center justify-center rounded-lg border border-border bg-muted/50 text-muted-foreground transition-colors hover:border-primary/40 hover:bg-accent hover:text-foreground cursor-pointer"
               title="Ver atalhos de teclado (?)"
               aria-label="Atalhos de teclado"
             >
@@ -141,7 +141,7 @@ export function AppShell({
           </div>
         </header>
 
-        <nav className="flex gap-1 overflow-x-auto border-b border-border/80 px-3 py-2 md:hidden bg-card/40">
+        <nav className="flex gap-1 overflow-x-auto border-b border-border px-3 py-2 md:hidden bg-card">
           {NAV.map(({ to, label, icon: Icon }) => {
             const ativo = to === "/" ? pathname === "/" : pathname.startsWith(to);
             return (
@@ -203,7 +203,7 @@ function Sidebar({ onOpenPalette }: { onOpenPalette: () => void }) {
           recolhida && "justify-center px-2",
         )}
       >
-        <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm shadow-primary/20">
+        <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-highlight text-highlight-foreground shadow-sm shadow-highlight/30">
           <HardHat className="size-5" />
         </div>
         {!recolhida && (
@@ -211,7 +211,7 @@ function Sidebar({ onOpenPalette }: { onOpenPalette: () => void }) {
             <p className="truncate text-sm font-bold tracking-tight text-sidebar-foreground">
               3AM LICITAÇÃO
             </p>
-            <p className="text-[11px] font-medium text-primary">Construção civil</p>
+            <p className="text-[11px] font-medium text-sidebar-primary">Construção civil</p>
           </div>
         )}
       </div>
@@ -222,7 +222,7 @@ function Sidebar({ onOpenPalette }: { onOpenPalette: () => void }) {
           size="icon"
           onClick={toggle}
           className={cn(
-            "mb-1 h-8 w-full text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+            "mb-1 h-8 w-full text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
             recolhida && "w-8",
           )}
           aria-label={recolhida ? "Expandir sidebar" : "Recolher sidebar"}
@@ -245,17 +245,19 @@ function Sidebar({ onOpenPalette }: { onOpenPalette: () => void }) {
                 recolhida && "justify-center px-2",
                 ativo
                   ? "bg-sidebar-accent font-medium text-sidebar-accent-foreground shadow-xs"
-                  : "text-muted-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground",
+                  : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground",
               )}
               title={label}
             >
               {ativo && (
-                <span className="absolute left-0 top-1/2 h-5 w-1 -translate-y-1/2 rounded-r-full bg-primary" />
+                <span className="absolute left-0 top-1/2 h-5 w-1 -translate-y-1/2 rounded-r-full bg-highlight" />
               )}
               <Icon
                 className={cn(
                   "size-4 shrink-0 transition-colors",
-                  ativo ? "text-primary" : "text-muted-foreground group-hover:text-foreground",
+                  ativo
+                    ? "text-sidebar-primary"
+                    : "text-sidebar-foreground/50 group-hover:text-sidebar-foreground",
                 )}
               />
               {!recolhida && <span className="truncate">{label}</span>}
@@ -265,7 +267,7 @@ function Sidebar({ onOpenPalette }: { onOpenPalette: () => void }) {
       </nav>
 
       {!recolhida && (
-        <div className="mt-auto space-y-2.5 border-t border-sidebar-border/80 px-4 py-4 text-[11px] text-muted-foreground">
+        <div className="mt-auto space-y-2.5 border-t border-sidebar-border/80 px-4 py-4 text-[11px] text-sidebar-foreground/60">
           <div className="flex items-center justify-between">
             <span>Licitações no banco</span>
             <span className="num font-semibold text-sidebar-foreground">

@@ -27,12 +27,9 @@ export const DistanceBadge: React.FC<DistanceBadgeProps> = ({
 
   // Estilos temáticos refinados por faixa
   const variantes = {
-    muito_perto:
-      "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/15",
-    media:
-      "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30 hover:bg-amber-500/15",
-    longe:
-      "bg-muted/70 text-muted-foreground border-border/60 hover:bg-muted",
+    muito_perto: "bg-success/10 text-success border-success/30 hover:bg-success/15",
+    media: "bg-warning/10 text-warning border-warning/30 hover:bg-warning/15",
+    longe: "bg-muted/70 text-muted-foreground border-border/60 hover:bg-muted",
     desconhecido: "bg-muted text-muted-foreground border-border/40",
   };
 

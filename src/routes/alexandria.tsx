@@ -189,7 +189,7 @@ function AlexandriaPage() {
           <div className="rounded-xl border border-border/80 bg-card p-3.5 shadow-xs">
             <p className="text-[11px] font-medium text-muted-foreground">Documentos Baixados</p>
             <div className="mt-1 flex items-baseline gap-1.5">
-              <span className="text-2xl font-bold tracking-tight text-emerald-400">
+              <span className="text-2xl font-bold tracking-tight text-success">
                 {totalDocsBaixados}
               </span>
               <span className="text-xs text-muted-foreground">arquivos</span>
@@ -199,7 +199,7 @@ function AlexandriaPage() {
           <div className="rounded-xl border border-border/80 bg-card p-3.5 shadow-xs">
             <p className="text-[11px] font-medium text-muted-foreground">Análises de IA Prontas</p>
             <div className="mt-1 flex items-baseline gap-1.5">
-              <span className="text-2xl font-bold tracking-tight text-purple-400">
+              <span className="text-2xl font-bold tracking-tight text-brand">
                 {totalAnalisadasIa}
               </span>
               <span className="text-xs text-muted-foreground">de {totalLicitacoes}</span>
@@ -366,12 +366,12 @@ function AlexandriaPage() {
                   <div className="mt-4 rounded-lg border border-border/60 bg-muted/20 p-3">
                     <div className="flex items-center justify-between gap-2 mb-2">
                       <div className="flex items-center gap-2">
-                        <FileCheck className="size-4 text-emerald-400" />
+                        <FileCheck className="size-4 text-success" />
                         <span className="text-xs font-semibold text-foreground">
                           Acervo Documental ({documentos.length} arquivo{documentos.length === 1 ? "" : "s"} baixado{documentos.length === 1 ? "" : "s"})
                         </span>
                       </div>
-                      <span className="text-[11px] text-emerald-400 font-medium">
+                      <span className="text-[11px] text-success font-medium">
                         ✓ Texto extraído para IA
                       </span>
                     </div>
@@ -425,20 +425,19 @@ function AlexandriaPage() {
                           size="sm"
                           variant="outline"
                           onClick={() => setLicitacaoAnaliseAberta(l)}
-                          className="h-8 gap-1.5 text-xs bg-purple-500/15 border-purple-500/40 text-purple-300 hover:bg-purple-500/25 hover:text-purple-100 font-semibold cursor-pointer shadow-xs transition-all"
+                          className="h-8 gap-1.5 text-xs bg-success/15 border-success/40 text-success hover:bg-success/25 font-semibold cursor-pointer shadow-xs transition-all"
                           title="Abrir painel completo de Análise de IA desta licitação"
                         >
-                          <CheckCircle2 className="size-3.5 text-purple-400" />
+                          <CheckCircle2 className="size-3.5 text-success" />
                           <span>Ver Análise de IA (Salva)</span>
                         </Button>
                       ) : (
                         <Button
                           type="button"
                           size="sm"
-                          variant="outline"
                           disabled={emAnalise}
                           onClick={() => setLicitacaoAnaliseAberta(l)}
-                          className="h-8 gap-1.5 text-xs border-purple-500/40 text-purple-400 hover:bg-purple-500/10 cursor-pointer"
+                          className="h-8 gap-1.5 text-xs bg-teal text-teal-foreground shadow-xs hover:bg-teal/90 cursor-pointer"
                           title="Abrir painel para executar e visualizar a Análise de IA"
                         >
                           {emAnalise ? (
@@ -448,7 +447,7 @@ function AlexandriaPage() {
                             </>
                           ) : (
                             <>
-                              <Sparkles className="size-3.5 text-purple-400" />
+                              <Sparkles className="size-3.5" />
                               <span>Analisar com IA</span>
                             </>
                           )}

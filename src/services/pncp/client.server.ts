@@ -214,7 +214,31 @@ async function requisitarJson<T>(
 
       if (resposta.status === 400 || resposta.status === 422) {
         const detalhe = (await resposta.text().catch(() => "")).slice(0, 500);
-        throw new ErroContratoPNCP(resposta.status, detalhe || resposta.statusText);
+        // O PNCP devolveu 422 "Período inicial e final maior que 365 dias" para
+        // uma janela de 3 dias na página 20 (17/09/2026). `montarUrl` já recusa
+        // janelas acima de 365 dias antes da rede, então essa mensagem só chega
+        // aqui como falso positivo da fonte: vale nova tentativa, não falha
+        // definitiva que abandona o segmento.
+        if (!(resposta.status === 422 && detalhe.includes("365 dias"))) {
+          throw new ErroContratoPNCP(resposta.status, detalhe || resposta.statusText);
+        }
+        falhas.outras++;
+        ultimoStatus = 422;
+        ultimoMotivo = "PNCP recusou uma janela válida com 422 espúrio (365 dias)";
+        if (tentativa === tentativasMax) break;
+        const teto = Math.min(esperaMaxMs, 1000 * 2 ** (tentativa - 1));
+        const espera = Math.round(teto / 2) + Math.round(aleatorio() * (teto / 2));
+        if (espera >= restante()) {
+          throw new FalhaTransitoriaPNCP(
+            `espera de ${espera} ms excede o orçamento restante (${ultimoMotivo})`,
+            ultimoStatus,
+            tentativa,
+            { ...falhas },
+            agora() - inicio,
+          );
+        }
+        await dormir(espera);
+        continue;
       }
 
       if (resposta.status === 401 || resposta.status === 403) {
@@ -238,15 +262,25 @@ async function requisitarJson<T>(
         const textoErro = (await resposta.text().catch(() => "")).slice(0, 300);
         const eh504 = resposta.status === 504 || textoErro.includes("504 Gateway");
         const ehSaturacaoDb =
-          textoErro.includes("HikariPool") ||
-          textoErro.includes("banco de dados") ||
-          eh504;
+          textoErro.includes("HikariPool") || textoErro.includes("banco de dados") || eh504;
 
         ultimoMotivo = eh504
           ? "PNCP temporariamente instável: 504 Gateway Time-out (servidor federal demorou a responder)"
           : ehSaturacaoDb
-            ? `PNCP saturado: ${textoErro.replace(/<[^>]*>/g, "").trim().slice(0, 150) || `HTTP ${resposta.status}`}`
-            : `HTTP ${resposta.status}${textoErro ? `: ${textoErro.replace(/<[^>]*>/g, "").trim().slice(0, 150)}` : ""}`;
+            ? `PNCP saturado: ${
+                textoErro
+                  .replace(/<[^>]*>/g, "")
+                  .trim()
+                  .slice(0, 150) || `HTTP ${resposta.status}`
+              }`
+            : `HTTP ${resposta.status}${
+                textoErro
+                  ? `: ${textoErro
+                      .replace(/<[^>]*>/g, "")
+                      .trim()
+                      .slice(0, 150)}`
+                  : ""
+              }`;
 
         const retryAfter =
           resposta.status === 429
@@ -433,4 +467,53 @@ export async function buscarArquivos(
     tentativas: r.tentativas,
     duracaoMs: r.duracaoMs,
   };
+}
+
+export interface ResultadoItens {
+  itens: Record<string, unknown>[];
+  /** false quando o teto de páginas cortou a lista antes do fim. */
+  completo: boolean;
+}
+
+function validarListaItens(corpo: unknown): Record<string, unknown>[] {
+  if (!Array.isArray(corpo)) {
+    throw new RespostaInvalidaPNCP(
+      `esperado array de itens, recebido ${corpo === null ? "null" : typeof corpo}`,
+    );
+  }
+  return corpo.filter(
+    (i): i is Record<string, unknown> => typeof i === "object" && i !== null && !Array.isArray(i),
+  );
+}
+
+/**
+ * Itens de uma contratação, na base de Integração. Como `/arquivos`, a rota
+ * devolve ARRAY puro; aqui ela é paginada, então lemos até uma página vir
+ * incompleta (ou 204) para contratações com mais itens que uma página.
+ *
+ * Chamada de tela, não de worker: timeout e tentativas menores que os da
+ * listagem, para a pessoa ver a mensagem de indisponibilidade em segundos.
+ */
+export async function buscarItens(
+  cnpj: string,
+  ano: number,
+  sequencial: number,
+  opcoes: OpcoesCliente & { tamanhoPagina?: number; paginasMax?: number } = {},
+): Promise<ResultadoItens> {
+  const { tamanhoPagina = 100, paginasMax = 20, ...cliente } = opcoes;
+  const base = urlArquivos(cnpj, ano, sequencial).replace(/\/arquivos$/, "/itens");
+  const itens: Record<string, unknown>[] = [];
+
+  for (let pagina = 1; pagina <= paginasMax; pagina++) {
+    const url = `${base}?pagina=${pagina}&tamanhoPagina=${tamanhoPagina}`;
+    const r = await requisitarJson(
+      url,
+      { timeoutMs: 15_000, tentativasMax: 2, ...cliente },
+      validarListaItens,
+    );
+    const lote = r.corpo ?? [];
+    itens.push(...lote);
+    if (r.status === 204 || lote.length < tamanhoPagina) return { itens, completo: true };
+  }
+  return { itens, completo: false };
 }

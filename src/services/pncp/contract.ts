@@ -100,6 +100,9 @@ export const CAPACIDADES: Record<EndpointPNCP, Capacidade> = {
 
 export const TAMANHO_PAGINA_PADRAO = 50;
 
+/** Maior período (dataFinal − dataInicial) que publicação e atualização aceitam. */
+export const JANELA_MAXIMA_DIAS = 365;
+
 export class ParametroInvalidoError extends Error {
   constructor(
     readonly parametro: string,
@@ -176,6 +179,20 @@ export function montarQuery(endpoint: EndpointPNCP, params: ParametrosConsulta):
   }
   if (params.dataInicial && params.dataFinal && params.dataInicial > params.dataFinal) {
     throw new ParametroInvalidoError("dataInicial", "posterior à dataFinal");
+  }
+  // Limite da fonte: publicação e atualização recusam (HTTP 422) período acima
+  // de 365 dias. Barrar aqui é o que permite ao cliente tratar um 422 com essa
+  // mensagem, quando chega, como falso positivo do PNCP.
+  if (params.dataInicial && params.dataFinal) {
+    const utc = (v: string) =>
+      Date.UTC(Number(v.slice(0, 4)), Number(v.slice(4, 6)) - 1, Number(v.slice(6, 8)));
+    const dias = (utc(params.dataFinal) - utc(params.dataInicial)) / 86_400_000;
+    if (dias > JANELA_MAXIMA_DIAS) {
+      throw new ParametroInvalidoError(
+        "dataInicial",
+        `período de ${dias} dias excede o máximo de ${JANELA_MAXIMA_DIAS} aceito pelo PNCP`,
+      );
+    }
   }
 
   if (params.codigoModalidadeContratacao !== undefined) {

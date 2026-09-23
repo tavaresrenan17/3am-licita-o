@@ -619,12 +619,27 @@ export const gerarAnaliseLicitacaoFn = createServerFn({ method: "POST" })
     };
   });
 
+export const obterDadosAdicionaisFn = createServerFn({ method: "POST" })
+  .validator((d: unknown) => z.object({ id: z.string().uuid() }).parse(d))
+  .handler(async ({ data }) => {
+    const { obterDadosAdicionais } = await import("./dadosAdicionais/servico.server");
+    return obterDadosAdicionais(data.id);
+  });
+
+export const extrairDadosAdicionaisFn = createServerFn({ method: "POST" })
+  .validator((d: unknown) =>
+    z.object({ id: z.string().uuid(), baixarSeFaltar: z.boolean().default(false) }).parse(d),
+  )
+  .handler(async ({ data }) => {
+    const { extrairDadosAdicionais } = await import("./dadosAdicionais/servico.server");
+    return extrairDadosAdicionais(data.id, { baixarSeFaltar: data.baixarSeFaltar });
+  });
+
 export const sincronizarDocumentosLicitacaoFn = createServerFn({ method: "POST" })
   .validator((d: unknown) => z.object({ id: z.string().uuid() }).parse(d))
   .handler(async ({ data }) => {
-    const { sincronizarArquivosLicitacaoSobDemanda } = await import(
-      "./documentos/otimizador.server"
-    );
+    const { sincronizarArquivosLicitacaoSobDemanda } =
+      await import("./documentos/otimizador.server");
     return sincronizarArquivosLicitacaoSobDemanda(data.id, {
       concorrencia: 4,
       maxArquivos: 6,
@@ -642,9 +657,8 @@ export interface ResultadoLoteLicitacao {
 export const sincronizarDocumentosLicitacoesLoteFn = createServerFn({ method: "POST" })
   .validator((d: unknown) => z.object({ ids: z.array(z.string().uuid()) }).parse(d))
   .handler(async ({ data }) => {
-    const { sincronizarArquivosLicitacaoSobDemanda } = await import(
-      "./documentos/otimizador.server"
-    );
+    const { sincronizarArquivosLicitacaoSobDemanda } =
+      await import("./documentos/otimizador.server");
     const resultados: ResultadoLoteLicitacao[] = [];
     let totalExtraidos = 0;
 
@@ -744,9 +758,7 @@ export const obterLicitacoesAlexandriaFn = createServerFn({ method: "POST" })
 
     // Coleta IDs registrados em Alexandria
     const idsPersistidos = await obterIdsAlexandriaServidor();
-    const idsCombinados = Array.from(
-      new Set([...idsPersistidos, ...(data?.ids ?? [])]),
-    );
+    const idsCombinados = Array.from(new Set([...idsPersistidos, ...(data?.ids ?? [])]));
 
     // Regra mandatória: em Alexandria aparecem SOMENTE as licitações que foram movidas para lá
     if (idsCombinados.length === 0) {
@@ -755,14 +767,16 @@ export const obterLicitacoesAlexandriaFn = createServerFn({ method: "POST" })
 
     let query = supabaseAdmin
       .from("licitacoes")
-      .select(`
+      .select(
+        `
         *,
         documentos_estado (estado),
         documentos_licitacao (
           id, nome, tipo_documento, url, ativo,
           documentos_arquivo (estado, chars, paginas)
         )
-      `)
+      `,
+      )
       .in("id", idsCombinados)
       .order("data_encerramento_proposta", { ascending: true, nullsFirst: false });
 
@@ -791,7 +805,8 @@ export const obterLicitacoesAlexandriaFn = createServerFn({ method: "POST" })
     const filtradas = (linhas ?? []).filter((l: Record<string, unknown>) => {
       if (data?.busca && data.busca.trim()) {
         const termo = data.busca.toLowerCase();
-        const texto = `${l["objeto"]} ${l["orgao"]} ${l["municipio"]} ${l["numero_controle_pncp"]}`.toLowerCase();
+        const texto =
+          `${l["objeto"]} ${l["orgao"]} ${l["municipio"]} ${l["numero_controle_pncp"]}`.toLowerCase();
         if (!texto.includes(termo)) return false;
       }
       return true;
@@ -825,7 +840,8 @@ export const obterLicitacoesAlexandriaFn = createServerFn({ method: "POST" })
         documentos_total: docs.length,
         documentos_estado: docsBaixados.length > 0 ? "completo" : baseDTO.documentos_estado,
         documentos_baixados: docsBaixados,
-        analise_estado: (analise?.["estado"] as LicitacaoAlexandriaDTO["analise_estado"]) ?? "nao_analisada",
+        analise_estado:
+          (analise?.["estado"] as LicitacaoAlexandriaDTO["analise_estado"]) ?? "nao_analisada",
         analise_resumo: (resultadoAnalise?.["resumo"] as string | undefined) ?? null,
       };
     });
@@ -850,7 +866,11 @@ export const obterItensLicitacaoFn = createServerFn({ method: "POST" })
       if (!detalhe) return { itens: [], total: 0, mensagem: "Licitação não encontrada." };
 
       const lic = detalhe.licitacao;
-      const cnpj = String(lic["cnpj_orgao"] ?? "").replace(/\D/g, "").padStart(14, "0");
+      // CNPJ pode ter letras desde a v2.5 do manual do PNCP: tirar só a pontuação.
+      const cnpj = String(lic["cnpj_orgao"] ?? "")
+        .replace(/[^A-Za-z0-9]/g, "")
+        .toUpperCase()
+        .padStart(14, "0");
       const ano = Number(lic["ano_compra"]);
       const sequencial = Number(lic["sequencial_compra"]);
 
@@ -863,32 +883,10 @@ export const obterItensLicitacaoFn = createServerFn({ method: "POST" })
         };
       }
 
+      const { buscarItens, FalhaTransitoriaPNCP, RecursoInexistentePNCP } =
+        await import("./pncp/client.server");
       try {
-        const url = `https://pncp.gov.br/api/pncp/v1/orgaos/${cnpj}/compras/${ano}/${sequencial}/itens?pagina=${data.pagina}&tamanhoPagina=${data.tamanhoPagina}`;
-        const res = await fetch(url, {
-          headers: { Accept: "application/json" },
-          signal: AbortSignal.timeout(15_000),
-        });
-
-        if (!res.ok) {
-          if (res.status === 404) {
-            return {
-              itens: [],
-              total: 0,
-              mensagem: "Nenhum item cadastrado no PNCP para esta contratação.",
-            };
-          }
-          return {
-            itens: [],
-            total: 0,
-            mensagem: `O PNCP retornou status HTTP ${res.status} ao consultar os itens.`,
-          };
-        }
-
-        const itensJson = await res.json();
-        if (!Array.isArray(itensJson)) {
-          return { itens: [], total: 0 };
-        }
+        const { itens: itensJson, completo } = await buscarItens(cnpj, ano, sequencial);
 
         const itens: ItemLicitacao[] = itensJson.map((it: Record<string, unknown>) => ({
           numeroItem: Number(it["numeroItem"] ?? 0),
@@ -902,8 +900,7 @@ export const obterItensLicitacaoFn = createServerFn({ method: "POST" })
           quantidade: Number(it["quantidade"] ?? 0),
           unidadeMedida: String(it["unidadeMedida"] ?? "").trim() || "un",
           orcamentoSigiloso: Boolean(it["orcamentoSigiloso"]),
-          itemCategoriaId:
-            typeof it["itemCategoriaId"] === "number" ? it["itemCategoriaId"] : null,
+          itemCategoriaId: typeof it["itemCategoriaId"] === "number" ? it["itemCategoriaId"] : null,
           itemCategoriaNome: it["itemCategoriaNome"] ? String(it["itemCategoriaNome"]) : null,
           patrimonio: it["patrimonio"] ? String(it["patrimonio"]) : null,
           codigoRegistroImobiliario: it["codigoRegistroImobiliario"]
@@ -919,8 +916,7 @@ export const obterItensLicitacaoFn = createServerFn({ method: "POST" })
           situacaoCompraItemNome: it["situacaoCompraItemNome"]
             ? String(it["situacaoCompraItemNome"])
             : null,
-          tipoBeneficio:
-            typeof it["tipoBeneficio"] === "number" ? it["tipoBeneficio"] : null,
+          tipoBeneficio: typeof it["tipoBeneficio"] === "number" ? it["tipoBeneficio"] : null,
           tipoBeneficioNome: it["tipoBeneficioNome"] ? String(it["tipoBeneficioNome"]) : null,
           incentivoProdutivoBasico: Boolean(it["incentivoProdutivoBasico"]),
           dataInclusao: it["dataInclusao"] ? String(it["dataInclusao"]) : null,
@@ -937,13 +933,26 @@ export const obterItensLicitacaoFn = createServerFn({ method: "POST" })
         return {
           itens,
           total: itens.length,
+          mensagem: completo
+            ? null
+            : `Exibindo os primeiros ${itens.length} itens; a lista completa está no PNCP.`,
         };
       } catch (e) {
+        if (e instanceof RecursoInexistentePNCP) {
+          return {
+            itens: [],
+            total: 0,
+            mensagem: "Nenhum item cadastrado no PNCP para esta contratação.",
+          };
+        }
+        console.error("[itens] falha ao consultar o PNCP", e);
         return {
           itens: [],
           total: 0,
           mensagem:
-            e instanceof Error ? e.message : "Falha ao conectar com a API de itens do PNCP.",
+            e instanceof FalhaTransitoriaPNCP
+              ? "O serviço de itens do PNCP não respondeu agora. Tente novamente em alguns minutos."
+              : "Não foi possível ler os itens desta contratação no PNCP.",
         };
       }
     },

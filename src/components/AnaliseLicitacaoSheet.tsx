@@ -92,7 +92,7 @@ export function AnaliseLicitacaoSheet({
         <SheetHeader className="p-6 border-b border-border/60 bg-muted/20">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
-              <div className="p-2 rounded-lg bg-primary/10 text-primary">
+              <div className="p-2 rounded-lg bg-teal/10 text-teal">
                 <Sparkles className="h-5 w-5" />
               </div>
               <div>
@@ -108,7 +108,7 @@ export function AnaliseLicitacaoSheet({
             {resultado ? (
               <Badge
                 variant="outline"
-                className="border-emerald-500/50 bg-emerald-500/10 text-emerald-400 gap-1.5 py-1 px-2.5 text-xs font-semibold"
+                className="border-success/50 bg-success/10 text-success gap-1.5 py-1 px-2.5 text-xs font-semibold"
               >
                 <CheckCircle2 className="size-3.5" /> Salva no cadastro
               </Badge>
@@ -133,9 +133,9 @@ export function AnaliseLicitacaoSheet({
 
             {/* ESTADO 2: Em processamento pelo modelo */}
             {processando && (
-              <Card className="border-primary/30 bg-primary/5">
+              <Card className="border-teal/30 bg-teal/5">
                 <CardContent className="pt-6 pb-6 text-center space-y-4">
-                  <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-primary/15 text-primary animate-pulse">
+                  <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-teal/15 text-teal animate-pulse">
                     <Sparkles className="h-7 w-7 animate-spin" />
                   </div>
                   <div>
@@ -159,7 +159,7 @@ export function AnaliseLicitacaoSheet({
               <div className="py-6 space-y-6">
                 <Card className="border-dashed border-2">
                   <CardHeader className="text-center pb-2">
-                    <div className="mx-auto p-3 rounded-full bg-primary/10 text-primary w-fit mb-2">
+                    <div className="mx-auto p-3 rounded-full bg-teal/10 text-teal w-fit mb-2">
                       <Sparkles className="h-8 w-8" />
                     </div>
                     <CardTitle className="text-lg">Pronto para analisar esta licitação</CardTitle>
@@ -171,19 +171,19 @@ export function AnaliseLicitacaoSheet({
                   <CardContent className="space-y-3 pt-2">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs text-muted-foreground">
                       <div className="flex items-start gap-2 p-2.5 rounded-md bg-muted/40 border border-border/40">
-                        <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />
+                        <CheckCircle2 className="h-4 w-4 text-success shrink-0 mt-0.5" />
                         <span>Resumo executivo do objeto e entregáveis</span>
                       </div>
                       <div className="flex items-start gap-2 p-2.5 rounded-md bg-muted/40 border border-border/40">
-                        <FileCheck2 className="h-4 w-4 text-blue-500 shrink-0 mt-0.5" />
+                        <FileCheck2 className="h-4 w-4 text-info shrink-0 mt-0.5" />
                         <span>Exigências de qualificação e atestados</span>
                       </div>
                       <div className="flex items-start gap-2 p-2.5 rounded-md bg-muted/40 border border-border/40">
-                        <Calendar className="h-4 w-4 text-purple-500 shrink-0 mt-0.5" />
+                        <Calendar className="h-4 w-4 text-brand shrink-0 mt-0.5" />
                         <span>Cronograma, prazos e datas-limite</span>
                       </div>
                       <div className="flex items-start gap-2 p-2.5 rounded-md bg-muted/40 border border-border/40">
-                        <ShieldAlert className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
+                        <ShieldAlert className="h-4 w-4 text-warning shrink-0 mt-0.5" />
                         <span>Identificação de riscos e multas</span>
                       </div>
                     </div>
@@ -191,7 +191,7 @@ export function AnaliseLicitacaoSheet({
                     <div className="pt-4 flex justify-center">
                       <Button
                         size="lg"
-                        className="gap-2 px-8 font-semibold shadow-md shadow-primary/20"
+                        className="gap-2 px-8 font-semibold bg-teal text-teal-foreground hover:bg-teal/90 shadow-md shadow-teal/20"
                         onClick={() => handleGerar(false)}
                       >
                         <Sparkles className="h-4 w-4" />
@@ -241,9 +241,9 @@ export function AnaliseLicitacaoSheet({
               return (
                 <div className="space-y-6">
                   {/* Selo de Persistência Definitiva */}
-                  <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 rounded-xl border border-emerald-500/40 bg-emerald-500/10 text-emerald-400">
+                  <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 rounded-xl border border-success/40 bg-success/10 text-success">
                     <div className="flex items-center gap-2">
-                      <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+                      <CheckCircle2 className="h-4 w-4 text-success shrink-0" />
                       <span className="text-xs font-semibold text-foreground">
                         Análise Salva no Cadastro da Licitação
                       </span>
@@ -276,8 +276,8 @@ export function AnaliseLicitacaoSheet({
 
                   {/* Aviso de Cobertura Parcial se houver */}
                   {analise.cobertura?.estado === "parcial" && (
-                    <Alert className="border-amber-500/40 bg-amber-500/10 text-amber-900 dark:text-amber-200">
-                      <Info className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                    <Alert className="border-warning/40 bg-warning/10 text-warning">
+                      <Info className="h-4 w-4 text-warning" />
                       <AlertTitle className="text-xs font-semibold">
                         Cobertura documental parcial
                       </AlertTitle>
@@ -290,14 +290,14 @@ export function AnaliseLicitacaoSheet({
 
                   {/* CARD DESTAQUE: PARECER DO ENGENHEIRO CHEFE (GO / NO-GO) */}
                   {resultado.parecerEngenheiro && (
-                    <Card className="border-indigo-500/40 bg-gradient-to-br from-indigo-500/[0.08] via-purple-500/[0.04] to-background shadow-md">
+                    <Card className="border-brand/40 bg-gradient-to-br from-brand/[0.08] via-brand/[0.04] to-background shadow-md">
                       <CardHeader className="pb-2.5">
                         <div className="flex items-center justify-between flex-wrap gap-2">
                           <div className="flex items-center gap-2">
-                            <div className="p-1.5 rounded-lg bg-indigo-500/20 text-indigo-400">
+                            <div className="p-1.5 rounded-lg bg-brand/20 text-brand">
                               <Compass className="h-4 w-4" />
                             </div>
-                            <span className="text-xs font-bold uppercase tracking-wider text-indigo-400">
+                            <span className="text-xs font-bold uppercase tracking-wider text-brand">
                               Decisão do Engenheiro Chefe (Go / No-Go)
                             </span>
                           </div>
@@ -305,10 +305,10 @@ export function AnaliseLicitacaoSheet({
                             className={cn(
                               "text-xs px-2.5 py-0.5 font-bold uppercase tracking-wide",
                               resultado.parecerEngenheiro.decisao === "go"
-                                ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
+                                ? "bg-success/20 text-success border-success/40"
                                 : resultado.parecerEngenheiro.decisao === "go_com_ressalvas"
-                                  ? "bg-amber-500/20 text-amber-300 border-amber-500/40"
-                                  : "bg-rose-500/20 text-rose-300 border-rose-500/40",
+                                  ? "bg-warning/20 text-warning border-warning/40"
+                                  : "bg-destructive/20 text-destructive border-destructive/40",
                             )}
                           >
                             {resultado.parecerEngenheiro.decisao === "go"
@@ -369,13 +369,13 @@ export function AnaliseLicitacaoSheet({
 
                   {/* BLOCO ESPECIAL: ENGENHARIA DE CUSTOS, BDI & ALERTA DE CAIXA */}
                   {resultado.engenhariaCustos && (
-                    <div className="rounded-xl border border-amber-500/40 bg-amber-500/[0.03] p-4 space-y-3">
+                    <div className="rounded-xl border border-warning/40 bg-warning/[0.03] p-4 space-y-3">
                       <div className="flex items-center gap-2">
-                        <div className="p-1.5 rounded-md bg-amber-500/15 text-amber-400">
+                        <div className="p-1.5 rounded-md bg-warning/15 text-warning">
                           <Coins className="h-4 w-4" />
                         </div>
                         <div>
-                          <h4 className="text-sm font-bold text-amber-400 tracking-tight">
+                          <h4 className="text-sm font-bold text-warning tracking-tight">
                             💰 Engenharia de Custos, BDI & Alerta de Caixa
                           </h4>
                           <p className="text-[11px] text-muted-foreground">
@@ -398,16 +398,16 @@ export function AnaliseLicitacaoSheet({
                           </div>
                         )}
                         {resultado.engenhariaCustos.alertaLinha75 && (
-                          <div className="p-2.5 rounded-lg border border-rose-500/30 bg-rose-500/10 space-y-0.5 sm:col-span-2">
-                            <span className="text-[10px] text-rose-400 uppercase font-bold flex items-center gap-1">
+                          <div className="p-2.5 rounded-lg border border-destructive/30 bg-destructive/10 space-y-0.5 sm:col-span-2">
+                            <span className="text-[10px] text-destructive uppercase font-bold flex items-center gap-1">
                               <AlertTriangle className="size-3" /> Linha dos 75% (Inexequibilidade Art. 59 §4º)
                             </span>
                             <p className="text-foreground/90">{resultado.engenhariaCustos.alertaLinha75}</p>
                           </div>
                         )}
                         {resultado.engenhariaCustos.alertaLinha85 && (
-                          <div className="p-2.5 rounded-lg border border-amber-500/30 bg-amber-500/10 space-y-0.5 sm:col-span-2">
-                            <span className="text-[10px] text-amber-400 uppercase font-bold flex items-center gap-1">
+                          <div className="p-2.5 rounded-lg border border-warning/30 bg-warning/10 space-y-0.5 sm:col-span-2">
+                            <span className="text-[10px] text-warning uppercase font-bold flex items-center gap-1">
                               <ShieldAlert className="size-3" /> Linha dos 85% (Garantia Adicional de Caixa Art. 59 §5º)
                             </span>
                             <p className="text-foreground/90">{resultado.engenhariaCustos.alertaLinha85}</p>
@@ -425,13 +425,13 @@ export function AnaliseLicitacaoSheet({
 
                   {/* BLOCO ESPECIAL: QUALIFICAÇÃO TÉCNICA & CAT/CREA (SÚMULA TCU 263) */}
                   {resultado.engenhariaHabilitacao && (
-                    <div className="rounded-xl border border-sky-500/40 bg-sky-500/[0.03] p-4 space-y-3">
+                    <div className="rounded-xl border border-info/40 bg-info/[0.03] p-4 space-y-3">
                       <div className="flex items-center gap-2">
-                        <div className="p-1.5 rounded-md bg-sky-500/15 text-sky-400">
+                        <div className="p-1.5 rounded-md bg-info/15 text-info">
                           <Award className="h-4 w-4" />
                         </div>
                         <div>
-                          <h4 className="text-sm font-bold text-sky-400 tracking-tight">
+                          <h4 className="text-sm font-bold text-info tracking-tight">
                             🏆 Qualificação Técnica & CAT/CREA (Súmula TCU 263)
                           </h4>
                           <p className="text-[11px] text-muted-foreground">
@@ -443,7 +443,7 @@ export function AnaliseLicitacaoSheet({
                       <div className="space-y-2 text-xs">
                         {resultado.engenhariaHabilitacao.catExigida && (
                           <div className="p-2.5 rounded-lg border border-border/50 bg-card/80 space-y-1">
-                            <span className="text-[10px] text-sky-400 uppercase font-bold">Exigência de Acervo Técnico (CAT)</span>
+                            <span className="text-[10px] text-info uppercase font-bold">Exigência de Acervo Técnico (CAT)</span>
                             <p className="text-foreground/90">{resultado.engenhariaHabilitacao.catExigida}</p>
                           </div>
                         )}
@@ -458,11 +458,11 @@ export function AnaliseLicitacaoSheet({
                           </div>
                         )}
                         {resultado.engenhariaHabilitacao.pegadinhasHabilitacao && resultado.engenhariaHabilitacao.pegadinhasHabilitacao.length > 0 && (
-                          <div className="p-2.5 rounded-lg border border-rose-500/30 bg-rose-500/10 space-y-1">
-                            <span className="text-[10px] text-rose-400 uppercase font-bold flex items-center gap-1">
+                          <div className="p-2.5 rounded-lg border border-destructive/30 bg-destructive/10 space-y-1">
+                            <span className="text-[10px] text-destructive uppercase font-bold flex items-center gap-1">
                               <AlertTriangle className="size-3" /> Armadilhas de Habilitação Detectadas no Edital
                             </span>
-                            <ul className="list-disc pl-4 space-y-0.5 text-rose-200">
+                            <ul className="list-disc pl-4 space-y-0.5 text-destructive">
                               {resultado.engenhariaHabilitacao.pegadinhasHabilitacao.map((peg, i) => (
                                 <li key={i}>{peg}</li>
                               ))}
@@ -475,13 +475,13 @@ export function AnaliseLicitacaoSheet({
 
                   {/* BLOCO ESPECIAL: ESTRATÉGIA DE COMBATE & IMPUGNAÇÃO PREVENTIVA */}
                   {resultado.estrategiaImpugnacao && (
-                    <div className="rounded-xl border border-indigo-500/40 bg-indigo-500/[0.03] p-4 space-y-3">
+                    <div className="rounded-xl border border-brand/40 bg-brand/[0.03] p-4 space-y-3">
                       <div className="flex items-center gap-2">
-                        <div className="p-1.5 rounded-md bg-indigo-500/15 text-indigo-400">
+                        <div className="p-1.5 rounded-md bg-brand/15 text-brand">
                           <Swords className="h-4 w-4" />
                         </div>
                         <div>
-                          <h4 className="text-sm font-bold text-indigo-400 tracking-tight">
+                          <h4 className="text-sm font-bold text-brand tracking-tight">
                             ⚔️ Estratégia de Combate & Impugnação Preventiva
                           </h4>
                           <p className="text-[11px] text-muted-foreground">
@@ -492,11 +492,11 @@ export function AnaliseLicitacaoSheet({
 
                       <div className="space-y-2 text-xs">
                         {resultado.estrategiaImpugnacao.pontosImpugnar && resultado.estrategiaImpugnacao.pontosImpugnar.length > 0 && (
-                          <div className="p-2.5 rounded-lg border border-rose-500/30 bg-rose-500/10 space-y-1">
-                            <span className="text-[10px] text-rose-400 uppercase font-bold flex items-center gap-1">
+                          <div className="p-2.5 rounded-lg border border-destructive/30 bg-destructive/10 space-y-1">
+                            <span className="text-[10px] text-destructive uppercase font-bold flex items-center gap-1">
                               <AlertCircle className="size-3" /> Pontos com Fundamento para Impugnação Prévia (Art. 164)
                             </span>
-                            <ul className="list-disc pl-4 space-y-0.5 text-rose-200">
+                            <ul className="list-disc pl-4 space-y-0.5 text-destructive">
                               {resultado.estrategiaImpugnacao.pontosImpugnar.map((imp, i) => (
                                 <li key={i}>{imp}</li>
                               ))}
@@ -514,11 +514,11 @@ export function AnaliseLicitacaoSheet({
                           </div>
                         )}
                         {resultado.estrategiaImpugnacao.documentosUrgentes && resultado.estrategiaImpugnacao.documentosUrgentes.length > 0 && (
-                          <div className="p-2.5 rounded-lg border border-amber-500/30 bg-amber-500/10 space-y-1">
-                            <span className="text-[10px] text-amber-400 uppercase font-bold flex items-center gap-1">
+                          <div className="p-2.5 rounded-lg border border-warning/30 bg-warning/10 space-y-1">
+                            <span className="text-[10px] text-warning uppercase font-bold flex items-center gap-1">
                               <Clock className="size-3" /> Documentação Crítica a Providenciar Imediatamente
                             </span>
-                            <ul className="list-disc pl-4 space-y-0.5 text-amber-200">
+                            <ul className="list-disc pl-4 space-y-0.5 text-warning">
                               {resultado.estrategiaImpugnacao.documentosUrgentes.map((doc, i) => (
                                 <li key={i}>{doc}</li>
                               ))}
@@ -531,14 +531,14 @@ export function AnaliseLicitacaoSheet({
 
                   {/* SEÇÃO 1: PONTOS DE ATENÇÃO & RISCOS CRÍTICOS (MÁXIMA PRIORIDADE) */}
                   {pontosAtencao.length > 0 && (
-                    <div className="space-y-3 rounded-xl border border-rose-500/40 bg-rose-500/[0.03] p-4">
+                    <div className="space-y-3 rounded-xl border border-destructive/40 bg-destructive/[0.03] p-4">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
-                          <div className="p-1.5 rounded-md bg-rose-500/15 text-rose-400">
+                          <div className="p-1.5 rounded-md bg-destructive/15 text-destructive">
                             <ShieldAlert className="h-4 w-4" />
                           </div>
                           <div>
-                            <h4 className="text-sm font-bold text-rose-400 tracking-tight">
+                            <h4 className="text-sm font-bold text-destructive tracking-tight">
                               🚨 Pontos de Atenção & Riscos Críticos
                             </h4>
                             <p className="text-[11px] text-muted-foreground">
@@ -557,11 +557,11 @@ export function AnaliseLicitacaoSheet({
                           return (
                             <div
                               key={idx}
-                              className="p-3 rounded-lg border border-rose-500/30 bg-card/90 shadow-xs space-y-1"
+                              className="p-3 rounded-lg border border-destructive/30 bg-card/90 shadow-xs space-y-1"
                             >
                               <div className="flex items-center justify-between gap-2">
                                 <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                                  <AlertTriangle className="h-3.5 w-3.5 text-rose-400 shrink-0" />
+                                  <AlertTriangle className="h-3.5 w-3.5 text-destructive shrink-0" />
                                   {item.titulo}
                                 </span>
                                 <Badge variant="destructive" className="text-[9px] py-0 uppercase">
@@ -580,14 +580,14 @@ export function AnaliseLicitacaoSheet({
 
                   {/* SEÇÃO 2: PONTOS IMPORTANTES & OPORTUNIDADES */}
                   {pontosImportantes.length > 0 && (
-                    <div className="space-y-3 rounded-xl border border-emerald-500/40 bg-emerald-500/[0.03] p-4">
+                    <div className="space-y-3 rounded-xl border border-success/40 bg-success/[0.03] p-4">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
-                          <div className="p-1.5 rounded-md bg-emerald-500/15 text-emerald-400">
+                          <div className="p-1.5 rounded-md bg-success/15 text-success">
                             <Sparkles className="h-4 w-4" />
                           </div>
                           <div>
-                            <h4 className="text-sm font-bold text-emerald-400 tracking-tight">
+                            <h4 className="text-sm font-bold text-success tracking-tight">
                               ⭐ Pontos Importantes & Oportunidades
                             </h4>
                             <p className="text-[11px] text-muted-foreground">
@@ -597,7 +597,7 @@ export function AnaliseLicitacaoSheet({
                         </div>
                         <Badge
                           variant="outline"
-                          className="border-emerald-500/50 text-emerald-400 bg-emerald-500/10 text-[10px] py-0.5 px-2 font-semibold"
+                          className="border-success/50 text-success bg-success/10 text-[10px] py-0.5 px-2 font-semibold"
                         >
                           {pontosImportantes.length} item(ns)
                         </Badge>
@@ -607,11 +607,11 @@ export function AnaliseLicitacaoSheet({
                         {pontosImportantes.map((item, idx) => (
                           <div
                             key={idx}
-                            className="p-3 rounded-lg border border-emerald-500/30 bg-card/90 shadow-xs space-y-1"
+                            className="p-3 rounded-lg border border-success/30 bg-card/90 shadow-xs space-y-1"
                           >
                             <div className="flex items-center justify-between gap-2">
                               <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+                                <CheckCircle2 className="h-3.5 w-3.5 text-success shrink-0" />
                                 {item.titulo}
                               </span>
                               {item.fonteIds?.length > 0 && (
@@ -631,14 +631,14 @@ export function AnaliseLicitacaoSheet({
 
                   {/* SEÇÃO 3: REQUISITOS DE HABILITAÇÃO & QUALIFICAÇÃO */}
                   {requisitos.length > 0 && (
-                    <div className="space-y-3 rounded-xl border border-sky-500/40 bg-sky-500/[0.03] p-4">
+                    <div className="space-y-3 rounded-xl border border-info/40 bg-info/[0.03] p-4">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
-                          <div className="p-1.5 rounded-md bg-sky-500/15 text-sky-400">
+                          <div className="p-1.5 rounded-md bg-info/15 text-info">
                             <FileCheck2 className="h-4 w-4" />
                           </div>
                           <div>
-                            <h4 className="text-sm font-bold text-sky-400 tracking-tight">
+                            <h4 className="text-sm font-bold text-info tracking-tight">
                               📋 Requisitos de Habilitação & Qualificação
                             </h4>
                             <p className="text-[11px] text-muted-foreground">
@@ -648,7 +648,7 @@ export function AnaliseLicitacaoSheet({
                         </div>
                         <Badge
                           variant="outline"
-                          className="border-sky-500/50 text-sky-400 bg-sky-500/10 text-[10px] py-0.5 px-2 font-semibold"
+                          className="border-info/50 text-info bg-info/10 text-[10px] py-0.5 px-2 font-semibold"
                         >
                           {requisitos.length} item(ns)
                         </Badge>
@@ -658,7 +658,7 @@ export function AnaliseLicitacaoSheet({
                         {requisitos.map((item, idx) => (
                           <div
                             key={idx}
-                            className="p-3 rounded-lg border border-sky-500/30 bg-card/90 shadow-xs space-y-1"
+                            className="p-3 rounded-lg border border-info/30 bg-card/90 shadow-xs space-y-1"
                           >
                             <span className="text-xs font-semibold text-foreground block">
                               {item.titulo}
@@ -674,14 +674,14 @@ export function AnaliseLicitacaoSheet({
 
                   {/* SEÇÃO 4: CRONOGRAMA & DATAS DECISIVAS */}
                   {prazos.length > 0 && (
-                    <div className="space-y-3 rounded-xl border border-purple-500/40 bg-purple-500/[0.03] p-4">
+                    <div className="space-y-3 rounded-xl border border-brand/40 bg-brand/[0.03] p-4">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
-                          <div className="p-1.5 rounded-md bg-purple-500/15 text-purple-400">
+                          <div className="p-1.5 rounded-md bg-brand/15 text-brand">
                             <Calendar className="h-4 w-4" />
                           </div>
                           <div>
-                            <h4 className="text-sm font-bold text-purple-400 tracking-tight">
+                            <h4 className="text-sm font-bold text-brand tracking-tight">
                               📅 Prazos Críticos & Cronograma Legal
                             </h4>
                             <p className="text-[11px] text-muted-foreground">
@@ -691,7 +691,7 @@ export function AnaliseLicitacaoSheet({
                         </div>
                         <Badge
                           variant="outline"
-                          className="border-purple-500/50 text-purple-400 bg-purple-500/10 text-[10px] py-0.5 px-2 font-semibold"
+                          className="border-brand/50 text-brand bg-brand/10 text-[10px] py-0.5 px-2 font-semibold"
                         >
                           {prazos.length} data(s)
                         </Badge>
@@ -701,7 +701,7 @@ export function AnaliseLicitacaoSheet({
                         {prazos.map((item, idx) => (
                           <div
                             key={idx}
-                            className="p-3 rounded-lg border border-purple-500/30 bg-card/90 shadow-xs"
+                            className="p-3 rounded-lg border border-brand/30 bg-card/90 shadow-xs"
                           >
                             <span className="text-xs font-semibold text-foreground block">
                               {item.titulo}

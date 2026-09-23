@@ -1,4 +1,4 @@
-import type { LucideIcon } from "lucide-react";
+import { BarChart3, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { STATUS_INTERNO_LABEL, type StatusInterno } from "@/lib/types";
 
@@ -38,7 +38,7 @@ export function MetricCard({
             : "bg-muted/60 border-border/80";
 
   return (
-    <div className="group relative overflow-hidden rounded-xl border border-border/80 bg-card/90 p-3.5 transition-all duration-200 hover:-translate-y-0.5 hover:border-border hover:bg-card hover:shadow-md hover:shadow-black/20">
+    <div className="group relative overflow-hidden rounded-xl border border-border/80 bg-card/90 p-3.5 transition-all duration-200 hover:-translate-y-0.5 hover:border-border hover:bg-card hover:shadow-md">
       <div className="flex items-center justify-between gap-2">
         <p className="truncate text-[11px] font-medium uppercase tracking-wider text-muted-foreground/90">
           {label}
@@ -150,37 +150,25 @@ export function StatusPncpBadge({ status }: { status: string }) {
   );
 }
 
-export function ScoreBadge({ score }: { score: number }) {
-  const corBarra =
+export function ScoreBadge({ score, className }: { score: number; className?: string }) {
+  const tom =
     score >= 75
-      ? "bg-success shadow-[0_0_8px_rgba(74,222,128,0.5)]"
-      : score >= 60
-        ? "bg-primary shadow-[0_0_8px_rgba(250,175,50,0.4)]"
-        : score >= 40
-          ? "bg-warning"
-          : "bg-muted-foreground";
-
-  const corTexto =
-    score >= 75
-      ? "text-success font-semibold"
-      : score >= 60
-        ? "text-primary font-semibold"
-        : score >= 40
-          ? "text-warning"
-          : "text-muted-foreground";
+      ? "bg-success/12 text-success"
+      : score >= 40
+        ? "bg-warning/12 text-warning"
+        : "bg-destructive/10 text-destructive";
 
   return (
     <div
-      className="inline-flex items-center gap-2 rounded-full border border-border/60 bg-muted/30 px-2 py-0.5"
+      className={cn(
+        "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 font-semibold",
+        tom,
+        className,
+      )}
       title={`Score de Aderência: ${score}%`}
     >
-      <div className="h-1.5 w-10 overflow-hidden rounded-full bg-muted/80">
-        <div
-          className={cn("h-full rounded-full transition-all duration-300", corBarra)}
-          style={{ width: `${Math.min(Math.max(score, 0), 100)}%` }}
-        />
-      </div>
-      <span className={cn("num text-[11px] leading-none", corTexto)}>{score}</span>
+      <BarChart3 className="size-3.5 shrink-0" aria-hidden="true" />
+      <span className="num text-[11px] leading-none">Score {score}</span>
     </div>
   );
 }
@@ -189,15 +177,17 @@ export function EmptyState({
   titulo,
   descricao,
   acao,
+  icone,
 }: {
   titulo: string;
   descricao: string;
   acao?: React.ReactNode;
+  icone?: React.ReactNode;
 }) {
   return (
     <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border/80 bg-card/30 px-6 py-14 text-center">
       <div className="flex size-10 items-center justify-center rounded-full border border-border/70 bg-muted/40 text-muted-foreground">
-        <span className="text-base font-semibold">?</span>
+        {icone ?? <span className="text-base font-semibold">?</span>}
       </div>
       <p className="text-sm font-semibold tracking-tight text-foreground">{titulo}</p>
       <p className="max-w-md text-xs leading-relaxed text-muted-foreground">{descricao}</p>

@@ -111,16 +111,16 @@ export function ItensLicitacaoTab({ licitacaoId }: ItensLicitacaoTabProps) {
 
             <div className="rounded-lg border border-border/60 bg-card p-3">
               <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                <Coins className="size-3 text-emerald-400" /> Soma Total dos Itens
+                <Coins className="size-3 text-success" /> Soma Total dos Itens
               </span>
-              <p className="font-mono mt-1 text-xl font-bold text-emerald-400">
+              <p className="font-mono mt-1 text-xl font-bold text-success">
                 {brl(metricas.valorTotalItens)}
               </p>
             </div>
 
             <div className="rounded-lg border border-border/60 bg-card p-3">
               <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                <Tag className="size-3 text-sky-400" /> Maior Unitário Estimado
+                <Tag className="size-3 text-info" /> Maior Unitário Estimado
               </span>
               <p className="font-mono mt-1 text-xl font-bold text-foreground">
                 {brl(metricas.maiorValorUnit)}
@@ -180,9 +180,9 @@ export function ItensLicitacaoTab({ licitacaoId }: ItensLicitacaoTabProps) {
               Carregando os itens cadastrados no PNCP...
             </p>
           </div>
-        ) : error || data?.mensagem ? (
+        ) : error || (data?.mensagem && itens.length === 0) ? (
           <div className="p-6 text-center space-y-2">
-            <AlertCircle className="size-6 text-amber-400 mx-auto" />
+            <AlertCircle className="size-6 text-warning mx-auto" />
             <p className="text-xs font-medium text-foreground">
               {data?.mensagem || "Não foi possível carregar os itens desta licitação."}
             </p>
@@ -206,6 +206,11 @@ export function ItensLicitacaoTab({ licitacaoId }: ItensLicitacaoTabProps) {
           </div>
         ) : (
           <div className="overflow-x-auto">
+            {data?.mensagem && (
+              <p className="border-b border-border bg-warning/10 px-3 py-2 text-[11px] text-warning">
+                {data.mensagem}
+              </p>
+            )}
             <table className="w-full text-left text-xs">
               <thead className="border-b border-border bg-muted/40 text-muted-foreground uppercase text-[10px] tracking-wider font-semibold">
                 <tr>
@@ -253,7 +258,7 @@ export function ItensLicitacaoTab({ licitacaoId }: ItensLicitacaoTabProps) {
                           </span>
                         )}
                         {item.orcamentoSigiloso && (
-                          <span className="inline-flex items-center rounded bg-amber-500/10 text-amber-400 px-1.5 py-0.5 font-medium border border-amber-500/20">
+                          <span className="inline-flex items-center rounded bg-warning/10 text-warning px-1.5 py-0.5 font-medium border border-warning/20">
                             Sigiloso
                           </span>
                         )}
@@ -279,7 +284,7 @@ export function ItensLicitacaoTab({ licitacaoId }: ItensLicitacaoTabProps) {
                       {item.orcamentoSigiloso ? (
                         <span className="text-muted-foreground italic">Sigiloso</span>
                       ) : (
-                        <span className="text-emerald-400 font-bold">{brl(item.valorTotal)}</span>
+                        <span className="text-success font-bold">{brl(item.valorTotal)}</span>
                       )}
                     </td>
 
@@ -316,7 +321,10 @@ export function ItensLicitacaoTab({ licitacaoId }: ItensLicitacaoTabProps) {
       </section>
 
       {/* Modal de Detalhamento do Item */}
-      <Dialog open={Boolean(itemSelecionado)} onOpenChange={(open) => !open && setItemSelecionado(null)}>
+      <Dialog
+        open={Boolean(itemSelecionado)}
+        onOpenChange={(open) => !open && setItemSelecionado(null)}
+      >
         <DialogContent className="sm:max-w-xl max-h-[85vh] overflow-y-auto">
           {itemSelecionado && (
             <>
@@ -373,7 +381,7 @@ export function ItensLicitacaoTab({ licitacaoId }: ItensLicitacaoTabProps) {
                     <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
                       Valor Total
                     </span>
-                    <p className="font-mono mt-1 text-sm font-bold text-emerald-400">
+                    <p className="font-mono mt-1 text-sm font-bold text-success">
                       {itemSelecionado.orcamentoSigiloso ? (
                         <span className="italic text-muted-foreground">Sigiloso</span>
                       ) : (
@@ -451,7 +459,9 @@ export function ItensLicitacaoTab({ licitacaoId }: ItensLicitacaoTabProps) {
                         </dt>
                         <dd className="font-mono font-medium text-foreground">
                           {itemSelecionado.ncmNbsCodigo}
-                          {itemSelecionado.ncmNbsDescricao ? ` - ${itemSelecionado.ncmNbsDescricao}` : ""}
+                          {itemSelecionado.ncmNbsDescricao
+                            ? ` - ${itemSelecionado.ncmNbsDescricao}`
+                            : ""}
                         </dd>
                       </div>
                     )}
