@@ -10,7 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as AlexandriaRouteImport } from './routes/alexandria'
+import { Route as MinhasLicitacoesRouteImport } from './routes/minhas-licitacoes'
 import { Route as SincronizacaoRouteImport } from './routes/sincronizacao'
 import { Route as LicitacoesIndexRouteImport } from './routes/licitacoes.index'
 import { Route as LicitacoesIdRouteImport } from './routes/licitacoes.$id'
@@ -20,9 +20,9 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AlexandriaRoute = AlexandriaRouteImport.update({
-  id: '/alexandria',
-  path: '/alexandria',
+const MinhasLicitacoesRoute = MinhasLicitacoesRouteImport.update({
+  id: '/minhas-licitacoes',
+  path: '/minhas-licitacoes',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SincronizacaoRoute = SincronizacaoRouteImport.update({
@@ -43,14 +43,14 @@ const LicitacoesIdRoute = LicitacoesIdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/alexandria': typeof AlexandriaRoute
+  '/minhas-licitacoes': typeof MinhasLicitacoesRoute
   '/sincronizacao': typeof SincronizacaoRoute
   '/licitacoes/$id': typeof LicitacoesIdRoute
   '/licitacoes/': typeof LicitacoesIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/alexandria': typeof AlexandriaRoute
+  '/minhas-licitacoes': typeof MinhasLicitacoesRoute
   '/sincronizacao': typeof SincronizacaoRoute
   '/licitacoes/$id': typeof LicitacoesIdRoute
   '/licitacoes': typeof LicitacoesIndexRoute
@@ -58,7 +58,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/alexandria': typeof AlexandriaRoute
+  '/minhas-licitacoes': typeof MinhasLicitacoesRoute
   '/sincronizacao': typeof SincronizacaoRoute
   '/licitacoes/$id': typeof LicitacoesIdRoute
   '/licitacoes/': typeof LicitacoesIndexRoute
@@ -66,13 +66,22 @@ export interface FileRoutesById {
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
-    '/' | '/alexandria' | '/sincronizacao' | '/licitacoes/$id' | '/licitacoes/'
+    | '/'
+    | '/minhas-licitacoes'
+    | '/sincronizacao'
+    | '/licitacoes/$id'
+    | '/licitacoes/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/alexandria' | '/sincronizacao' | '/licitacoes/$id' | '/licitacoes'
+  to:
+    | '/'
+    | '/minhas-licitacoes'
+    | '/sincronizacao'
+    | '/licitacoes/$id'
+    | '/licitacoes'
   id:
     | '__root__'
     | '/'
-    | '/alexandria'
+    | '/minhas-licitacoes'
     | '/sincronizacao'
     | '/licitacoes/$id'
     | '/licitacoes/'
@@ -80,7 +89,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  AlexandriaRoute: typeof AlexandriaRoute
+  MinhasLicitacoesRoute: typeof MinhasLicitacoesRoute
   SincronizacaoRoute: typeof SincronizacaoRoute
   LicitacoesIdRoute: typeof LicitacoesIdRoute
   LicitacoesIndexRoute: typeof LicitacoesIndexRoute
@@ -95,11 +104,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/alexandria': {
-      id: '/alexandria'
-      path: '/alexandria'
-      fullPath: '/alexandria'
-      preLoaderRoute: typeof AlexandriaRouteImport
+    '/minhas-licitacoes': {
+      id: '/minhas-licitacoes'
+      path: '/minhas-licitacoes'
+      fullPath: '/minhas-licitacoes'
+      preLoaderRoute: typeof MinhasLicitacoesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/sincronizacao': {
@@ -128,7 +137,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  AlexandriaRoute: AlexandriaRoute,
+  MinhasLicitacoesRoute: MinhasLicitacoesRoute,
   SincronizacaoRoute: SincronizacaoRoute,
   LicitacoesIdRoute: LicitacoesIdRoute,
   LicitacoesIndexRoute: LicitacoesIndexRoute,

@@ -45,10 +45,10 @@ import {
   salvarConfiguracoesFn,
   sincronizarDocumentosLicitacaoFn,
   sincronizarDocumentosLicitacoesLoteFn,
-  obterLicitacoesAlexandriaFn,
-  obterIdsAlexandriaFn,
-  moverParaAlexandriaFn,
-  removerDeAlexandriaFn,
+  obterMinhasLicitacoesFn,
+  obterIdsMinhasLicitacoesFn,
+  moverParaMinhasLicitacoesFn,
+  removerDeMinhasLicitacoesFn,
   statusApiPncpFn,
   statusSincronizacaoFn,
 } from "@/services/licitacoes.functions";
@@ -584,20 +584,20 @@ export function useSincronizarDocumentosLote() {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["licitacoes"] }),
         queryClient.invalidateQueries({ queryKey: ["metricas"] }),
-        queryClient.invalidateQueries({ queryKey: ["licitacoes-alexandria"] }),
+        queryClient.invalidateQueries({ queryKey: ["minhas-licitacoes"] }),
       ]);
     },
   });
 }
 
-export function useLicitacoesAlexandria(params?: {
+export function useMinhasLicitacoes(params?: {
   ids?: string[];
   busca?: string;
   statusInterno?: string;
 }) {
   return useQuery({
-    queryKey: ["licitacoes-alexandria", params],
-    queryFn: () => obterLicitacoesAlexandriaFn({ data: params }),
+    queryKey: ["minhas-licitacoes", params],
+    queryFn: () => obterMinhasLicitacoesFn({ data: params }),
     staleTime: 60 * 1000,
   });
 }
@@ -621,64 +621,64 @@ export function useAnalisarComIa() {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["licitacao", id] }),
         queryClient.invalidateQueries({ queryKey: ["analise-licitacao", id] }),
-        queryClient.invalidateQueries({ queryKey: ["licitacoes-alexandria"] }),
+        queryClient.invalidateQueries({ queryKey: ["minhas-licitacoes"] }),
       ]);
     },
   });
 }
 
-const LOCAL_STORAGE_ALEXANDRIA_KEY = "3am_licitacoes_alexandria_ids";
+const LOCAL_STORAGE_MINHAS_LICITACOES_KEY = "3am_minhas_licitacoes_ids";
 
-export function getLocalIdsAlexandria(): string[] {
+export function getLocalIdsMinhasLicitacoes(): string[] {
   if (typeof window === "undefined") return [];
   try {
-    const raw = window.localStorage.getItem(LOCAL_STORAGE_ALEXANDRIA_KEY);
+    const raw = window.localStorage.getItem(LOCAL_STORAGE_MINHAS_LICITACOES_KEY);
     return raw ? JSON.parse(raw) : [];
   } catch {
     return [];
   }
 }
 
-export function setLocalIdsAlexandria(ids: string[]) {
+export function setLocalIdsMinhasLicitacoes(ids: string[]) {
   if (typeof window === "undefined") return;
   try {
     window.localStorage.setItem(
-      LOCAL_STORAGE_ALEXANDRIA_KEY,
+      LOCAL_STORAGE_MINHAS_LICITACOES_KEY,
       JSON.stringify(Array.from(new Set(ids))),
     );
-    window.dispatchEvent(new Event("alexandria-storage-change"));
+    window.dispatchEvent(new Event("minhas-licitacoes-storage-change"));
   } catch {
     // ignora
   }
 }
 
-export function useIdsAlexandria() {
+export function useIdsMinhasLicitacoes() {
   return useQuery({
-    queryKey: ["ids-alexandria"],
+    queryKey: ["ids-minhas-licitacoes"],
     queryFn: async () => {
       try {
-        const idsServidor = await obterIdsAlexandriaFn();
-        const idsLocal = getLocalIdsAlexandria();
+        const idsServidor = await obterIdsMinhasLicitacoesFn();
+        const idsLocal = getLocalIdsMinhasLicitacoes();
         const unificados = Array.from(new Set([...idsServidor, ...idsLocal]));
-        setLocalIdsAlexandria(unificados);
+        setLocalIdsMinhasLicitacoes(unificados);
         return unificados;
       } catch {
-        return getLocalIdsAlexandria();
+        return getLocalIdsMinhasLicitacoes();
       }
     },
     staleTime: 30 * 1000,
   });
 }
 
-export function useMoverParaAlexandria() {
+export function useMoverParaMinhasLicitacoes() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (ids: string[]) => {
-      const atuais = getLocalIdsAlexandria();
+      const atuais = getLocalIdsMinhasLicitacoes();
       const proximos = Array.from(new Set([...atuais, ...ids]));
-      setLocalIdsAlexandria(proximos);
+      setLocalIdsMinhasLicitacoes(proximos);
       try {
-        await moverParaAlexandriaFn({ data: { ids } });
+        await moverParaMinhasLicitacoesFn({ data: { ids } });
       } catch {
         // segue com local
       }
@@ -686,24 +686,24 @@ export function useMoverParaAlexandria() {
     },
     onSuccess: async () => {
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["ids-alexandria"] }),
+        queryClient.invalidateQueries({ queryKey: ["ids-minhas-licitacoes"] }),
         queryClient.invalidateQueries({ queryKey: ["licitacoes"] }),
         queryClient.invalidateQueries({ queryKey: ["metricas"] }),
-        queryClient.invalidateQueries({ queryKey: ["licitacoes-alexandria"] }),
+        queryClient.invalidateQueries({ queryKey: ["minhas-licitacoes"] }),
       ]);
     },
   });
 }
 
-export function useRemoverDeAlexandria() {
+export function useRemoverDeMinhasLicitacoes() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (ids: string[]) => {
-      const atuais = new Set(getLocalIdsAlexandria());
+      const atuais = new Set(getLocalIdsMinhasLicitacoes());
       for (const id of ids) atuais.delete(id);
-      setLocalIdsAlexandria(Array.from(atuais));
+      setLocalIdsMinhasLicitacoes(Array.from(atuais));
       try {
-        await removerDeAlexandriaFn({ data: { ids } });
+        await removerDeMinhasLicitacoesFn({ data: { ids } });
       } catch {
         // segue com local
       }
@@ -711,10 +711,10 @@ export function useRemoverDeAlexandria() {
     },
     onSuccess: async () => {
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["ids-alexandria"] }),
+        queryClient.invalidateQueries({ queryKey: ["ids-minhas-licitacoes"] }),
         queryClient.invalidateQueries({ queryKey: ["licitacoes"] }),
         queryClient.invalidateQueries({ queryKey: ["metricas"] }),
-        queryClient.invalidateQueries({ queryKey: ["licitacoes-alexandria"] }),
+        queryClient.invalidateQueries({ queryKey: ["minhas-licitacoes"] }),
       ]);
     },
   });

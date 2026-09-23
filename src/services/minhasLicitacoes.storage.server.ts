@@ -1,28 +1,26 @@
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 
 // Cache em memória para redundância e performance instantânea
-const cacheIdsAlexandria = new Set<string>();
+const cacheIdsMinhasLicitacoes = new Set<string>();
 let carregadoDoBanco = false;
 
 /**
- * Obtém todos os IDs de licitações atualmente alocadas em Alexandria.
+ * Obtém todos os IDs de licitações atualmente alocadas em Minhas Licitações.
  */
-export async function obterIdsAlexandriaServidor(): Promise<string[]> {
+export async function obterIdsMinhasLicitacoesServidor(): Promise<string[]> {
   try {
     // 1. Tenta pela tabela dedicada
-    const { data, error } = await supabaseAdmin
-      .from("licitacoes_alexandria")
-      .select("licitacao_id");
+    const { data, error } = await supabaseAdmin.from("minhas_licitacoes").select("licitacao_id");
 
     if (!error && Array.isArray(data)) {
-      cacheIdsAlexandria.clear();
+      cacheIdsMinhasLicitacoes.clear();
       for (const row of data) {
         if (row && (row as any).licitacao_id) {
-          cacheIdsAlexandria.add(String((row as any).licitacao_id));
+          cacheIdsMinhasLicitacoes.add(String((row as any).licitacao_id));
         }
       }
       carregadoDoBanco = true;
-      return Array.from(cacheIdsAlexandria);
+      return Array.from(cacheIdsMinhasLicitacoes);
     }
   } catch {
     // Fallback gracioso se a tabela ainda não tiver sido criada no Supabase
@@ -34,17 +32,17 @@ export async function obterIdsAlexandriaServidor(): Promise<string[]> {
       const { data: eventos, error: errHist } = await supabaseAdmin
         .from("licitacoes_historico")
         .select("licitacao_id, texto, em")
-        .ilike("texto", "%Alexandria%")
+        .ilike("texto", "%Minhas Licitações%")
         .order("em", { ascending: true });
 
       if (!errHist && Array.isArray(eventos)) {
         for (const ev of eventos) {
           const id = String(ev.licitacao_id);
           const txt = String(ev.texto ?? "");
-          if (txt.includes("Movida para") || txt.includes("acervo de Alexandria")) {
-            cacheIdsAlexandria.add(id);
-          } else if (txt.includes("Removida de Alexandria")) {
-            cacheIdsAlexandria.delete(id);
+          if (txt.includes("Movida para Minhas Licitações")) {
+            cacheIdsMinhasLicitacoes.add(id);
+          } else if (txt.includes("Removida de Minhas Licitações")) {
+            cacheIdsMinhasLicitacoes.delete(id);
           }
         }
         carregadoDoBanco = true;
@@ -54,23 +52,23 @@ export async function obterIdsAlexandriaServidor(): Promise<string[]> {
     }
   }
 
-  return Array.from(cacheIdsAlexandria);
+  return Array.from(cacheIdsMinhasLicitacoes);
 }
 
 /**
- * Adiciona licitações a Alexandria (move da tela geral para Alexandria).
+ * Adiciona licitações a Minhas Licitações (move da tela geral para Minhas Licitações).
  */
-export async function adicionarLicitacoesAlexandriaServidor(ids: string[]): Promise<boolean> {
+export async function adicionarMinhasLicitacoesServidor(ids: string[]): Promise<boolean> {
   if (!ids || ids.length === 0) return true;
 
   // Atualiza cache em memória
   for (const id of ids) {
-    cacheIdsAlexandria.add(id);
+    cacheIdsMinhasLicitacoes.add(id);
   }
 
   try {
     // Tenta RPC dedicada
-    const { error: rpcError } = await supabaseAdmin.rpc("mover_para_alexandria", {
+    const { error: rpcError } = await supabaseAdmin.rpc("mover_para_minhas_licitacoes", {
       p_licitacao_ids: ids,
     });
 
@@ -79,7 +77,7 @@ export async function adicionarLicitacoesAlexandriaServidor(ids: string[]): Prom
     // Se a RPC não existir, tenta insert direto
     const rows = ids.map((id) => ({ licitacao_id: id }));
     const { error: insError } = await supabaseAdmin
-      .from("licitacoes_alexandria")
+      .from("minhas_licitacoes")
       .upsert(rows, { onConflict: "licitacao_id" });
 
     if (!insError) return true;
@@ -92,7 +90,7 @@ export async function adicionarLicitacoesAlexandriaServidor(ids: string[]): Prom
     const rowsHist = ids.map((id) => ({
       licitacao_id: id,
       origem: "equipe",
-      texto: "Movida para o acervo de Alexandria",
+      texto: "Movida para Minhas Licitações",
     }));
     await supabaseAdmin.from("licitacoes_historico").insert(rowsHist);
   } catch {
@@ -103,19 +101,19 @@ export async function adicionarLicitacoesAlexandriaServidor(ids: string[]): Prom
 }
 
 /**
- * Remove licitações de Alexandria (devolve para a tela geral de Licitações).
+ * Remove licitações de Minhas Licitações (devolve para a tela geral de Licitações).
  */
-export async function removerLicitacoesAlexandriaServidor(ids: string[]): Promise<boolean> {
+export async function removerMinhasLicitacoesServidor(ids: string[]): Promise<boolean> {
   if (!ids || ids.length === 0) return true;
 
   // Atualiza cache em memória
   for (const id of ids) {
-    cacheIdsAlexandria.delete(id);
+    cacheIdsMinhasLicitacoes.delete(id);
   }
 
   try {
     // Tenta RPC dedicada
-    const { error: rpcError } = await supabaseAdmin.rpc("remover_de_alexandria", {
+    const { error: rpcError } = await supabaseAdmin.rpc("remover_de_minhas_licitacoes", {
       p_licitacao_ids: ids,
     });
 
@@ -123,7 +121,7 @@ export async function removerLicitacoesAlexandriaServidor(ids: string[]): Promis
 
     // Se a RPC não existir, tenta delete direto
     const { error: delError } = await supabaseAdmin
-      .from("licitacoes_alexandria")
+      .from("minhas_licitacoes")
       .delete()
       .in("licitacao_id", ids);
 
@@ -137,7 +135,7 @@ export async function removerLicitacoesAlexandriaServidor(ids: string[]): Promis
     const rowsHist = ids.map((id) => ({
       licitacao_id: id,
       origem: "equipe",
-      texto: "Removida de Alexandria (devolvida para Licitações Gerais)",
+      texto: "Removida de Minhas Licitações (devolvida para Licitações Gerais)",
     }));
     await supabaseAdmin.from("licitacoes_historico").insert(rowsHist);
   } catch {

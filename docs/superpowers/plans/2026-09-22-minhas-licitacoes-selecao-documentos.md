@@ -1,17 +1,17 @@
-# Alexandria & Sincronização em Lote de Documentos — Implementation Plan
+# Minhas Licitações & Sincronização em Lote de Documentos — Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Adicionar seleção em lote por checkbox na tela de Licitações, botão flutuante para sincronizar documentos das selecionadas com atualização para status "Baixado", e redirecionamento para o novo hub executivo de análise "Alexandria" (`/alexandria`).
+**Goal:** Adicionar seleção em lote por checkbox na tela de Licitações, botão flutuante para sincronizar documentos das selecionadas com atualização para status "Baixado", e redirecionamento para o novo hub executivo de análise "Minhas Licitações" (`/minhas-licitacoes`).
 
 **Architecture:** 
-- Camada de Dados/Servidor: Server Function `sincronizarDocumentosLicitacoesLoteFn` executa o download concorrente dos editais essenciais e marca `documentos_estado = 'completo'` no Supabase. `obterLicitacoesAlexandriaFn` busca as licitações com acervo pronto.
-- Camada de Estado/API: Hooks `useSincronizarDocumentosLote` e `useLicitacoesAlexandria` com invalidação do TanStack Query.
-- Camada de Interface: Checkboxes nas linhas e cards de `/licitacoes`, barra flutuante `BarraAcoesLote` com contador e ação rápida, badge "Baixado" e a rota `/alexandria` no TanStack Router integrada ao `AppShell`.
+- Camada de Dados/Servidor: Server Function `sincronizarDocumentosLicitacoesLoteFn` executa o download concorrente dos editais essenciais e marca `documentos_estado = 'completo'` no Supabase. `obterMinhasLicitacoesFn` busca as licitações com acervo pronto.
+- Camada de Estado/API: Hooks `useSincronizarDocumentosLote` e `useMinhasLicitacoes` com invalidação do TanStack Query.
+- Camada de Interface: Checkboxes nas linhas e cards de `/licitacoes`, barra flutuante `BarraAcoesLote` com contador e ação rápida, badge "Baixado" e a rota `/minhas-licitacoes` no TanStack Router integrada ao `AppShell`.
 
 **Tech Stack:** React 19, TanStack Router, TanStack Query, Tailwind CSS, Lucide Icons, Supabase, Vitest.
 
-**Spec:** `docs/superpowers/specs/2026-09-22-alexandria-selecao-documentos-design.md`
+**Spec:** `docs/superpowers/specs/2026-09-22-minhas-licitacoes-selecao-documentos-design.md`
 
 ## Global Constraints
 - Toda resposta e interface em português do Brasil.
@@ -31,9 +31,9 @@
 
 **Interfaces:**
 - Produces: `sincronizarDocumentosLicitacoesLoteFn({ data: { ids: string[] } })`
-- Produces: `obterLicitacoesAlexandriaFn({ data?: { ids?: string[], busca?: string } })`
+- Produces: `obterMinhasLicitacoesFn({ data?: { ids?: string[], busca?: string } })`
 - Produces: `useSincronizarDocumentosLote()`
-- Produces: `useLicitacoesAlexandria()`
+- Produces: `useMinhasLicitacoes()`
 
 - [ ] **Step 1: Escrever teste de unidade para a sincronização em lote**
   Criar `src/services/documentos/lote.test.ts` testando o comportamento de agrupamento e retorno da sincronização em lote.
@@ -43,14 +43,14 @@
   Expected: FAIL (funções e mocks ainda não implementados).
 
 - [ ] **Step 3: Implementar sincronização em lote e persistência de status**
-  Em `otimizador.server.ts`, garantir que `documentos_estado` seja gravado como `'completo'` quando houver documentos extraídos. Em `licitacoes.functions.ts`, implementar `sincronizarDocumentosLicitacoesLoteFn` e `obterLicitacoesAlexandriaFn`. Em `api.ts`, exportar `useSincronizarDocumentosLote` e `useLicitacoesAlexandria`.
+  Em `otimizador.server.ts`, garantir que `documentos_estado` seja gravado como `'completo'` quando houver documentos extraídos. Em `licitacoes.functions.ts`, implementar `sincronizarDocumentosLicitacoesLoteFn` e `obterMinhasLicitacoesFn`. Em `api.ts`, exportar `useSincronizarDocumentosLote` e `useMinhasLicitacoes`.
 
 - [ ] **Step 4: Executar testes para verificar sucesso**
   Run: `npx vitest run src/services/documentos/lote.test.ts`
   Expected: PASS.
 
 - [ ] **Step 5: Commit**
-  Run: `git add src/services/documentos/otimizador.server.ts src/services/licitacoes.functions.ts src/services/api.ts src/services/documentos/lote.test.ts && git commit -m "feat(api): adicionar funcoes e hooks para sincronizacao em lote e hub alexandria"`
+  Run: `git add src/services/documentos/otimizador.server.ts src/services/licitacoes.functions.ts src/services/api.ts src/services/documentos/lote.test.ts && git commit -m "feat(api): adicionar funcoes e hooks para sincronizacao em lote e hub minhas licitacoes"`
 
 ---
 
@@ -80,7 +80,7 @@
     - Adicionar estado `selecionadas: Set<string>`.
     - Adicionar checkbox no cabeçalho da tabela (selecionar todos visíveis).
     - Adicionar checkbox em cada linha da tabela e no topo de cada card do modo grid.
-    - Integrar mutação `useSincronizarDocumentosLote` com toast de progresso e redirecionamento para `/alexandria`.
+    - Integrar mutação `useSincronizarDocumentosLote` com toast de progresso e redirecionamento para `/minhas-licitacoes`.
 
 - [ ] **Step 4: Executar testes de componentes**
   Run: `npx vitest run src/components/BarraAcoesLote.test.tsx`
@@ -91,24 +91,24 @@
 
 ---
 
-### Task 3: Criação da Rota e Painel Alexandria (`/alexandria`)
+### Task 3: Criação da Rota e Painel Minhas Licitações (`/minhas-licitacoes`)
 
 **Files:**
-- Create: `src/routes/alexandria.tsx`
-- Create: `src/routes/alexandria.test.tsx`
+- Create: `src/routes/minhas-licitacoes.tsx`
+- Create: `src/routes/minhas-licitacoes.test.tsx`
 
 **Interfaces:**
-- Produces: Rota TanStack Router `/alexandria`
-- Consumes: `useLicitacoesAlexandria()`, `useAtualizarInterno()`, `useAnalisarComIa()`
+- Produces: Rota TanStack Router `/minhas-licitacoes`
+- Consumes: `useMinhasLicitacoes()`, `useAtualizarInterno()`, `useAnalisarComIa()`
 
-- [ ] **Step 1: Escrever teste básico da rota Alexandria**
+- [ ] **Step 1: Escrever teste básico da rota Minhas Licitações**
   Testar montagem da página, listagem vazia e listagem com itens.
 
 - [ ] **Step 2: Executar teste para verificar falha inicial**
-  Run: `npx vitest run src/routes/alexandria.test.tsx`
+  Run: `npx vitest run src/routes/minhas-licitacoes.test.tsx`
   Expected: FAIL (rota ainda não criada).
 
-- [ ] **Step 3: Implementar a rota `src/routes/alexandria.tsx`**
+- [ ] **Step 3: Implementar a rota `src/routes/minhas-licitacoes.tsx`**
   - Integração com `AppShell`.
   - Contadores no topo (Total no Hub, Documentos Prontos, Analisadas por IA, Valor Global).
   - Filtros rápidos por texto e status interno.
@@ -119,12 +119,12 @@
     - Seletor de status interno com feedback instantâneo.
     - Link para a página de detalhe `/licitacoes/$id`.
 
-- [ ] **Step 4: Executar testes da rota Alexandria**
-  Run: `npx vitest run src/routes/alexandria.test.tsx`
+- [ ] **Step 4: Executar testes da rota Minhas Licitações**
+  Run: `npx vitest run src/routes/minhas-licitacoes.test.tsx`
   Expected: PASS.
 
 - [ ] **Step 5: Commit**
-  Run: `git add src/routes/alexandria.tsx src/routes/alexandria.test.tsx && git commit -m "feat(alexandria): criar hub alexandria para analise detalhada de licitacoes"`
+  Run: `git add src/routes/minhas-licitacoes.tsx src/routes/minhas-licitacoes.test.tsx && git commit -m "feat(minhas-licitacoes): criar hub minhas licitacoes para analise detalhada de licitacoes"`
 
 ---
 
@@ -135,19 +135,19 @@
 - Modify: `src/components/CommandPalette.tsx`
 
 **Interfaces:**
-- Produces: Item de navegação "Alexandria" no sidebar e header.
+- Produces: Item de navegação "Minhas Licitações" no sidebar e header.
 - Produces: Atalho na paleta de comando.
 
-- [ ] **Step 1: Adicionar Alexandria no NAV do `AppShell.tsx` e CommandPalette**
-  - Adicionar `{ to: "/alexandria", label: "Alexandria", icon: Library }` no menu lateral de navegação.
-  - Adicionar comando "Ir para Alexandria" na `CommandPalette`.
+- [ ] **Step 1: Adicionar Minhas Licitações no NAV do `AppShell.tsx` e CommandPalette**
+  - Adicionar `{ to: "/minhas-licitacoes", label: "Minhas Licitações", icon: Library }` no menu lateral de navegação.
+  - Adicionar comando "Ir para Minhas Licitações" na `CommandPalette`.
 
 - [ ] **Step 2: Executar testes gerais de rotas e componentes**
   Run: `npm test`
   Expected: PASS.
 
 - [ ] **Step 3: Commit**
-  Run: `git add src/components/AppShell.tsx src/components/CommandPalette.tsx && git commit -m "feat(nav): integrar rota alexandria ao appshell e command palette"`
+  Run: `git add src/components/AppShell.tsx src/components/CommandPalette.tsx && git commit -m "feat(nav): integrar rota minhas-licitacoes ao appshell e command palette"`
 
 ---
 
@@ -156,7 +156,7 @@
 **Files:**
 - Run: Suíte de testes completa `npm run test`
 - Run: Verificação de tipagem / build `npm run build`
-- Verify: Aplicação em execução no navegador em `http://localhost:8080/licitacoes` e `http://localhost:8080/alexandria`
+- Verify: Aplicação em execução no navegador em `http://localhost:8080/licitacoes` e `http://localhost:8080/minhas-licitacoes`
 
 - [ ] **Step 1: Executar todos os testes**
   Run: `npm run test`
@@ -165,4 +165,4 @@
   Run: `npm run build`
 
 - [ ] **Step 3: Commit final e entrega**
-  Run: `git commit -am "chore: conclusao e validacao completa do hub alexandria e sincronizacao em lote"`
+  Run: `git commit -am "chore: conclusao e validacao completa do hub minhas licitacoes e sincronizacao em lote"`

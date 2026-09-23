@@ -36,26 +36,26 @@ import { cn } from "@/lib/utils";
 import { brl, dataBR, dataHoraBR, diasRestantes } from "@/lib/format";
 import { STATUS_INTERNO_LABEL, type StatusInterno } from "@/lib/types";
 import {
-  useLicitacoesAlexandria,
+  useMinhasLicitacoes,
   useAtualizarInterno,
   useAnalisarComIa,
-  useRemoverDeAlexandria,
+  useRemoverDeMinhasLicitacoes,
 } from "@/services/api";
 import { AnaliseLicitacaoSheet } from "@/components/AnaliseLicitacaoSheet";
-import type { LicitacaoAlexandriaDTO } from "@/services/licitacoes.functions";
+import type { MinhaLicitacaoDTO } from "@/services/licitacoes.functions";
 
-const alexandriaBuscaSchema = z.object({
+const minhasLicitacoesBuscaSchema = z.object({
   ids: z.string().optional(),
   busca: z.string().optional(),
   statusInterno: z.string().optional(),
 });
 
-export const Route = createFileRoute("/alexandria")({
-  validateSearch: (search) => alexandriaBuscaSchema.parse(search),
-  component: AlexandriaPage,
+export const Route = createFileRoute("/minhas-licitacoes")({
+  validateSearch: (search) => minhasLicitacoesBuscaSchema.parse(search),
+  component: MinhasLicitacoesPage,
 });
 
-function AlexandriaPage() {
+function MinhasLicitacoesPage() {
   const navigate = useNavigate();
   const search = Route.useSearch();
   const [buscaTexto, setBuscaTexto] = useState(search.busca ?? "");
@@ -69,7 +69,7 @@ function AlexandriaPage() {
       .filter((s) => s.length > 0);
   }, [search.ids]);
 
-  const { data: licitacoes = [], isLoading, refetch, isFetching } = useLicitacoesAlexandria({
+  const { data: licitacoes = [], isLoading, refetch, isFetching } = useMinhasLicitacoes({
     ids: idsArray,
     busca: buscaTexto || undefined,
     statusInterno: statusFiltro !== "todos" ? statusFiltro : undefined,
@@ -78,14 +78,14 @@ function AlexandriaPage() {
   const atualizarInterno = useAtualizarInterno();
   const analisarIa = useAnalisarComIa();
   const [analisandoId, setAnalisandoId] = useState<string | null>(null);
-  const [licitacaoAnaliseAberta, setLicitacaoAnaliseAberta] = useState<LicitacaoAlexandriaDTO | null>(null);
+  const [licitacaoAnaliseAberta, setLicitacaoAnaliseAberta] = useState<MinhaLicitacaoDTO | null>(null);
 
   const handleMudarStatus = (id: string, novoStatus: StatusInterno) => {
     atualizarInterno.mutate(
       {
         id,
         statusInterno: novoStatus,
-        historico: `Status alterado em Alexandria para ${STATUS_INTERNO_LABEL[novoStatus]}`,
+        historico: `Status alterado em Minhas Licitações para ${STATUS_INTERNO_LABEL[novoStatus]}`,
       },
       {
         onSuccess: () => {
@@ -117,21 +117,21 @@ function AlexandriaPage() {
     }
   };
 
-  const removerAlexandria = useRemoverDeAlexandria();
+  const removerMinhasLicitacoes = useRemoverDeMinhasLicitacoes();
 
-  const handleRemoverDeAlexandria = async (id: string) => {
+  const handleRemoverDeMinhasLicitacoes = async (id: string) => {
     try {
-      await removerAlexandria.mutateAsync([id]);
-      toast.success("Licitação removida de Alexandria e devolvida à aba Licitações.");
+      await removerMinhasLicitacoes.mutateAsync([id]);
+      toast.success("Licitação removida de Minhas Licitações e devolvida à aba Licitações.");
       refetch();
     } catch (err) {
       toast.error(
-        `Falha ao remover de Alexandria: ${err instanceof Error ? err.message : String(err)}`,
+        `Falha ao remover de Minhas Licitações: ${err instanceof Error ? err.message : String(err)}`,
       );
     }
   };
 
-  // Métricas do Hub Alexandria
+  // Métricas do de Minhas Licitações
   const totalLicitacoes = licitacoes.length;
   const totalDocsBaixados = useMemo(
     () => licitacoes.reduce((acc, l) => acc + (l.documentos_baixados?.length ?? 0), 0),
@@ -148,7 +148,7 @@ function AlexandriaPage() {
 
   return (
     <AppShell
-      titulo="Alexandria — Acervo & Análise Cautelosa"
+      titulo="Minhas Licitações — Acervo & Análise Cautelosa"
       descricao="Espaço dedicado para auditoria profunda, leitura de editais e acionamento de Inteligência Artificial."
       acoes={
         <div className="flex items-center gap-2">
@@ -251,7 +251,7 @@ function AlexandriaPage() {
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => navigate({ to: "/alexandria" })}
+                onClick={() => navigate({ to: "/minhas-licitacoes" })}
                 className="h-8 text-xs text-muted-foreground hover:text-foreground"
               >
                 Ver todas do acervo
@@ -264,12 +264,12 @@ function AlexandriaPage() {
         {isLoading ? (
           <div className="flex flex-col items-center justify-center py-20 text-muted-foreground gap-3">
             <Loader2 className="size-8 animate-spin text-primary" />
-            <p className="text-sm font-medium">Carregando acervo de Alexandria…</p>
+            <p className="text-sm font-medium">Carregando Minhas Licitações…</p>
           </div>
         ) : licitacoes.length === 0 ? (
           <EmptyState
             icone={<Library className="size-8 text-muted-foreground" />}
-            titulo="Nenhuma licitação no acervo de Alexandria"
+            titulo="Nenhuma licitação em Minhas Licitações"
             descricao="Selecione as oportunidades desejadas na aba Licitações e clique em 'Sincronizar Documentos' para enviá-las para análise cautelosa aqui."
             acao={
               <Button asChild size="sm" className="mt-2">
@@ -466,13 +466,13 @@ function AlexandriaPage() {
                         type="button"
                         variant="ghost"
                         size="sm"
-                        onClick={() => handleRemoverDeAlexandria(l.id)}
-                        disabled={removerAlexandria.isPending}
+                        onClick={() => handleRemoverDeMinhasLicitacoes(l.id)}
+                        disabled={removerMinhasLicitacoes.isPending}
                         className="h-8 text-xs gap-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10 cursor-pointer transition-colors"
-                        title="Remover de Alexandria e devolver para a aba Licitações"
+                        title="Remover de Minhas Licitações e devolver para a aba Licitações"
                       >
                         <Undo2 className="size-3.5" />
-                        <span>Remover de Alexandria</span>
+                        <span>Remover de Minhas Licitações</span>
                       </Button>
 
                       <Button asChild variant="outline" size="sm" className="h-8 text-xs gap-1.5">

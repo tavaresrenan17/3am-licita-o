@@ -696,12 +696,13 @@ export const sincronizarDocumentosLicitacoesLoteFn = createServerFn({ method: "P
       }
     }
 
-    // Aloca automaticamente as licitações sincronizadas no acervo de Alexandria
+    // Aloca automaticamente as licitações sincronizadas em Minhas Licitações
     try {
-      const { adicionarLicitacoesAlexandriaServidor } = await import("./alexandria.storage.server");
-      await adicionarLicitacoesAlexandriaServidor(data.ids);
+      const { adicionarMinhasLicitacoesServidor } =
+        await import("./minhasLicitacoes.storage.server");
+      await adicionarMinhasLicitacoesServidor(data.ids);
     } catch (e) {
-      console.error("Falha ao alocar licitações em Alexandria:", e);
+      console.error("Falha ao alocar licitações em Minhas Licitações:", e);
     }
 
     return {
@@ -712,30 +713,30 @@ export const sincronizarDocumentosLicitacoesLoteFn = createServerFn({ method: "P
     };
   });
 
-export const obterIdsAlexandriaFn = createServerFn({ method: "POST" }).handler(
+export const obterIdsMinhasLicitacoesFn = createServerFn({ method: "POST" }).handler(
   async (): Promise<string[]> => {
-    const { obterIdsAlexandriaServidor } = await import("./alexandria.storage.server");
-    return obterIdsAlexandriaServidor();
+    const { obterIdsMinhasLicitacoesServidor } = await import("./minhasLicitacoes.storage.server");
+    return obterIdsMinhasLicitacoesServidor();
   },
 );
 
-export const moverParaAlexandriaFn = createServerFn({ method: "POST" })
+export const moverParaMinhasLicitacoesFn = createServerFn({ method: "POST" })
   .validator((d: unknown) => z.object({ ids: z.array(z.string().uuid()) }).parse(d))
   .handler(async ({ data }): Promise<{ ok: boolean; movidos: number }> => {
-    const { adicionarLicitacoesAlexandriaServidor } = await import("./alexandria.storage.server");
-    await adicionarLicitacoesAlexandriaServidor(data.ids);
+    const { adicionarMinhasLicitacoesServidor } = await import("./minhasLicitacoes.storage.server");
+    await adicionarMinhasLicitacoesServidor(data.ids);
     return { ok: true, movidos: data.ids.length };
   });
 
-export const removerDeAlexandriaFn = createServerFn({ method: "POST" })
+export const removerDeMinhasLicitacoesFn = createServerFn({ method: "POST" })
   .validator((d: unknown) => z.object({ ids: z.array(z.string().uuid()) }).parse(d))
   .handler(async ({ data }): Promise<{ ok: boolean; removidos: number }> => {
-    const { removerLicitacoesAlexandriaServidor } = await import("./alexandria.storage.server");
-    await removerLicitacoesAlexandriaServidor(data.ids);
+    const { removerMinhasLicitacoesServidor } = await import("./minhasLicitacoes.storage.server");
+    await removerMinhasLicitacoesServidor(data.ids);
     return { ok: true, removidos: data.ids.length };
   });
 
-export interface DocumentoBaixadoAlexandria {
+export interface DocumentoBaixadoMinhaLicitacao {
   id: string;
   nome: string;
   tipo_documento: string;
@@ -744,13 +745,13 @@ export interface DocumentoBaixadoAlexandria {
   url: string | null;
 }
 
-export interface LicitacaoAlexandriaDTO extends LicitacaoDTO {
-  documentos_baixados: DocumentoBaixadoAlexandria[];
+export interface MinhaLicitacaoDTO extends LicitacaoDTO {
+  documentos_baixados: DocumentoBaixadoMinhaLicitacao[];
   analise_estado?: "nao_analisada" | "processando" | "pronta" | "erro";
   analise_resumo?: string | null;
 }
 
-export const obterLicitacoesAlexandriaFn = createServerFn({ method: "POST" })
+export const obterMinhasLicitacoesFn = createServerFn({ method: "POST" })
   .validator((d: unknown) =>
     z
       .object({
@@ -761,15 +762,15 @@ export const obterLicitacoesAlexandriaFn = createServerFn({ method: "POST" })
       .optional()
       .parse(d),
   )
-  .handler(async ({ data }): Promise<LicitacaoAlexandriaDTO[]> => {
+  .handler(async ({ data }): Promise<MinhaLicitacaoDTO[]> => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { obterIdsAlexandriaServidor } = await import("./alexandria.storage.server");
+    const { obterIdsMinhasLicitacoesServidor } = await import("./minhasLicitacoes.storage.server");
 
-    // Coleta IDs registrados em Alexandria
-    const idsPersistidos = await obterIdsAlexandriaServidor();
+    // Coleta IDs registrados em Minhas Licitações
+    const idsPersistidos = await obterIdsMinhasLicitacoesServidor();
     const idsCombinados = Array.from(new Set([...idsPersistidos, ...(data?.ids ?? [])]));
 
-    // Regra mandatória: em Alexandria aparecem SOMENTE as licitações que foram movidas para lá
+    // Regra mandatória: em Minhas Licitações aparecem SOMENTE as licitações que foram movidas para lá
     if (idsCombinados.length === 0) {
       return [];
     }
@@ -795,7 +796,7 @@ export const obterLicitacoesAlexandriaFn = createServerFn({ method: "POST" })
 
     const { data: linhas, error } = await query.limit(200);
     if (error) {
-      console.error("Erro ao buscar licitações em Alexandria:", error);
+      console.error("Erro ao buscar licitações em Minhas Licitações:", error);
       return [];
     }
 
@@ -825,7 +826,7 @@ export const obterLicitacoesAlexandriaFn = createServerFn({ method: "POST" })
       const docs = ((l["documentos_licitacao"] as Array<Record<string, unknown>>) ?? []).filter(
         (d) => d["ativo"] !== false,
       );
-      const docsBaixados: DocumentoBaixadoAlexandria[] = docs.map((d) => {
+      const docsBaixados: DocumentoBaixadoMinhaLicitacao[] = docs.map((d) => {
         const arqRaw = d["documentos_arquivo"];
         const arq = Array.isArray(arqRaw)
           ? ((arqRaw[0] as Record<string, unknown>) ?? {})
@@ -850,7 +851,7 @@ export const obterLicitacoesAlexandriaFn = createServerFn({ method: "POST" })
         documentos_estado: docsBaixados.length > 0 ? "completo" : baseDTO.documentos_estado,
         documentos_baixados: docsBaixados,
         analise_estado:
-          (analise?.["estado"] as LicitacaoAlexandriaDTO["analise_estado"]) ?? "nao_analisada",
+          (analise?.["estado"] as MinhaLicitacaoDTO["analise_estado"]) ?? "nao_analisada",
         analise_resumo: (resultadoAnalise?.["resumo"] as string | undefined) ?? null,
       };
     });

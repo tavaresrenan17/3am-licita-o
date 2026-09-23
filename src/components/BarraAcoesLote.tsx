@@ -6,7 +6,7 @@ interface BarraAcoesLoteProps {
   selecionadasCount: number;
   onSincronizar: () => void;
   onDesmarcar: () => void;
-  onIrParaAlexandria?: () => void;
+  onIrParaMinhasLicitacoes?: () => void;
   isSincronizando?: boolean;
   className?: string;
 }
@@ -15,7 +15,7 @@ export function BarraAcoesLote({
   selecionadasCount,
   onSincronizar,
   onDesmarcar,
-  onIrParaAlexandria,
+  onIrParaMinhasLicitacoes,
   isSincronizando = false,
   className,
 }: BarraAcoesLoteProps) {
@@ -54,22 +54,22 @@ export function BarraAcoesLote({
         ) : (
           <>
             <Download className="size-3.5" />
-            <span>Sincronizar & Mover para Alexandria</span>
+            <span>Sincronizar & Mover para Minhas Licitações</span>
           </>
         )}
       </Button>
 
-      {onIrParaAlexandria && (
+      {onIrParaMinhasLicitacoes && (
         <Button
           type="button"
           variant="outline"
           size="sm"
           disabled={isSincronizando}
-          onClick={onIrParaAlexandria}
+          onClick={onIrParaMinhasLicitacoes}
           className="h-8 gap-1.5 px-3 text-xs font-medium cursor-pointer hover:bg-muted"
         >
           <Library className="size-3.5 text-primary" />
-          <span>Ver em Alexandria</span>
+          <span>Ver em Minhas Licitações</span>
         </Button>
       )}
 

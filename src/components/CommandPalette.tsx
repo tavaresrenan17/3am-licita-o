@@ -72,10 +72,10 @@ export function CommandPalette({
             <span>Catálogo de Licitações</span>
             <CommandShortcut>G L</CommandShortcut>
           </CommandItem>
-          <CommandItem onSelect={() => irPara("/alexandria")}>
+          <CommandItem onSelect={() => irPara("/minhas-licitacoes")}>
             <Library className="mr-2.5 size-4 text-primary" />
-            <span>Alexandria — Acervo & Análise</span>
-            <CommandShortcut>G A</CommandShortcut>
+            <span>Minhas Licitações — Acervo & Análise</span>
+            <CommandShortcut>G M</CommandShortcut>
           </CommandItem>
           <CommandItem onSelect={() => irPara("/sincronizacao")}>
             <RefreshCw className="mr-2.5 size-4 text-primary" />
@@ -138,7 +138,7 @@ export function CommandPalette({
             }
           >
             <Star className="mr-2.5 size-4 text-primary fill-primary" />
-            <span>Minhas Licitações Prioritárias</span>
+            <span>Licitações Prioritárias</span>
           </CommandItem>
         </CommandGroup>
 

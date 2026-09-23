@@ -88,8 +88,8 @@ import {
   useModalidades,
   useOpcoesFiltros,
   useSincronizarDocumentosLote,
-  useIdsAlexandria,
-  useMoverParaAlexandria,
+  useIdsMinhasLicitacoes,
+  useMoverParaMinhasLicitacoes,
 } from "@/services/api";
 
 /**
@@ -438,14 +438,17 @@ function LicitacoesSalvas() {
   // portanto, o ouvinte de `keydown` registrado uma vez em vez de a cada
   // render. Não havia vazamento nem registro duplo antes (a limpeza do efeito é
   // garantida), só churn; o comentário anterior contava metade da história.
-  const { data: idsAlexandriaArray = [] } = useIdsAlexandria();
-  const idsAlexandriaSet = useMemo(() => new Set(idsAlexandriaArray), [idsAlexandriaArray]);
-  const moverParaAlexandria = useMoverParaAlexandria();
+  const { data: idsMinhasLicitacoesArray = [] } = useIdsMinhasLicitacoes();
+  const idsMinhasLicitacoesSet = useMemo(
+    () => new Set(idsMinhasLicitacoesArray),
+    [idsMinhasLicitacoesArray],
+  );
+  const moverParaMinhasLicitacoes = useMoverParaMinhasLicitacoes();
 
-  // Licitações alocadas em Alexandria ficam visíveis SOMENTE em Alexandria
+  // Licitações alocadas em Minhas Licitações ficam visíveis SOMENTE em Minhas Licitações
   const itens = useMemo(
-    () => (consulta.data?.itens ?? []).filter((l) => !idsAlexandriaSet.has(l.id)),
-    [consulta.data?.itens, idsAlexandriaSet],
+    () => (consulta.data?.itens ?? []).filter((l) => !idsMinhasLicitacoesSet.has(l.id)),
+    [consulta.data?.itens, idsMinhasLicitacoesSet],
   );
   const total = consulta.data?.total ?? 0;
   const totalPaginas = consulta.data?.totalPaginas ?? 1;
@@ -488,17 +491,17 @@ function LicitacoesSalvas() {
     if (idsArray.length === 0) return;
 
     toast.info(
-      `Iniciando download e transferência de ${idsArray.length} licitação(ões) para Alexandria...`,
+      `Iniciando download e transferência de ${idsArray.length} licitação(ões) para Minhas Licitações...`,
     );
     try {
       const res = await sincronizarLote.mutateAsync(idsArray);
-      await moverParaAlexandria.mutateAsync(idsArray);
+      await moverParaMinhasLicitacoes.mutateAsync(idsArray);
       toast.success(
-        `${res.processadas} licitação(ões) movida(s) para Alexandria (${res.totalExtraidos} documentos prontos)!`,
+        `${res.processadas} licitação(ões) movida(s) para Minhas Licitações (${res.totalExtraidos} documentos prontos)!`,
       );
       limparSelecao();
       navigate({
-        to: "/alexandria",
+        to: "/minhas-licitacoes",
         search: { ids: idsArray.join(",") },
       });
     } catch (err) {
@@ -1863,7 +1866,7 @@ function LicitacoesSalvas() {
         selecionadasCount={selecionadas.size}
         onSincronizar={handleSincronizarLote}
         onDesmarcar={limparSelecao}
-        onIrParaAlexandria={() => navigate({ to: "/alexandria" })}
+        onIrParaMinhasLicitacoes={() => navigate({ to: "/minhas-licitacoes" })}
         isSincronizando={sincronizarLote.isPending}
       />
     </AppShell>

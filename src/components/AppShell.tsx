@@ -22,7 +22,7 @@ import { AtalhosModal } from "@/components/AtalhosModal";
 const NAV: { to: string; label: string; icon: LucideIcon }[] = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
   { to: "/licitacoes", label: "Licitações", icon: Table2 },
-  { to: "/alexandria", label: "Alexandria", icon: Library },
+  { to: "/minhas-licitacoes", label: "Minhas Licitações", icon: Library },
   { to: "/sincronizacao", label: "Sincronização PNCP", icon: RefreshCw },
 ];
 
