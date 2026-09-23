@@ -18,6 +18,7 @@ import type {
   ResultadoBuscaDTO,
   ResumoColetaDocumentosDTO,
   SincronizacaoDTO,
+  StatusApiPncpDTO,
 } from "@/lib/dto";
 import type { ItemLicitacao, StatusInterno } from "@/lib/types";
 
@@ -539,6 +540,14 @@ export const coberturaIncrementalFn = createServerFn({ method: "POST" }).handler
   const repo = await getRepo();
   return (await repo.diagnosticoCobertura()) as unknown as CoberturaIncrementalDTO;
 });
+
+/** Única leitura desta camada que vai ao PNCP em vez do banco: é uma sonda ao vivo. */
+export const statusApiPncpFn = createServerFn({ method: "POST" }).handler(
+  async (): Promise<StatusApiPncpDTO> => {
+    const { verificarStatusPncp } = await import("./pncp/statusApi");
+    return verificarStatusPncp();
+  },
+);
 
 const idParamSchema = z.object({
   id: z.string().uuid(),

@@ -1,7 +1,8 @@
 /**
  * HOOKS DE DADOS DAS TELAS.
  *
- * Tudo vem do banco por server functions: nenhuma tela conversa com o PNCP, e
+ * Tudo vem do banco por server functions: nenhuma tela conversa com o PNCP (a
+ * exceção é a sonda de status em `useStatusApiPncp`, uma requisição mínima), e
  * nenhum filtro roda sobre um pedaço da tabela baixado no navegador.
  */
 import { useCallback, useRef, useState } from "react";
@@ -17,6 +18,7 @@ import type {
   ResultadoBuscaDTO,
   ResumoColetaDocumentosDTO,
   SincronizacaoDTO,
+  StatusApiPncpDTO,
 } from "@/lib/dto";
 import type { FiltrosLicitacoes, OrdenacaoCampo, StatusInterno } from "@/lib/types";
 import {
@@ -47,6 +49,7 @@ import {
   obterIdsAlexandriaFn,
   moverParaAlexandriaFn,
   removerDeAlexandriaFn,
+  statusApiPncpFn,
   statusSincronizacaoFn,
 } from "@/services/licitacoes.functions";
 
@@ -172,6 +175,23 @@ export function useAtualizarInterno() {
       await qc.invalidateQueries({ queryKey: ["licitacao", variaveis.id] });
       await qc.invalidateQueries({ queryKey: ["metricas"] });
     },
+  });
+}
+
+/**
+ * Sonda ao vivo do PNCP, a cada 2 min. Pausa enquanto a coleta roda: o PNCP
+ * devolve 429 a partir da 6ª requisição em rajada, e a sonda não pode disputar
+ * esse orçamento com o worker — durante a coleta, a saúde vem das métricas do job.
+ */
+export function useStatusApiPncp(pausado = false) {
+  return useQuery<StatusApiPncpDTO>({
+    queryKey: ["status-api-pncp"],
+    queryFn: () => statusApiPncpFn(),
+    enabled: !pausado,
+    staleTime: 60_000,
+    refetchInterval: pausado ? false : 120_000,
+    refetchOnWindowFocus: false,
+    retry: false,
   });
 }
 

@@ -10,6 +10,7 @@ import {
   Square,
 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
+import { StatusApiPncp } from "@/components/StatusApiPncp";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -182,6 +183,7 @@ function SincronizacaoPage() {
       }
     >
       <div className="space-y-4">
+        <StatusApiPncp pausado={rodando} />
         <div className="grid gap-3 lg:grid-cols-3">
         <section className="space-y-3 lg:col-span-2">
           <div className="rounded-lg border border-border bg-card p-4">
@@ -298,7 +300,7 @@ function SincronizacaoPage() {
 
             <div className="mt-3 rounded-md border border-border bg-muted/30 p-3">
               <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-                <span className="font-semibold">Saúde da API PNCP: {saude.estado}</span>
+                <span className="font-semibold">Saúde da API na última coleta: {saude.estado}</span>
                 <span className="num text-muted-foreground">
                   última resposta: {dataHoraBR(job?.api_ultima_resposta_em ?? null)}
                 </span>

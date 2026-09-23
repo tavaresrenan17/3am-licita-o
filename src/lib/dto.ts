@@ -210,6 +210,26 @@ export interface SincronizacaoDTO {
   finalizado_em: string | null;
 }
 
+/**
+ * Situação da fonte observada por uma sonda ao vivo, não pelo histórico da
+ * coleta. "instavel" cobre o PNCP de pé mas recusando (429 ou 4xx inesperado).
+ */
+export type EstadoApiPncp = "online" | "lenta" | "instavel" | "fora_do_ar";
+
+export interface SondaApiPncpDTO {
+  estado: EstadoApiPncp;
+  httpStatus: number | null;
+  latenciaMs: number;
+  detalhe: string;
+}
+
+/** Consulta (listagens da sincronização) e Integração (documentos e itens) caem separadas. */
+export interface StatusApiPncpDTO {
+  consulta: SondaApiPncpDTO;
+  integracao: SondaApiPncpDTO;
+  verificadoEm: string;
+}
+
 export interface ConfiguracoesDTO {
   ufs_coleta: string[];
   modalidades_coleta: number[];
