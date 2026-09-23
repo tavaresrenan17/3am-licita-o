@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { formatarApresentacaoAnalise } from "./apresentacao";
 import type { AnaliseLicitacaoDTO } from "../../lib/dto";
+import { parsearAnaliseResultado } from "./contrato";
+import { respostaV2 } from "./__fixtures__/respostaV2";
 
 describe("formatarApresentacaoAnalise", () => {
   it("trata nulo como nunca gerada", () => {
@@ -63,7 +65,7 @@ describe("formatarApresentacaoAnalise", () => {
     expect(a.estadoVisual).toBe("indisponivel");
   });
 
-  it("trata estado pronta com veredito", () => {
+  it("oferece refazer quando a análise salva está no formato anterior às três partes", () => {
     const dto: AnaliseLicitacaoDTO = {
       licitacaoId: "lic-1",
       estado: "pronta",
@@ -77,6 +79,27 @@ describe("formatarApresentacaoAnalise", () => {
         riscos: [],
         proximosPassos: [],
       },
+      fontes: [],
+      cobertura: { estado: "completa", ativos: 1, disponiveis: 1, falhos: 0, pendentes: 0 },
+      modelo: "gpt-4o-mini",
+      erro: null,
+      geradoEm: new Date().toISOString(),
+      atualizadoEm: new Date().toISOString(),
+    };
+    const a = formatarApresentacaoAnalise(dto);
+    expect(a.estadoVisual).toBe("desatualizada");
+    expect(a.permiteRegenerar).toBe(true);
+    expect(a.rotuloBotaoAcao).toMatch(/refazer/i);
+    expect(a.vereditoFormatado?.texto).toMatch(/favor[aá]vel/i);
+  });
+
+  it("trata estado pronta com veredito", () => {
+    const dto: AnaliseLicitacaoDTO = {
+      licitacaoId: "lic-1",
+      estado: "pronta",
+      resultado: parsearAnaliseResultado(
+        JSON.stringify({ ...respostaV2("fonte-1"), veredito: "favoravel" }),
+      ),
       fontes: [],
       cobertura: { estado: "completa", ativos: 1, disponiveis: 1, falhos: 0, pendentes: 0 },
       modelo: "gpt-4o-mini",

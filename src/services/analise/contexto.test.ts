@@ -2,12 +2,15 @@ import { describe, expect, it } from "vitest";
 import {
   ALGORITMO_VERSAO,
   CONSULTAS_TEMATICAS,
+  PARTE1_PRAZOS_CONTATOS,
+  PARTE2_HABILITACAO,
+  PARTE3_REQUISITOS,
   PROMPT_VERSAO,
-  analiseResultadoSchema,
   parsearAnaliseResultado,
   validarFontes,
   type AnaliseResultado,
 } from "./contrato";
+import { respostaV2 } from "./__fixtures__/respostaV2";
 import {
   agruparBlocos,
   calcularCobertura,
@@ -17,23 +20,8 @@ import {
   dividirTextoIntegral,
 } from "./contexto";
 
-const resultado = (fonteIds: string[] = ["fonte-a"]): AnaliseResultado => ({
-  veredito: "atencao",
-  confianca: "media",
-  resumoExecutivo: "Síntese baseada no conjunto documental analisado.",
-  pontosImportantes: [{ titulo: "Objeto", descricao: "Execução da obra", fonteIds }],
-  prazos: [],
-  requisitos: [],
-  riscos: [
-    {
-      titulo: "Garantia",
-      descricao: "Exigência relevante",
-      severidade: "alta",
-      fonteIds,
-    },
-  ],
-  proximosPassos: ["Validar capacidade técnica"],
-});
+const resultado = (fonteId = "fonte-a"): AnaliseResultado =>
+  parsearAnaliseResultado(JSON.stringify(respostaV2(fonteId)));
 
 describe("contrato da analise", () => {
   it("expõe versões e todas as consultas temáticas obrigatórias", () => {
@@ -50,28 +38,26 @@ describe("contrato da analise", () => {
       "pagamento_reajuste",
       "visitas_amostras",
       "consorcio_subcontratacao",
+      "contatos",
+      "lances",
+      "entrega_instalacao",
     ]);
   });
 
-  it("faz parse estrito do JSON e permite o resumo como síntese sem fonte própria", () => {
-    const valor = parsearAnaliseResultado(JSON.stringify(resultado()));
-    expect(valor.resumoExecutivo).toContain("conjunto documental");
-    expect(() => analiseResultadoSchema.parse({ ...resultado(), campoInventado: true })).toThrow();
+  it("faz parse do JSON, descarta chaves fora do contrato e aceita o resumo sem fonte própria", () => {
+    const valor = parsearAnaliseResultado(
+      JSON.stringify({ ...respostaV2("fonte-a"), campoInventado: true }),
+    );
+    expect(valor.resumoExecutivo).toContain("mobiliário escolar");
+    expect(valor).not.toHaveProperty("campoInventado");
     expect(() => parsearAnaliseResultado("```json\n{}\n```")).toThrow(/análise|analise/i);
   });
 
-  it("rejeita fonte inventada e item citável sem fonte", () => {
-    expect(() => validarFontes(resultado(["fonte-inventada"]), [{ id: "fonte-a" }])).toThrow(
-      /fonte/i,
-    );
-    expect(() =>
-      analiseResultadoSchema.parse({
-        ...resultado(),
-        riscos: [
-          { titulo: "Crítico", descricao: "Sem prova", severidade: "critica", fonteIds: [] },
-        ],
-      }),
-    ).toThrow();
+  it("descarta fonte inventada mantendo o valor, e preserva a fonte conhecida", () => {
+    const inventada = validarFontes(resultado("fonte-inventada"), [{ id: "fonte-a" }]);
+    expect(inventada.prazosContatos["comerciais"]?.["pagamento"]?.fonteIds).toEqual([]);
+    const conhecida = validarFontes(resultado("fonte-a"), [{ id: "fonte-a" }]);
+    expect(conhecida.prazosContatos["comerciais"]?.["pagamento"]?.fonteIds).toEqual(["fonte-a"]);
   });
 });
 
@@ -213,6 +199,25 @@ describe("prompt seguro", () => {
     expect(prompt).toContain("<documentos_nao_confiaveis>");
     expect(prompt).toContain(injecao);
     expect(prompt).toContain("fonteIds");
+  });
+
+  it("pede ao modelo todos os campos do catálogo das três partes", () => {
+    const prompt = construirPromptAnalise({
+      metadados: {},
+      blocos: [{ id: "bloco-a", documentoId: "doc-a", nome: "Edital", indice: 0, texto: "x" }],
+      evidencias: [],
+      cobertura: { estado: "completa", ativos: 1, disponiveis: 1, falhos: 0, pendentes: 0 },
+    });
+    for (const secao of [...PARTE1_PRAZOS_CONTATOS, ...PARTE3_REQUISITOS]) {
+      for (const campo of secao.campos) {
+        expect(prompt).toContain(`${campo.chave}: ${campo.rotulo}`);
+      }
+    }
+    for (const secao of PARTE2_HABILITACAO) {
+      expect(prompt).toContain(`habilitacao.${secao.chave}`);
+    }
+    expect(prompt).toContain("enderecosEntrega");
+    expect(prompt).toMatch(/úteis.*corridos/);
   });
 
   it("não permite que conteúdo feche o delimitador do documento", () => {

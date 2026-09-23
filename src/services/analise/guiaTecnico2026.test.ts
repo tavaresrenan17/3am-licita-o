@@ -73,8 +73,8 @@ describe("Guia Técnico de Referência 2026 - Memória da IA", () => {
     expect(prompt).toContain("Lei nº 13.726/2018");
   });
 
-  it("mantém os 10 IDs canônicos em CONSULTAS_TEMATICAS com queries enriquecidas", () => {
-    expect(CONSULTAS_TEMATICAS).toHaveLength(10);
+  it("mantém os 13 IDs canônicos em CONSULTAS_TEMATICAS com queries enriquecidas", () => {
+    expect(CONSULTAS_TEMATICAS).toHaveLength(13);
     const temaHabilitacao = CONSULTAS_TEMATICAS.find((t) => t.id === "habilitacao");
     expect(temaHabilitacao?.consulta).toContain("CRF FGTS 30 dias");
     const temaJulgamento = CONSULTAS_TEMATICAS.find((t) => t.id === "julgamento_proposta");

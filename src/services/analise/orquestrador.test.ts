@@ -7,43 +7,39 @@ import type {
   MateriaPrimaAnalise,
 } from "./repositorio.analise.server";
 import type { Embedder } from "../busca/embedder";
+import { PROMPT_VERSAO } from "./contrato";
+import { respostaV2 } from "./__fixtures__/respostaV2";
 
 function criarMockResultadoValido(fonteId: string) {
-  return JSON.stringify({
-    veredito: "favoravel",
-    confianca: "alta",
-    resumoExecutivo: "Licitação para compra de equipamentos escolares.",
-    pontosImportantes: [
-      {
-        titulo: "Entrega em 30 dias",
-        descricao: "Prazo fixado na cláusula 4",
-        fonteIds: [fonteId],
-      },
-    ],
-    prazos: [
-      {
-        titulo: "Abertura das propostas",
-        descricao: "Dia 10/10 às 09h",
-        fonteIds: [fonteId],
-      },
-    ],
-    requisitos: [
-      {
-        titulo: "Qualificação técnica",
-        descricao: "Atestado de capacidade",
-        fonteIds: [fonteId],
-      },
-    ],
-    riscos: [
-      {
-        titulo: "Multa por atraso",
-        descricao: "1% ao dia",
-        severidade: "media",
-        fonteIds: [fonteId],
-      },
-    ],
-    proximosPassos: ["Elaborar proposta comercial", "Revisar certidões"],
-  });
+  return JSON.stringify(respostaV2(fonteId));
+}
+
+function repoComAnaliseSalva(promptVersao: string) {
+  return {
+    obterMateriaPrima: vi.fn().mockResolvedValue({
+      licitacao: { id: "lic-salva", objeto: "Mobiliário" },
+      documentos: [
+        {
+          documentoId: "doc-1",
+          ativo: true,
+          estado: "extraido",
+          texto: "Texto do edital",
+          nome: "edital.pdf",
+          tipoDocumento: "edital",
+          sha256: "hash-1",
+        },
+      ],
+      chunksDisponiveis: 0,
+    } as MateriaPrimaAnalise),
+    obterAnalise: vi.fn().mockResolvedValue({
+      licitacaoId: "lic-salva",
+      estado: "pronta",
+      promptVersao,
+      resultado: { veredito: "favoravel" },
+    } as unknown as LinhaAnalise),
+    adquirirLease: vi.fn().mockResolvedValue({ adquirido: true, linha: null, leaseId: "lease-1" }),
+    concluir: vi.fn().mockResolvedValue(undefined),
+  } satisfies Partial<RepositorioAnalise>;
 }
 
 describe("executarAnaliseLicitacao", () => {
@@ -222,51 +218,56 @@ describe("executarAnaliseLicitacao", () => {
     );
   });
 
-  it("rejeita quando o modelo inventa fonteId inexistente", async () => {
-    const docId = "doc-1";
-    const respostaComFonteInventada = criarMockResultadoValido("fonte-fantasma-999");
-
-    const geradorMock: GeradorChat = {
+  it("refaz análise salva em formato anterior quando a pessoa pede (forcar)", async () => {
+    const repo = repoComAnaliseSalva("v1");
+    const gerador: GeradorChat = {
       modelo: "gpt-4o-mini",
-      gerar: vi.fn().mockResolvedValue(respostaComFonteInventada),
-    };
-    const repoMock: Partial<RepositorioAnalise> = {
-      obterMateriaPrima: vi.fn().mockResolvedValue({
-        licitacao: { id: "lic-fonte-falsa", objeto: "Teste fonte" },
-        documentos: [
-          {
-            documentoId: docId,
-            ativo: true,
-            estado: "extraido",
-            texto: "Texto real do edital",
-            nome: "edital.pdf",
-            tipoDocumento: "edital",
-            sha256: "hash-1",
-          },
-        ],
-        chunksDisponiveis: 0,
-      } as MateriaPrimaAnalise),
-      obterAnalise: vi.fn().mockResolvedValue(null),
-      adquirirLease: vi.fn().mockResolvedValue({
-        adquirido: true,
-        linha: null,
-        leaseId: "lease-fonte-falsa",
-      }),
-      falhar: vi.fn().mockResolvedValue(undefined),
+      gerar: vi.fn().mockResolvedValue(criarMockResultadoValido("doc-1:bloco:0")),
     };
 
-    await expect(
-      executarAnaliseLicitacao({
-        licitacaoId: "lic-fonte-falsa",
-        repositorio: repoMock as RepositorioAnalise,
-        gerador: geradorMock,
-      }),
-    ).rejects.toThrow(/fonte.*desconhecida|fonte/i);
+    await executarAnaliseLicitacao({
+      licitacaoId: "lic-salva",
+      forcar: true,
+      repositorio: repo as unknown as RepositorioAnalise,
+      gerador,
+    });
 
-    expect(repoMock.falhar).toHaveBeenCalledWith(
-      "lic-fonte-falsa",
-      "lease-fonte-falsa",
-      expect.any(String),
-    );
+    expect(gerador.gerar).toHaveBeenCalledTimes(1);
+    expect(repo.concluir).toHaveBeenCalledTimes(1);
+  });
+
+  it("não refaz análise salva no formato atual, mesmo com forcar", async () => {
+    const repo = repoComAnaliseSalva(PROMPT_VERSAO);
+    const gerador: GeradorChat = { modelo: "gpt-4o-mini", gerar: vi.fn() };
+
+    const linha = await executarAnaliseLicitacao({
+      licitacaoId: "lic-salva",
+      forcar: true,
+      repositorio: repo as unknown as RepositorioAnalise,
+      gerador,
+    });
+
+    expect(linha.estado).toBe("pronta");
+    expect(gerador.gerar).not.toHaveBeenCalled();
+    expect(repo.adquirirLease).not.toHaveBeenCalled();
+  });
+
+  it("descarta fonteId inventado pelo modelo e conclui a análise", async () => {
+    const repo = repoComAnaliseSalva("v1");
+    repo.obterAnalise.mockResolvedValue(null);
+    const gerador: GeradorChat = {
+      modelo: "gpt-4o-mini",
+      gerar: vi.fn().mockResolvedValue(criarMockResultadoValido("fonte-fantasma-999")),
+    };
+
+    await executarAnaliseLicitacao({
+      licitacaoId: "lic-salva",
+      repositorio: repo as unknown as RepositorioAnalise,
+      gerador,
+    });
+
+    const salvo = repo.concluir.mock.calls[0]?.[0] as { resultado: string };
+    expect(JSON.stringify(salvo.resultado)).not.toContain("fonte-fantasma-999");
+    expect(JSON.stringify(salvo.resultado)).toContain("60 dias corridos");
   });
 });

@@ -1,4 +1,5 @@
 import type { AnaliseLicitacaoDTO } from "../../lib/dto";
+import { ehFormatoAtual } from "./contrato";
 
 export type EstadoApresentacao =
   "nunca" | "processando" | "pronta" | "parcial" | "desatualizada" | "indisponivel" | "erro";
@@ -52,7 +53,7 @@ export function formatarApresentacaoAnalise(
       estadoVisual: "processando",
       tituloEstado: "Analisando com IA...",
       descricaoEstado:
-        "Lendo editais, projetos, termos de referência e sintetizando conclusões. Isso pode levar até 60 segundos.",
+        "Lendo editais e termos de referência e extraindo prazos, contatos, habilitação e requisitos operacionais. Costuma levar de 1 a 2 minutos.",
       badgeVariante: "secondary",
       rotuloBotaoAcao: "Processando...",
       permiteRegenerar: false,
@@ -107,6 +108,20 @@ export function formatarApresentacaoAnalise(
       texto: "Informações insuficientes",
       cor: "text-slate-500",
       varianteBadge: "outline",
+    };
+  }
+
+  if (analise.resultado && !ehFormatoAtual(analise.resultado)) {
+    return {
+      estadoVisual: "desatualizada",
+      tituloEstado: "Análise no formato antigo",
+      descricaoEstado:
+        "Gerada antes do roteiro em três partes (prazos e contatos, documentos de habilitação e requisitos operacionais). Refaça para ver as informações completas.",
+      badgeVariante: "secondary",
+      rotuloBotaoAcao: "Refazer análise",
+      permiteRegenerar: true,
+      carregando: false,
+      vereditoFormatado,
     };
   }
 

@@ -8,6 +8,7 @@ import {
   ALGORITMO_VERSAO,
   CONSULTAS_TEMATICAS,
   PROMPT_VERSAO,
+  confirmarTrechos,
   parseAnaliseResultado,
   validarFontes,
   type AnaliseResultado,
@@ -62,8 +63,15 @@ export async function executarAnaliseLicitacao(
 
   // Regra de negócio: uma vez gerada e salva para esta licitação, a análise é definitiva
   // e não deve ser gerada novamente, economizando recursos e protegendo o histórico.
+  // Única exceção: análise num formato anterior, refeita só quando a pessoa pede (forcar).
   const analiseSalva = await repo.obterAnalise(licitacaoId);
-  if (analiseSalva && analiseSalva.estado === "pronta" && analiseSalva.resultado) {
+  const formatoAnterior = analiseSalva?.promptVersao !== PROMPT_VERSAO;
+  if (
+    analiseSalva &&
+    analiseSalva.estado === "pronta" &&
+    analiseSalva.resultado &&
+    !(forcar && formatoAnterior)
+  ) {
     return analiseSalva;
   }
 
@@ -126,7 +134,14 @@ export async function executarAnaliseLicitacao(
 
     const respostaTexto = await gerador.gerar(prompt);
     const resultadoBruto = parseAnaliseResultado(respostaTexto);
-    const resultado = validarFontes(resultadoBruto, fontesValidas);
+    const textosPorFonte = new Map([
+      ...blocos.map((b) => [b.id, b.texto] as const),
+      ...evidencias.map((e) => [e.id, e.trecho] as const),
+    ]);
+    const resultado = confirmarTrechos(
+      validarFontes(resultadoBruto, fontesValidas),
+      textosPorFonte,
+    );
 
     const fontesSalvas = [
       ...blocos.map((b) => ({

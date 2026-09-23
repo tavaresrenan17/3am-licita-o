@@ -5,6 +5,7 @@
  * língua do produto (`data_limite_proposta`, `modalidade`, `status_pncp`). A
  * conversão acontece uma vez só, no servidor.
  */
+import type { AnaliseResultadoSalvo } from "@/services/analise/contrato";
 import type { StatusInterno, TipoDocumento } from "./types";
 
 export type SituacaoTemporal =
@@ -285,48 +286,8 @@ export interface CoberturaAnaliseDTO {
 export interface AnaliseLicitacaoDTO {
   licitacaoId: string;
   estado: "nunca" | "processando" | "pronta" | "erro";
-  resultado: {
-    veredito: "favoravel" | "atencao" | "desfavoravel" | "insuficiente";
-    confianca: "alta" | "media" | "baixa";
-    resumoExecutivo: string;
-    pontosImportantes: Array<{
-      titulo: string;
-      descricao: string;
-      severidade?: string;
-      fonteIds: string[];
-    }>;
-    pontosAtencao?: Array<{
-      titulo: string;
-      descricao: string;
-      severidade?: string;
-      fonteIds: string[];
-    }>;
-    itensNaoImportantes?: Array<{
-      titulo: string;
-      descricao: string;
-      severidade?: string;
-      fonteIds: string[];
-    }>;
-    prazos: Array<{
-      titulo: string;
-      descricao: string;
-      severidade?: string;
-      fonteIds: string[];
-    }>;
-    requisitos: Array<{
-      titulo: string;
-      descricao: string;
-      severidade?: string;
-      fonteIds: string[];
-    }>;
-    riscos: Array<{
-      titulo: string;
-      descricao: string;
-      severidade?: string;
-      fonteIds: string[];
-    }>;
-    proximosPassos: string[];
-  } | null;
+  /** v2 (três partes) ou v1 (formato antigo, só leitura até ser refeito). */
+  resultado: AnaliseResultadoSalvo | null;
   fontes: FonteEvidenciaDTO[];
   cobertura: CoberturaAnaliseDTO;
   modelo: string | null;

@@ -41,6 +41,8 @@ import {
 } from "@/components/ui/accordion";
 import { useAnaliseLicitacao, useGerarAnaliseLicitacao } from "@/services/api";
 import { formatarApresentacaoAnalise } from "@/services/analise/apresentacao";
+import { ehFormatoAtual } from "@/services/analise/contrato";
+import { AnaliseTresPartes } from "@/components/analise/AnaliseTresPartes";
 import { dataHoraBR } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -172,19 +174,19 @@ export function AnaliseLicitacaoSheet({
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs text-muted-foreground">
                       <div className="flex items-start gap-2 p-2.5 rounded-md bg-muted/40 border border-border/40">
                         <CheckCircle2 className="h-4 w-4 text-success shrink-0 mt-0.5" />
-                        <span>Resumo executivo do objeto e entregáveis</span>
-                      </div>
-                      <div className="flex items-start gap-2 p-2.5 rounded-md bg-muted/40 border border-border/40">
-                        <FileCheck2 className="h-4 w-4 text-info shrink-0 mt-0.5" />
-                        <span>Exigências de qualificação e atestados</span>
+                        <span>Veredito, resumo e parecer go / no-go</span>
                       </div>
                       <div className="flex items-start gap-2 p-2.5 rounded-md bg-muted/40 border border-border/40">
                         <Calendar className="h-4 w-4 text-brand shrink-0 mt-0.5" />
-                        <span>Cronograma, prazos e datas-limite</span>
+                        <span>Parte 1 · Prazos procedimentais, comerciais e contatos</span>
+                      </div>
+                      <div className="flex items-start gap-2 p-2.5 rounded-md bg-muted/40 border border-border/40">
+                        <FileCheck2 className="h-4 w-4 text-info shrink-0 mt-0.5" />
+                        <span>Parte 2 · Documentos de habilitação</span>
                       </div>
                       <div className="flex items-start gap-2 p-2.5 rounded-md bg-muted/40 border border-border/40">
                         <ShieldAlert className="h-4 w-4 text-warning shrink-0 mt-0.5" />
-                        <span>Identificação de riscos e multas</span>
+                        <span>Parte 3 · Amostras, entrega, lances, garantias e exequibilidade</span>
                       </div>
                     </div>
 
@@ -228,15 +230,17 @@ export function AnaliseLicitacaoSheet({
 
             {/* ESTADO 5: Análise Pronta ou Parcial */}
             {!processando && !isLoading && resultado && (() => {
+              // Formato anterior às três partes: só leitura, até a pessoa refazer.
+              const antigo = ehFormatoAtual(resultado) ? null : resultado;
               const pontosAtencao =
-                resultado.pontosAtencao && resultado.pontosAtencao.length > 0
-                  ? resultado.pontosAtencao
-                  : (resultado.riscos ?? []);
-              const pontosImportantes = resultado.pontosImportantes ?? [];
-              const itensNaoImportantes = resultado.itensNaoImportantes ?? [];
-              const requisitos = resultado.requisitos ?? [];
-              const prazos = resultado.prazos ?? [];
-              const proximosPassos = resultado.proximosPassos ?? [];
+                antigo?.pontosAtencao && antigo.pontosAtencao.length > 0
+                  ? antigo.pontosAtencao
+                  : (antigo?.riscos ?? []);
+              const pontosImportantes = antigo?.pontosImportantes ?? [];
+              const itensNaoImportantes = antigo?.itensNaoImportantes ?? [];
+              const requisitos = antigo?.requisitos ?? [];
+              const prazos = antigo?.prazos ?? [];
+              const proximosPassos = antigo?.proximosPassos ?? [];
 
               return (
                 <div className="space-y-6">
@@ -257,6 +261,27 @@ export function AnaliseLicitacaoSheet({
                       )}
                     </div>
                   </div>
+
+                  {apresentacao.estadoVisual === "desatualizada" && (
+                    <Alert className="border-warning/40 bg-warning/10">
+                      <RotateCw className="h-4 w-4 text-warning" />
+                      <AlertTitle className="text-xs font-semibold">
+                        {apresentacao.tituloEstado}
+                      </AlertTitle>
+                      <AlertDescription className="space-y-2 text-xs">
+                        <p>{apresentacao.descricaoEstado}</p>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="gap-2 border-warning/50 cursor-pointer"
+                          onClick={() => handleGerar(true)}
+                        >
+                          <RefreshCw className="h-3.5 w-3.5" />
+                          {apresentacao.rotuloBotaoAcao}
+                        </Button>
+                      </AlertDescription>
+                    </Alert>
+                  )}
 
                   {/* Veredito e Nível de Confiança */}
                   <div className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-xl border border-border/70 bg-muted/30">
@@ -367,8 +392,13 @@ export function AnaliseLicitacaoSheet({
                     </CardContent>
                   </Card>
 
+                  {/* AS TRÊS PARTES: prazos e contatos, habilitação, requisitos operacionais */}
+                  {ehFormatoAtual(resultado) && (
+                    <AnaliseTresPartes resultado={resultado} fontes={fontes} />
+                  )}
+
                   {/* BLOCO ESPECIAL: ENGENHARIA DE CUSTOS, BDI & ALERTA DE CAIXA */}
-                  {resultado.engenhariaCustos && (
+                  {antigo?.engenhariaCustos && (
                     <div className="rounded-xl border border-warning/40 bg-warning/[0.03] p-4 space-y-3">
                       <div className="flex items-center gap-2">
                         <div className="p-1.5 rounded-md bg-warning/15 text-warning">
@@ -385,38 +415,38 @@ export function AnaliseLicitacaoSheet({
                       </div>
 
                       <div className="grid gap-2 text-xs sm:grid-cols-2">
-                        {resultado.engenhariaCustos.regimeExecucao && (
+                        {antigo.engenhariaCustos.regimeExecucao && (
                           <div className="p-2.5 rounded-lg border border-border/50 bg-card/80 space-y-0.5">
                             <span className="text-[10px] text-muted-foreground uppercase font-bold">Regime de Execução</span>
-                            <p className="font-semibold text-foreground">{resultado.engenhariaCustos.regimeExecucao}</p>
+                            <p className="font-semibold text-foreground">{antigo.engenhariaCustos.regimeExecucao}</p>
                           </div>
                         )}
-                        {resultado.engenhariaCustos.bdiSugerido && (
+                        {antigo.engenhariaCustos.bdiSugerido && (
                           <div className="p-2.5 rounded-lg border border-border/50 bg-card/80 space-y-0.5">
                             <span className="text-[10px] text-muted-foreground uppercase font-bold">BDI Referencial</span>
-                            <p className="font-semibold text-foreground">{resultado.engenhariaCustos.bdiSugerido}</p>
+                            <p className="font-semibold text-foreground">{antigo.engenhariaCustos.bdiSugerido}</p>
                           </div>
                         )}
-                        {resultado.engenhariaCustos.alertaLinha75 && (
+                        {antigo.engenhariaCustos.alertaLinha75 && (
                           <div className="p-2.5 rounded-lg border border-destructive/30 bg-destructive/10 space-y-0.5 sm:col-span-2">
                             <span className="text-[10px] text-destructive uppercase font-bold flex items-center gap-1">
                               <AlertTriangle className="size-3" /> Linha dos 75% (Inexequibilidade Art. 59 §4º)
                             </span>
-                            <p className="text-foreground/90">{resultado.engenhariaCustos.alertaLinha75}</p>
+                            <p className="text-foreground/90">{antigo.engenhariaCustos.alertaLinha75}</p>
                           </div>
                         )}
-                        {resultado.engenhariaCustos.alertaLinha85 && (
+                        {antigo.engenhariaCustos.alertaLinha85 && (
                           <div className="p-2.5 rounded-lg border border-warning/30 bg-warning/10 space-y-0.5 sm:col-span-2">
                             <span className="text-[10px] text-warning uppercase font-bold flex items-center gap-1">
                               <ShieldAlert className="size-3" /> Linha dos 85% (Garantia Adicional de Caixa Art. 59 §5º)
                             </span>
-                            <p className="text-foreground/90">{resultado.engenhariaCustos.alertaLinha85}</p>
+                            <p className="text-foreground/90">{antigo.engenhariaCustos.alertaLinha85}</p>
                           </div>
                         )}
-                        {resultado.engenhariaCustos.reajusteRegra && (
+                        {antigo.engenhariaCustos.reajusteRegra && (
                           <div className="p-2.5 rounded-lg border border-border/50 bg-card/80 space-y-0.5 sm:col-span-2">
                             <span className="text-[10px] text-muted-foreground uppercase font-bold">Reajuste Inflacionário Anual (Art. 25 §7º)</span>
-                            <p className="text-foreground/90">{resultado.engenhariaCustos.reajusteRegra}</p>
+                            <p className="text-foreground/90">{antigo.engenhariaCustos.reajusteRegra}</p>
                           </div>
                         )}
                       </div>
@@ -424,7 +454,7 @@ export function AnaliseLicitacaoSheet({
                   )}
 
                   {/* BLOCO ESPECIAL: QUALIFICAÇÃO TÉCNICA & CAT/CREA (SÚMULA TCU 263) */}
-                  {resultado.engenhariaHabilitacao && (
+                  {antigo?.engenhariaHabilitacao && (
                     <div className="rounded-xl border border-info/40 bg-info/[0.03] p-4 space-y-3">
                       <div className="flex items-center gap-2">
                         <div className="p-1.5 rounded-md bg-info/15 text-info">
@@ -441,29 +471,29 @@ export function AnaliseLicitacaoSheet({
                       </div>
 
                       <div className="space-y-2 text-xs">
-                        {resultado.engenhariaHabilitacao.catExigida && (
+                        {antigo.engenhariaHabilitacao.catExigida && (
                           <div className="p-2.5 rounded-lg border border-border/50 bg-card/80 space-y-1">
                             <span className="text-[10px] text-info uppercase font-bold">Exigência de Acervo Técnico (CAT)</span>
-                            <p className="text-foreground/90">{resultado.engenhariaHabilitacao.catExigida}</p>
+                            <p className="text-foreground/90">{antigo.engenhariaHabilitacao.catExigida}</p>
                           </div>
                         )}
-                        {resultado.engenhariaHabilitacao.parcelasRelevantes && resultado.engenhariaHabilitacao.parcelasRelevantes.length > 0 && (
+                        {antigo.engenhariaHabilitacao.parcelasRelevantes && antigo.engenhariaHabilitacao.parcelasRelevantes.length > 0 && (
                           <div className="p-2.5 rounded-lg border border-border/50 bg-card/80 space-y-1">
                             <span className="text-[10px] text-muted-foreground uppercase font-bold">Parcelas de Maior Relevância e Valor Significativo</span>
                             <ul className="list-disc pl-4 space-y-0.5 text-muted-foreground">
-                              {resultado.engenhariaHabilitacao.parcelasRelevantes.map((parc, i) => (
+                              {antigo.engenhariaHabilitacao.parcelasRelevantes.map((parc, i) => (
                                 <li key={i} className="text-foreground/90">{parc}</li>
                               ))}
                             </ul>
                           </div>
                         )}
-                        {resultado.engenhariaHabilitacao.pegadinhasHabilitacao && resultado.engenhariaHabilitacao.pegadinhasHabilitacao.length > 0 && (
+                        {antigo.engenhariaHabilitacao.pegadinhasHabilitacao && antigo.engenhariaHabilitacao.pegadinhasHabilitacao.length > 0 && (
                           <div className="p-2.5 rounded-lg border border-destructive/30 bg-destructive/10 space-y-1">
                             <span className="text-[10px] text-destructive uppercase font-bold flex items-center gap-1">
                               <AlertTriangle className="size-3" /> Armadilhas de Habilitação Detectadas no Edital
                             </span>
                             <ul className="list-disc pl-4 space-y-0.5 text-destructive">
-                              {resultado.engenhariaHabilitacao.pegadinhasHabilitacao.map((peg, i) => (
+                              {antigo.engenhariaHabilitacao.pegadinhasHabilitacao.map((peg, i) => (
                                 <li key={i}>{peg}</li>
                               ))}
                             </ul>
@@ -474,7 +504,7 @@ export function AnaliseLicitacaoSheet({
                   )}
 
                   {/* BLOCO ESPECIAL: ESTRATÉGIA DE COMBATE & IMPUGNAÇÃO PREVENTIVA */}
-                  {resultado.estrategiaImpugnacao && (
+                  {antigo?.estrategiaImpugnacao && (
                     <div className="rounded-xl border border-brand/40 bg-brand/[0.03] p-4 space-y-3">
                       <div className="flex items-center gap-2">
                         <div className="p-1.5 rounded-md bg-brand/15 text-brand">
@@ -491,35 +521,35 @@ export function AnaliseLicitacaoSheet({
                       </div>
 
                       <div className="space-y-2 text-xs">
-                        {resultado.estrategiaImpugnacao.pontosImpugnar && resultado.estrategiaImpugnacao.pontosImpugnar.length > 0 && (
+                        {antigo.estrategiaImpugnacao.pontosImpugnar && antigo.estrategiaImpugnacao.pontosImpugnar.length > 0 && (
                           <div className="p-2.5 rounded-lg border border-destructive/30 bg-destructive/10 space-y-1">
                             <span className="text-[10px] text-destructive uppercase font-bold flex items-center gap-1">
                               <AlertCircle className="size-3" /> Pontos com Fundamento para Impugnação Prévia (Art. 164)
                             </span>
                             <ul className="list-disc pl-4 space-y-0.5 text-destructive">
-                              {resultado.estrategiaImpugnacao.pontosImpugnar.map((imp, i) => (
+                              {antigo.estrategiaImpugnacao.pontosImpugnar.map((imp, i) => (
                                 <li key={i}>{imp}</li>
                               ))}
                             </ul>
                           </div>
                         )}
-                        {resultado.estrategiaImpugnacao.esclarecimentos && resultado.estrategiaImpugnacao.esclarecimentos.length > 0 && (
+                        {antigo.estrategiaImpugnacao.esclarecimentos && antigo.estrategiaImpugnacao.esclarecimentos.length > 0 && (
                           <div className="p-2.5 rounded-lg border border-border/50 bg-card/80 space-y-1">
                             <span className="text-[10px] text-muted-foreground uppercase font-bold">Pedidos de Esclarecimento Sugeridos</span>
                             <ul className="list-disc pl-4 space-y-0.5 text-muted-foreground">
-                              {resultado.estrategiaImpugnacao.esclarecimentos.map((esc, i) => (
+                              {antigo.estrategiaImpugnacao.esclarecimentos.map((esc, i) => (
                                 <li key={i} className="text-foreground/90">{esc}</li>
                               ))}
                             </ul>
                           </div>
                         )}
-                        {resultado.estrategiaImpugnacao.documentosUrgentes && resultado.estrategiaImpugnacao.documentosUrgentes.length > 0 && (
+                        {antigo.estrategiaImpugnacao.documentosUrgentes && antigo.estrategiaImpugnacao.documentosUrgentes.length > 0 && (
                           <div className="p-2.5 rounded-lg border border-warning/30 bg-warning/10 space-y-1">
                             <span className="text-[10px] text-warning uppercase font-bold flex items-center gap-1">
                               <Clock className="size-3" /> Documentação Crítica a Providenciar Imediatamente
                             </span>
                             <ul className="list-disc pl-4 space-y-0.5 text-warning">
-                              {resultado.estrategiaImpugnacao.documentosUrgentes.map((doc, i) => (
+                              {antigo.estrategiaImpugnacao.documentosUrgentes.map((doc, i) => (
                                 <li key={i}>{doc}</li>
                               ))}
                             </ul>
@@ -714,6 +744,7 @@ export function AnaliseLicitacaoSheet({
                   )}
 
                   {/* SEÇÃO 5: O QUE NÃO É IMPORTANTE (CLÁUSULAS PADRÃO & DISPENSÁVEIS) */}
+                  {antigo && (
                   <div className="space-y-3 rounded-xl border border-border/80 bg-muted/20 p-4">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
@@ -749,6 +780,7 @@ export function AnaliseLicitacaoSheet({
                       )}
                     </div>
                   </div>
+                  )}
 
                   {/* SEÇÃO 6: PRÓXIMOS PASSOS */}
                   {proximosPassos.length > 0 && (
