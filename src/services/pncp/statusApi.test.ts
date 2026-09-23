@@ -15,7 +15,7 @@ const resp = (corpo: string | object | null, status = 200, tipo = "application/j
 
 const relogio = (...instantes: number[]) => {
   const fila = [...instantes];
-  return () => fila.shift() ?? instantes[instantes.length - 1];
+  return (): number => fila.shift() ?? instantes.at(-1) ?? 0;
 };
 
 describe("classificarSonda", () => {
