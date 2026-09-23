@@ -1,5 +1,11 @@
 @echo off
-rem Reconciliacao diaria: rele as oportunidades abertas de SP nos proximos 30 dias.
+rem Rotina diaria do PC: filas de documentos e embeddings.
+rem
+rem A coleta do catalogo (incremental a cada 3 h e reconciliacao diaria de 30
+rem dias) roda no GitHub Actions desde 23/09/2026, em
+rem .github\workflows\sincronizacao-pncp.yml. Ela saiu daqui para haver um unico
+rem condutor: dois processos na mesma coleta dobram a carga sobre o PNCP. Estas
+rem duas filas ficam no PC porque os embeddings dependem do Ollama local.
 
 setlocal
 cd /d "%~dp0.."
@@ -7,25 +13,18 @@ cd /d "%~dp0.."
 set "LOG=%~dp0..\logs"
 if not exist "%LOG%" mkdir "%LOG%"
 
-rem Arquivo proprio, separado da rotina de 3 h: quando o PC acorda depois de
-rem horarios perdidos, as duas tarefas disparam juntas, e dois cmd anexando no
-rem mesmo arquivo com >> disputam o arquivo e um deles perde a saida.
+rem Arquivo proprio: se a rotina de 3 h voltar a rodar no PC como plano B, dois
+rem cmd anexando no mesmo arquivo com >> disputam o arquivo e um perde a saida.
 for /f %%d in ('powershell -NoProfile -Command "Get-Date -Format yyyy-MM-dd"') do set "HOJE=%%d"
 set "ARQ=%LOG%\diaria-%HOJE%.log"
 
 echo ================================================= >> "%ARQ%"
-echo Reconciliacao diaria iniciada em %DATE% %TIME% >> "%ARQ%"
-echo. >> "%ARQ%"
-echo --- descoberta completa SP / 30 dias --- >> "%ARQ%"
-rem Janela de 1 h 30 min para a coleta; o restante das 4 h da tarefa fica para
-rem documentos e embeddings.
-set "SYNC_MAX_RUNTIME_MS=5400000"
-call npm run sincronizar -- --uf SP --horizonte 30 >> "%ARQ%" 2>&1
+echo Rotina diaria iniciada em %DATE% %TIME% >> "%ARQ%"
 
 rem --------------------------------------------------------------------------
 rem Filas de documentos e embeddings.
 rem
-rem Ficam aqui, na diaria, e nao na rotina de 3 h: medido em 18/09/2026, o PNCP
+rem Uma vez por dia, e nao a cada 3 h: medido em 18/09/2026, o PNCP
 rem recusou 62%% dos downloads com HTTP 422 do proprio armazenamento dele.
 rem Insistir de tres em tres horas contra uma fonte nesse estado gasta rede para
 rem ganhar pouco. A janela de retentativa da fila e de 6 h, entao uma passada
@@ -56,5 +55,5 @@ rem se houver uma em andamento, este comando encerra avisando, sem estragar nada
 call npm run gerar:embeddings >> "%ARQ%" 2>&1
 
 echo. >> "%ARQ%"
-echo Reconciliacao diaria encerrada em %DATE% %TIME% >> "%ARQ%"
+echo Rotina diaria encerrada em %DATE% %TIME% >> "%ARQ%"
 endlocal

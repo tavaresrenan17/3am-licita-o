@@ -46,10 +46,18 @@ Actions**:
 - `SUPABASE_URL`
 - `SUPABASE_SERVICE_ROLE_KEY`
 
-O workflow usa concorrência única, checkpoint no Supabase e limite de 150
-minutos por comando. Se o PNCP ficar indisponível ou a janela terminar, a
-execução falha de forma visível e o próximo agendamento retoma a página salva.
-Os anexos não são baixados nessa rotina; o app mantém o link oficial do PNCP.
+O workflow usa concorrência única e checkpoint no Supabase. Cada execução tem
+janela de até 2 h 40 min: com o PNCP fora, ela sonda a fonte a cada ~1,5 min e
+retoma sozinha quando ele volta. Se a janela terminar antes, o próximo
+agendamento retoma a página salva. O agendador do GitHub não é pontual (pula
+horários e atrasa de 1,5 a 3 h), e as janelas longas compensam isso.
+
+O Actions é o único condutor da coleta. O PC roda só a rotina diária de
+documentos e embeddings, que depende do Ollama local
+(`scripts\agendar-rotinas.ps1`). Se o Actions ficar fora, o plano B é
+desativar o workflow no GitHub e rodar
+`powershell -ExecutionPolicy Bypass -File scripts\agendar-rotinas.ps1 -ColetaLocal`;
+nunca os dois ao mesmo tempo, porque isso dobra a carga sobre o PNCP.
 
 Quero criar uma aplicação web MVP para apoiar o departamento de licitações da minha empresa, que atua no setor de construção civil. Meu projeto se chamará: 3AM LICITAÇÃO.
 

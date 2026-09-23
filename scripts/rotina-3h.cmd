@@ -1,5 +1,9 @@
 @echo off
-rem Rotina do 3AM Licitacao - roda a cada tres horas pelo Agendador de Tarefas.
+rem Rotina do 3AM Licitacao - coleta do PNCP a cada tres horas no PC.
+rem
+rem PLANO B: desde 23/09/2026 a coleta roda no GitHub Actions. Esta rotina so e
+rem agendada com `scripts\agendar-rotinas.ps1 -ColetaLocal`, para quando o
+rem Actions estiver fora; nunca as duas ao mesmo tempo.
 rem
 rem Busca apenas registros novos ou alterados desde a cobertura anterior.
 rem
