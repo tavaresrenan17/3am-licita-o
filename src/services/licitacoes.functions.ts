@@ -878,16 +878,10 @@ export const obterItensLicitacaoFn = createServerFn({ method: "POST" })
       const detalhe = await repo.obterLicitacao(data.id);
       if (!detalhe) return { itens: [], total: 0, mensagem: "Licitação não encontrada." };
 
-      const lic = detalhe.licitacao;
-      // CNPJ pode ter letras desde a v2.5 do manual do PNCP: tirar só a pontuação.
-      const cnpj = String(lic["cnpj_orgao"] ?? "")
-        .replace(/[^A-Za-z0-9]/g, "")
-        .toUpperCase()
-        .padStart(14, "0");
-      const ano = Number(lic["ano_compra"]);
-      const sequencial = Number(lic["sequencial_compra"]);
+      const { identificarCompraPncp, mapearItemPncp } = await import("./pncp/itens");
+      const compra = identificarCompraPncp(detalhe.licitacao);
 
-      if (!cnpj || !ano || !sequencial) {
+      if (!compra) {
         return {
           itens: [],
           total: 0,
@@ -899,49 +893,13 @@ export const obterItensLicitacaoFn = createServerFn({ method: "POST" })
       const { buscarItens, FalhaTransitoriaPNCP, RecursoInexistentePNCP } =
         await import("./pncp/client.server");
       try {
-        const { itens: itensJson, completo } = await buscarItens(cnpj, ano, sequencial);
+        const { itens: itensJson, completo } = await buscarItens(
+          compra.cnpj,
+          compra.ano,
+          compra.sequencial,
+        );
 
-        const itens: ItemLicitacao[] = itensJson.map((it: Record<string, unknown>) => ({
-          numeroItem: Number(it["numeroItem"] ?? 0),
-          descricao: String(it["descricao"] ?? "").trim(),
-          materialOuServico: it["materialOuServico"] ? String(it["materialOuServico"]) : null,
-          materialOuServicoNome: it["materialOuServicoNome"]
-            ? String(it["materialOuServicoNome"])
-            : null,
-          valorUnitarioEstimado: Number(it["valorUnitarioEstimado"] ?? 0),
-          valorTotal: Number(it["valorTotal"] ?? 0),
-          quantidade: Number(it["quantidade"] ?? 0),
-          unidadeMedida: String(it["unidadeMedida"] ?? "").trim() || "un",
-          orcamentoSigiloso: Boolean(it["orcamentoSigiloso"]),
-          itemCategoriaId: typeof it["itemCategoriaId"] === "number" ? it["itemCategoriaId"] : null,
-          itemCategoriaNome: it["itemCategoriaNome"] ? String(it["itemCategoriaNome"]) : null,
-          patrimonio: it["patrimonio"] ? String(it["patrimonio"]) : null,
-          codigoRegistroImobiliario: it["codigoRegistroImobiliario"]
-            ? String(it["codigoRegistroImobiliario"])
-            : null,
-          criterioJulgamentoId:
-            typeof it["criterioJulgamentoId"] === "number" ? it["criterioJulgamentoId"] : null,
-          criterioJulgamentoNome: it["criterioJulgamentoNome"]
-            ? String(it["criterioJulgamentoNome"])
-            : null,
-          situacaoCompraItem:
-            typeof it["situacaoCompraItem"] === "number" ? it["situacaoCompraItem"] : null,
-          situacaoCompraItemNome: it["situacaoCompraItemNome"]
-            ? String(it["situacaoCompraItemNome"])
-            : null,
-          tipoBeneficio: typeof it["tipoBeneficio"] === "number" ? it["tipoBeneficio"] : null,
-          tipoBeneficioNome: it["tipoBeneficioNome"] ? String(it["tipoBeneficioNome"]) : null,
-          incentivoProdutivoBasico: Boolean(it["incentivoProdutivoBasico"]),
-          dataInclusao: it["dataInclusao"] ? String(it["dataInclusao"]) : null,
-          dataAtualizacao: it["dataAtualizacao"] ? String(it["dataAtualizacao"]) : null,
-          temResultado: Boolean(it["temResultado"]),
-          imagem: typeof it["imagem"] === "number" ? it["imagem"] : null,
-          ncmNbsCodigo: it["ncmNbsCodigo"] ? String(it["ncmNbsCodigo"]) : null,
-          ncmNbsDescricao: it["ncmNbsDescricao"] ? String(it["ncmNbsDescricao"]) : null,
-          informacaoComplementar: it["informacaoComplementar"]
-            ? String(it["informacaoComplementar"])
-            : null,
-        }));
+        const itens: ItemLicitacao[] = itensJson.map(mapearItemPncp);
 
         return {
           itens,

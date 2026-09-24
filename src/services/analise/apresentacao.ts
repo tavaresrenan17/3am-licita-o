@@ -1,5 +1,5 @@
 import type { AnaliseLicitacaoDTO } from "../../lib/dto";
-import { ehFormatoAtual } from "./contrato";
+import { ehFormatoAtual, type AnaliseResultado } from "./contrato";
 
 export type EstadoApresentacao =
   "nunca" | "processando" | "pronta" | "parcial" | "desatualizada" | "indisponivel" | "erro";
@@ -12,10 +12,33 @@ export interface ModeloApresentacaoAnalise {
   rotuloBotaoAcao: string;
   permiteRegenerar: boolean;
   carregando: boolean;
-  vereditoFormatado?: {
-    texto: string;
-    cor: string;
-    varianteBadge: "default" | "secondary" | "destructive" | "outline";
+  /** Quanto do roteiro o edital respondeu; só no formato atual. */
+  completude?: CompletudeAnalise;
+}
+
+export interface CompletudeAnalise {
+  camposPreenchidos: number;
+  camposTotal: number;
+  /** Campos e documentos cuja frase citada foi achada no texto do edital. */
+  trechosConfirmados: number;
+  documentosHabilitacao: number;
+}
+
+/**
+ * Sem veredito, o que a tela mostra no topo é o quanto a análise achou:
+ * medido em 24/09/2026, as análises v2 preenchiam 19 a 23 dos 51 campos.
+ */
+export function calcularCompletude(resultado: AnaliseResultado): CompletudeAnalise {
+  const campos = [resultado.prazosContatos, resultado.requisitosOperacionais].flatMap((parte) =>
+    Object.values(parte).flatMap((secao) => Object.values(secao)),
+  );
+  const preenchidos = campos.filter((campo) => campo !== null);
+  const documentos = Object.values(resultado.habilitacao).flat();
+  return {
+    camposPreenchidos: preenchidos.length,
+    camposTotal: campos.length,
+    trechosConfirmados: [...preenchidos, ...documentos].filter((item) => item?.confirmado).length,
+    documentosHabilitacao: documentos.length,
   };
 }
 
@@ -74,54 +97,16 @@ export function formatarApresentacaoAnalise(
     };
   }
 
-  const veredito = analise.resultado?.veredito;
-  let vereditoFormatado: {
-    texto: string;
-    cor: string;
-    varianteBadge: "default" | "secondary" | "destructive" | "outline";
-  } = {
-    texto: "Em análise",
-    cor: "text-muted-foreground",
-    varianteBadge: "outline",
-  };
-
-  if (veredito === "favoravel") {
-    vereditoFormatado = {
-      texto: "Favorável para participação",
-      cor: "text-emerald-600 dark:text-emerald-400",
-      varianteBadge: "default",
-    };
-  } else if (veredito === "atencao") {
-    vereditoFormatado = {
-      texto: "Requer atenção / ressalvas",
-      cor: "text-amber-600 dark:text-amber-400",
-      varianteBadge: "secondary",
-    };
-  } else if (veredito === "desfavoravel") {
-    vereditoFormatado = {
-      texto: "Desfavorável / Alto risco",
-      cor: "text-rose-600 dark:text-rose-400",
-      varianteBadge: "destructive",
-    };
-  } else if (veredito === "insuficiente") {
-    vereditoFormatado = {
-      texto: "Informações insuficientes",
-      cor: "text-slate-500",
-      varianteBadge: "outline",
-    };
-  }
-
   if (analise.resultado && !ehFormatoAtual(analise.resultado)) {
     return {
       estadoVisual: "desatualizada",
       tituloEstado: "Análise no formato antigo",
       descricaoEstado:
-        "Gerada antes do roteiro em três partes (prazos e contatos, documentos de habilitação e requisitos operacionais). Refaça para ver as informações completas.",
+        "Gerada no formato anterior, com veredito de participação e sem os itens do PNCP. Refaça para ver o resumo com números, os itens e a situação do certame.",
       badgeVariante: "secondary",
       rotuloBotaoAcao: "Refazer análise",
       permiteRegenerar: true,
       carregando: false,
-      vereditoFormatado,
     };
   }
 
@@ -139,6 +124,8 @@ export function formatarApresentacaoAnalise(
     rotuloBotaoAcao: "Análise salva na licitação",
     permiteRegenerar: false,
     carregando: false,
-    vereditoFormatado,
+    ...(ehFormatoAtual(analise.resultado)
+      ? { completude: calcularCompletude(analise.resultado) }
+      : {}),
   };
 }

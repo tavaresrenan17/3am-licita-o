@@ -8,10 +8,10 @@ import type {
 } from "./repositorio.analise.server";
 import type { Embedder } from "../busca/embedder";
 import { PROMPT_VERSAO } from "./contrato";
-import { respostaV2 } from "./__fixtures__/respostaV2";
+import { respostaV3 } from "./__fixtures__/respostaV3";
 
 function criarMockResultadoValido(fonteId: string) {
-  return JSON.stringify(respostaV2(fonteId));
+  return JSON.stringify(respostaV3(fonteId));
 }
 
 function repoComAnaliseSalva(promptVersao: string) {
@@ -269,5 +269,150 @@ describe("executarAnaliseLicitacao", () => {
     const salvo = repo.concluir.mock.calls[0]?.[0] as { resultado: string };
     expect(JSON.stringify(salvo.resultado)).not.toContain("fonte-fantasma-999");
     expect(JSON.stringify(salvo.resultado)).toContain("60 dias corridos");
+  });
+
+  it("resposta que não é JSON válido ganha uma segunda tentativa antes de virar erro", async () => {
+    // 24/09/2026: 1 falha em 5 execuções do mesmo prompt, sem corte de saída;
+    // a repetição passou. Uma segunda chamada custa menos que a pessoa refazer.
+    const repo = repoComAnaliseSalva("v2");
+    repo.obterAnalise.mockResolvedValue(null);
+    const gerador: GeradorChat = {
+      modelo: "gpt-4o-mini",
+      gerar: vi
+        .fn()
+        .mockResolvedValueOnce('{"resumoExecutivo": "cortad')
+        .mockResolvedValueOnce(criarMockResultadoValido("doc-1:bloco:0")),
+    };
+
+    await executarAnaliseLicitacao({
+      licitacaoId: "lic-salva",
+      repositorio: repo as unknown as RepositorioAnalise,
+      gerador,
+    });
+
+    expect(gerador.gerar).toHaveBeenCalledTimes(2);
+    expect(repo.concluir).toHaveBeenCalledTimes(1);
+  });
+
+  it("duas respostas inválidas viram erro com o começo da resposta, para diagnóstico", async () => {
+    const repo = { ...repoComAnaliseSalva("v2"), falhar: vi.fn().mockResolvedValue(undefined) };
+    repo.obterAnalise.mockResolvedValue(null);
+    const gerador: GeradorChat = {
+      modelo: "gpt-4o-mini",
+      gerar: vi.fn().mockResolvedValue("Desculpe, não consigo"),
+    };
+
+    await expect(
+      executarAnaliseLicitacao({
+        licitacaoId: "lic-salva",
+        repositorio: repo as unknown as RepositorioAnalise,
+        gerador,
+      }),
+    ).rejects.toThrow(/JSON válido.*Desculpe, não consigo/);
+    expect(gerador.gerar).toHaveBeenCalledTimes(2);
+    expect(repo.concluir).not.toHaveBeenCalled();
+  });
+
+  describe("itens do PNCP", () => {
+    function repoComCompra() {
+      const repo = repoComAnaliseSalva("v2");
+      repo.obterAnalise.mockResolvedValue(null);
+      repo.obterMateriaPrima.mockResolvedValue({
+        licitacao: {
+          id: "lic-salva",
+          objeto: "Credenciamento de consultas",
+          cnpj_orgao: "12345678000190",
+          ano_compra: 2026,
+          sequencial_compra: 14,
+          situacao_compra_id: 1,
+          data_encerramento_proposta: "2026-12-01T12:00:00+00:00",
+        },
+        documentos: [
+          {
+            documentoId: "doc-1",
+            ativo: true,
+            estado: "extraido",
+            texto: "Texto do termo de referência",
+            nome: "TERMO_DE_REFERENCIA.pdf",
+            tipoDocumento: "anexo",
+            sha256: "hash-1",
+          },
+        ],
+        chunksDisponiveis: 0,
+      } as MateriaPrimaAnalise);
+      return repo;
+    }
+
+    const homologado = (numeroItem: number) => ({
+      numeroItem,
+      descricao: `CONSULTA ESPECIALIDADE ${numeroItem}`,
+      quantidade: 100,
+      unidadeMedida: "SERVIÇO",
+      valorUnitarioEstimado: 150,
+      valorTotal: 15_000,
+      tipoBeneficioNome: "Não se aplica",
+      situacaoCompraItemNome: "Homologado",
+      temResultado: true,
+    });
+
+    it("envia os itens ao modelo e salva os fatos do certame calculados pelo sistema", async () => {
+      const repo = repoComCompra();
+      const gerador: GeradorChat = {
+        modelo: "gpt-4o-mini",
+        gerar: vi.fn().mockResolvedValue(criarMockResultadoValido("doc-1:bloco:0")),
+      };
+      const obterItens = vi.fn().mockResolvedValue([homologado(1), homologado(2)]);
+
+      await executarAnaliseLicitacao({
+        licitacaoId: "lic-salva",
+        repositorio: repo as unknown as RepositorioAnalise,
+        gerador,
+        obterItens,
+        agora: () => new Date("2026-09-24T12:00:00-03:00"),
+      });
+
+      expect(obterItens).toHaveBeenCalledWith({
+        cnpj: "12345678000190",
+        ano: 2026,
+        sequencial: 14,
+      });
+      expect(vi.mocked(gerador.gerar).mock.calls[0]?.[0]).toContain("CONSULTA ESPECIALIDADE 2");
+      const salvo = repo.concluir.mock.calls[0]?.[0] as {
+        resultado: { fatosPncp: Record<string, unknown>; alertasSistema: string[] };
+      };
+      expect(salvo.resultado.fatosPncp).toMatchObject({
+        itensDisponiveis: true,
+        totalItens: 2,
+        valorTotalItens: 30_000,
+        situacaoCertame: "homologado",
+      });
+      expect(salvo.resultado.alertasSistema).toEqual([]);
+    });
+
+    it("falha do PNCP ao ler os itens não derruba a análise: segue sem itens e registra alerta", async () => {
+      const repo = repoComCompra();
+      const gerador: GeradorChat = {
+        modelo: "gpt-4o-mini",
+        gerar: vi.fn().mockResolvedValue(criarMockResultadoValido("doc-1:bloco:0")),
+      };
+
+      await executarAnaliseLicitacao({
+        licitacaoId: "lic-salva",
+        repositorio: repo as unknown as RepositorioAnalise,
+        gerador,
+        obterItens: vi.fn().mockRejectedValue(new Error("HTTP 504")),
+        agora: () => new Date("2026-09-24T12:00:00-03:00"),
+      });
+
+      expect(vi.mocked(gerador.gerar).mock.calls[0]?.[0]).toMatch(/itens do PNCP indispon/i);
+      const salvo = repo.concluir.mock.calls[0]?.[0] as {
+        resultado: { fatosPncp: Record<string, unknown>; alertasSistema: string[] };
+      };
+      expect(salvo.resultado.fatosPncp).toMatchObject({
+        itensDisponiveis: false,
+        situacaoCertame: "aberto",
+      });
+      expect(salvo.resultado.alertasSistema).toEqual([expect.stringMatching(/itens do PNCP/i)]);
+    });
   });
 });

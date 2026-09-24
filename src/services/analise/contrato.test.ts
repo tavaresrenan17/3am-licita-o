@@ -8,16 +8,15 @@ import {
   parsearAnaliseResultado,
   validarFontes,
 } from "./contrato";
-import { respostaV2 } from "./__fixtures__/respostaV2";
+import { respostaV3 } from "./__fixtures__/respostaV3";
 
-describe("Contrato da análise v2 (veredito + três partes)", () => {
-  it("faz parse do parecer e das três partes e marca o formato", () => {
-    const r = parsearAnaliseResultado(JSON.stringify(respostaV2("fonte-1")));
+describe("Contrato da análise v3 (resumo + três partes, sem veredito)", () => {
+  it("faz parse do resumo e das três partes e marca o formato", () => {
+    const r = parsearAnaliseResultado(JSON.stringify(respostaV3("fonte-1")));
 
-    expect(r.formato).toBe("v2");
+    expect(r.formato).toBe("v3");
     expect(ehFormatoAtual(r)).toBe(true);
-    expect(r.veredito).toBe("atencao");
-    expect(r.parecerEngenheiro?.decisao).toBe("go_com_ressalvas");
+    expect(r.resumoExecutivo).toContain("120 conjuntos");
     expect(r.prazosContatos["procedimentais"]?.["validadeProposta"]).toMatchObject({
       valor: "60 dias corridos",
       fonteIds: ["fonte-1"],
@@ -27,8 +26,30 @@ describe("Contrato da análise v2 (veredito + três partes)", () => {
     expect(r.enderecosEntrega[0]).toMatchObject({ cidade: "São Paulo", uf: "SP" });
   });
 
+  it("não guarda veredito nem parecer, mesmo que o modelo ainda os mande", () => {
+    // A análise só extrai dados: sem conhecer a empresa, "go / no-go" era
+    // opinião sem base (recomendou consultas médicas em 23/09/2026).
+    const r = parsearAnaliseResultado(
+      JSON.stringify({
+        ...respostaV3("fonte-1"),
+        veredito: "favoravel",
+        confianca: "alta",
+        parecerEngenheiro: { decisao: "go" },
+      }),
+    );
+    expect(r).not.toHaveProperty("veredito");
+    expect(r).not.toHaveProperty("confianca");
+    expect(r).not.toHaveProperty("parecerEngenheiro");
+  });
+
+  it("sai do parse sem fatos do PNCP nem alertas do sistema: quem preenche é o orquestrador", () => {
+    const r = parsearAnaliseResultado(JSON.stringify(respostaV3("fonte-1")));
+    expect(r.fatosPncp).toBeNull();
+    expect(r.alertasSistema).toEqual([]);
+  });
+
   it("todo campo do catálogo existe no resultado, null quando o edital não informa", () => {
-    const r = parsearAnaliseResultado(JSON.stringify(respostaV2("fonte-1")));
+    const r = parsearAnaliseResultado(JSON.stringify(respostaV3("fonte-1")));
     for (const secao of PARTE1_PRAZOS_CONTATOS) {
       for (const campo of secao.campos) {
         expect(r.prazosContatos[secao.chave]).toHaveProperty(campo.chave);
@@ -48,8 +69,6 @@ describe("Contrato da análise v2 (veredito + três partes)", () => {
   it("aceita seções inteiras ausentes sem derrubar a análise", () => {
     const r = parsearAnaliseResultado(
       JSON.stringify({
-        veredito: "insuficiente",
-        confianca: "baixa",
         resumoExecutivo: "Sem edital legível.",
       }),
     );
@@ -59,7 +78,7 @@ describe("Contrato da análise v2 (veredito + três partes)", () => {
   });
 
   it('trata "não informado" como ausência, mas preserva respostas do edital como "Não exigida"', () => {
-    const bruto = respostaV2("fonte-1");
+    const bruto = respostaV3("fonte-1");
     bruto.prazosContatos.procedimentais.vistoriaTecnica = {
       valor: "Não informado no edital",
       fonteIds: [],
@@ -71,7 +90,7 @@ describe("Contrato da análise v2 (veredito + três partes)", () => {
   });
 
   it("aceita campo respondido como texto puro, sem fonte", () => {
-    const bruto = respostaV2("fonte-1") as Record<string, unknown>;
+    const bruto = respostaV3("fonte-1") as Record<string, unknown>;
     (bruto["prazosContatos"] as { pregoeiro: Record<string, unknown> }).pregoeiro["horario"] =
       "8h às 17h";
     const r = parsearAnaliseResultado(JSON.stringify(bruto));
@@ -82,21 +101,20 @@ describe("Contrato da análise v2 (veredito + três partes)", () => {
   });
 
   it("exigência desconhecida vira obrigatória em vez de derrubar a análise", () => {
-    const bruto = respostaV2("fonte-1");
+    const bruto = respostaV3("fonte-1");
     (bruto.habilitacao.fiscalTributario[0] as { exigencia: string }).exigencia = "essencial";
     const r = parsearAnaliseResultado(JSON.stringify(bruto));
     expect(r.habilitacao["fiscalTributario"]?.[0]?.exigencia).toBe("obrigatorio");
   });
 
-  it("rejeita veredito fora do contrato e JSON inválido", () => {
-    expect(() =>
-      parsearAnaliseResultado(JSON.stringify({ ...respostaV2("f"), veredito: "otimo" })),
-    ).toThrow(/contrato/);
+  it("rejeita resposta sem resumo e JSON inválido", () => {
+    const { resumoExecutivo: _, ...semResumo } = respostaV3("f");
+    expect(() => parsearAnaliseResultado(JSON.stringify(semResumo))).toThrow(/contrato/);
     expect(() => parsearAnaliseResultado("```json\n{}\n```")).toThrow(/JSON/);
   });
 
   it("descarta fonteIds inventados sem perder o valor extraído", () => {
-    const r = parsearAnaliseResultado(JSON.stringify(respostaV2("fonte-fantasma")));
+    const r = parsearAnaliseResultado(JSON.stringify(respostaV3("fonte-fantasma")));
     validarFontes(r, [{ id: "fonte-1" }]);
     expect(r.prazosContatos["procedimentais"]?.["validadeProposta"]).toMatchObject({
       valor: "60 dias corridos",
@@ -107,10 +125,16 @@ describe("Contrato da análise v2 (veredito + três partes)", () => {
   });
 
   it("mantém fonteIds conhecidos", () => {
-    const r = validarFontes(parsearAnaliseResultado(JSON.stringify(respostaV2("fonte-1"))), [
+    const r = validarFontes(parsearAnaliseResultado(JSON.stringify(respostaV3("fonte-1"))), [
       { id: "fonte-1" },
     ]);
     expect(r.requisitosOperacionais["lances"]?.["intervaloMinimo"]?.fonteIds).toEqual(["fonte-1"]);
+  });
+
+  it("formato v2 salvo (com veredito) não é reconhecido como atual", () => {
+    expect(
+      ehFormatoAtual({ ...respostaV3("f"), formato: "v2", veredito: "atencao" } as never),
+    ).toBe(false);
   });
 
   it("formato v1 salvo não é reconhecido como atual", () => {
@@ -134,8 +158,8 @@ describe("Contrato da análise v2 (veredito + três partes)", () => {
       "4.2. Não haverá exigência da garantia da contratação dos arts. 96 e seguintes da Lei. " +
       "Os bens devem atender às normas da Associação Brasileira de Normas Técnicas – ABNT, periódi- cas.";
 
-    const analisar = (mudar: (b: ReturnType<typeof respostaV2>) => void) => {
-      const bruto = respostaV2("bloco-1");
+    const analisar = (mudar: (b: ReturnType<typeof respostaV3>) => void) => {
+      const bruto = respostaV3("bloco-1");
       mudar(bruto);
       return confirmarTrechos(
         parsearAnaliseResultado(JSON.stringify(bruto)),
@@ -162,7 +186,7 @@ describe("Contrato da análise v2 (veredito + três partes)", () => {
     });
 
     it("confirma frase achada em outro bloco e corrige a fonte para onde ela está", () => {
-      const bruto = respostaV2("bloco-errado");
+      const bruto = respostaV3("bloco-errado");
       const r = confirmarTrechos(
         parsearAnaliseResultado(JSON.stringify(bruto)),
         new Map([

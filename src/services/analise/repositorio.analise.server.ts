@@ -129,7 +129,7 @@ function portaSupabase(): PortaSupabaseAnalise {
       const { data, error } = await db()
         .from("licitacoes")
         .select(
-          "id,numero_controle_pncp,cnpj_orgao,ano_compra,sequencial_compra,score_aderencia,orgao,unidade_nome,uf,municipio,objeto,informacao_complementar,modalidade_nome,processo,valor_total_estimado,data_publicacao,data_abertura_proposta,data_encerramento_proposta,situacao_nome,categoria,source_hash,updated_at",
+          "id,numero_controle_pncp,cnpj_orgao,ano_compra,sequencial_compra,score_aderencia,orgao,unidade_nome,uf,municipio,objeto,informacao_complementar,modalidade_nome,processo,valor_total_estimado,data_publicacao,data_abertura_proposta,data_encerramento_proposta,situacao_compra_id,situacao_nome,categoria,source_hash,updated_at",
         )
         .eq("id", licitacaoId)
         .maybeSingle();

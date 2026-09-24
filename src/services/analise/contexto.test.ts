@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { ItemLicitacao } from "@/lib/types";
 import {
   ALGORITMO_VERSAO,
   CONSULTAS_TEMATICAS,
@@ -10,7 +11,7 @@ import {
   validarFontes,
   type AnaliseResultado,
 } from "./contrato";
-import { respostaV2 } from "./__fixtures__/respostaV2";
+import { respostaV3 } from "./__fixtures__/respostaV3";
 import {
   agruparBlocos,
   calcularCobertura,
@@ -21,7 +22,7 @@ import {
 } from "./contexto";
 
 const resultado = (fonteId = "fonte-a"): AnaliseResultado =>
-  parsearAnaliseResultado(JSON.stringify(respostaV2(fonteId)));
+  parsearAnaliseResultado(JSON.stringify(respostaV3(fonteId)));
 
 describe("contrato da analise", () => {
   it("expõe versões e todas as consultas temáticas obrigatórias", () => {
@@ -46,7 +47,7 @@ describe("contrato da analise", () => {
 
   it("faz parse do JSON, descarta chaves fora do contrato e aceita o resumo sem fonte própria", () => {
     const valor = parsearAnaliseResultado(
-      JSON.stringify({ ...respostaV2("fonte-a"), campoInventado: true }),
+      JSON.stringify({ ...respostaV3("fonte-a"), campoInventado: true }),
     );
     expect(valor.resumoExecutivo).toContain("mobiliário escolar");
     expect(valor).not.toHaveProperty("campoInventado");
@@ -238,5 +239,89 @@ describe("prompt seguro", () => {
 
     expect(prompt.match(/<\/documentos_nao_confiaveis>/g)).toHaveLength(1);
     expect(prompt).toContain("\\u003c/system\\u003e");
+  });
+});
+
+describe("prompt v3: só extração, com números e itens do PNCP", () => {
+  const cobertura = {
+    estado: "completa",
+    ativos: 1,
+    disponiveis: 1,
+    falhos: 0,
+    pendentes: 0,
+  } as const;
+  const blocos = [{ id: "bloco-a", documentoId: "doc-a", nome: "Edital", indice: 0, texto: "x" }];
+  const item = (n: number): ItemLicitacao => ({
+    numeroItem: n,
+    descricao: `CONSULTA ESPECIALIDADE ${n} ${"x".repeat(300)}`,
+    quantidade: 7101,
+    unidadeMedida: "SERVIÇO",
+    valorUnitarioEstimado: 150,
+    valorTotal: 1_065_150,
+    tipoBeneficioNome: "Não se aplica",
+    situacaoCompraItemNome: "Homologado",
+  });
+
+  it("não cita referências não verificadas nem pede veredito ou parecer", () => {
+    // O "Decreto nº 12.807/2025" da memória do guia técnico virou fonte
+    // inventada em três análises; o veredito era opinião sem base na empresa.
+    const prompt = construirPromptAnalise({ metadados: {}, blocos, evidencias: [], cobertura });
+
+    expect(prompt).not.toContain("12.807");
+    expect(prompt).not.toMatch(/jurisprud[êe]ncia/i);
+    expect(prompt).not.toContain("parecerEngenheiro");
+    expect(prompt).not.toMatch(/veredito|go \/ no.go/i);
+  });
+
+  it("exige resumo com números concretos e sem adjetivos avaliativos", () => {
+    const prompt = construirPromptAnalise({ metadados: {}, blocos, evidencias: [], cobertura });
+
+    expect(prompt).toMatch(/resumoExecutivo:.*quantidade/i);
+    expect(prompt).toMatch(/valor estimado/i);
+    expect(prompt).toMatch(/não use adjetivos avaliativos/i);
+  });
+
+  it("envia os itens do PNCP compactos, com descrição curta, até 150 e a contagem total", () => {
+    const itens = Array.from({ length: 200 }, (_, i) => item(i + 1));
+    const prompt = construirPromptAnalise({
+      metadados: {},
+      blocos,
+      evidencias: [],
+      cobertura,
+      itens,
+    });
+
+    const bloco = /<itens_pncp_confiaveis>(.*)<\/itens_pncp_confiaveis>/s.exec(prompt)?.[1] ?? "";
+    const enviados = JSON.parse(bloco) as { totalItens: number; itens: { descricao: string }[] };
+    expect(enviados.totalItens).toBe(200);
+    expect(enviados.itens).toHaveLength(150);
+    expect(enviados.itens[0]).toMatchObject({
+      numero: 1,
+      quantidade: 7101,
+      unidade: "SERVIÇO",
+      valorUnitario: 150,
+      valorTotal: 1_065_150,
+      beneficio: "Não se aplica",
+      situacao: "Homologado",
+    });
+    expect(enviados.itens[0]!.descricao.length).toBeLessThanOrEqual(160);
+  });
+
+  it("proíbe copiar os itens do PNCP para a resposta", () => {
+    // Medido em 24/09/2026: em 2 de 3 respostas o modelo repetiu o bloco de
+    // itens no fim do JSON, gastando tokens de saída à toa.
+    const prompt = construirPromptAnalise({ metadados: {}, blocos, evidencias: [], cobertura });
+    expect(prompt).toMatch(/não copie os itens/i);
+  });
+
+  it("avisa quando os itens do PNCP não puderam ser lidos", () => {
+    const prompt = construirPromptAnalise({
+      metadados: {},
+      blocos,
+      evidencias: [],
+      cobertura,
+      itens: null,
+    });
+    expect(prompt).toMatch(/itens do PNCP indispon[íi]veis/i);
   });
 });

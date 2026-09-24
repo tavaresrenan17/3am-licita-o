@@ -37,6 +37,7 @@ import {
   useSincronizarDocumentosLicitacao,
 } from "@/services/api";
 import { AnaliseLicitacaoSheet } from "@/components/AnaliseLicitacaoSheet";
+import { ehFormatoAtual } from "@/services/analise/contrato";
 import { ItensLicitacaoTab } from "@/components/ItensLicitacaoTab";
 import { DadosAdicionaisTab } from "@/components/DadosAdicionaisTab";
 
@@ -452,10 +453,18 @@ function DetalheLicitacao() {
             </h2>
             {analisePronta && analiseData?.resultado ? (
               <>
-                <p className="mt-2 text-xs">
-                  <span className="text-muted-foreground">Veredito: </span>
-                  <span className="font-bold uppercase">{analiseData.resultado.veredito}</span>
-                </p>
+                {!ehFormatoAtual(analiseData.resultado) ? (
+                  <p className="mt-2 text-xs font-medium text-warning">
+                    Análise no formato antigo: abra para refazer.
+                  </p>
+                ) : (
+                  analiseData.resultado.fatosPncp &&
+                  analiseData.resultado.fatosPncp.situacaoCertame !== "aberto" && (
+                    <p className="mt-2 text-xs font-semibold text-destructive">
+                      {analiseData.resultado.fatosPncp.motivoSituacao}
+                    </p>
+                  )
+                )}
                 {analiseData.resultado.resumoExecutivo && (
                   <p className="mt-1 line-clamp-3 text-xs leading-relaxed text-muted-foreground">
                     {analiseData.resultado.resumoExecutivo}
@@ -464,7 +473,8 @@ function DetalheLicitacao() {
               </>
             ) : (
               <p className="mt-2 text-xs leading-snug text-muted-foreground">
-                A IA lê o edital e os anexos e aponta riscos, exigências e pontos de atenção.
+                A IA lê o edital, os anexos e os itens do PNCP e extrai prazos, contatos, habilitação
+                e requisitos.
               </p>
             )}
             <Button

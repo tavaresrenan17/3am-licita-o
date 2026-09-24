@@ -286,7 +286,7 @@ export interface CoberturaAnaliseDTO {
 export interface AnaliseLicitacaoDTO {
   licitacaoId: string;
   estado: "nunca" | "processando" | "pronta" | "erro";
-  /** v2 (três partes) ou v1 (formato antigo, só leitura até ser refeito). */
+  /** v3 (resumo, três partes, itens e fatos do PNCP) ou v1/v2 (formato antigo, só leitura até ser refeito). */
   resultado: AnaliseResultadoSalvo | null;
   fontes: FonteEvidenciaDTO[];
   cobertura: CoberturaAnaliseDTO;

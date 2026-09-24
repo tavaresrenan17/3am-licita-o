@@ -1,18 +1,12 @@
-/** Resposta do modelo no formato v2 (três partes), como chega antes do parse. */
-export function respostaV2(fonteId: string) {
+/**
+ * Resposta do modelo no formato v3 (resumo + três partes, sem veredito), como
+ * chega antes do parse.
+ */
+export function respostaV3(fonteId: string) {
   const f = [fonteId];
   return {
-    veredito: "atencao",
-    confianca: "media",
     resumoExecutivo:
-      "Pregão eletrônico para aquisição de mobiliário escolar com entrega em 3 escolas.",
-    parecerEngenheiro: {
-      decisao: "go_com_ressalvas",
-      titulo: "Participar com atenção à amostra",
-      justificativa: "Preço de referência adequado, mas a amostra física tem prazo curto.",
-      atratividadeComercial: "media",
-      complexidadeOperacional: "baixa",
-    },
+      "Pregão eletrônico para aquisição de 120 conjuntos de mobiliário escolar, valor estimado de R$ 96.000,00, entrega em 20 dias em 3 escolas de São Paulo/SP.",
     prazosContatos: {
       procedimentais: {
         validadeProposta: {

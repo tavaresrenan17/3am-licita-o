@@ -23,7 +23,10 @@ import {
   type BlocoContexto,
   type EvidenciaContexto,
 } from "./contexto";
+import { calcularFatosPncp } from "./fatos";
 import { type GeradorChat, criarGeradorChat } from "./gerador.server";
+import type { ItemLicitacao } from "@/lib/types";
+import { identificarCompraPncp, type IdentificacaoCompraPncp } from "../pncp/itens";
 import {
   type LinhaAnalise,
   type RepositorioAnalise,
@@ -37,6 +40,62 @@ export interface ParametrosExecutarAnalise {
   repositorio?: RepositorioAnalise;
   gerador?: GeradorChat;
   embedder?: Embedder;
+  /** Itens da compra no PNCP; trocável nos testes. */
+  obterItens?: (compra: IdentificacaoCompraPncp) => Promise<ItemLicitacao[]>;
+  agora?: () => Date;
+}
+
+async function obterItensDoPncp(compra: IdentificacaoCompraPncp): Promise<ItemLicitacao[]> {
+  const { buscarItens } = await import("../pncp/client.server");
+  const { mapearItemPncp } = await import("../pncp/itens");
+  const { itens } = await buscarItens(compra.cnpj, compra.ano, compra.sequencial);
+  return itens.map(mapearItemPncp);
+}
+
+/**
+ * Itens da compra, ou null com o motivo. Falha do PNCP não derruba a análise:
+ * o edital continua sendo lido, só sem a lista oficial de itens.
+ */
+async function carregarItens(
+  licitacao: Record<string, unknown>,
+  obterItens: NonNullable<ParametrosExecutarAnalise["obterItens"]>,
+): Promise<{ itens: ItemLicitacao[] | null; alerta: string | null }> {
+  const compra = identificarCompraPncp(licitacao);
+  if (!compra) {
+    return {
+      itens: null,
+      alerta: "Itens do PNCP não consultados: faltam CNPJ, ano ou sequencial da compra.",
+    };
+  }
+  try {
+    return { itens: await obterItens(compra), alerta: null };
+  } catch (erro) {
+    // 404 do PNCP é "compra sem itens cadastrados": lista vazia, não falha.
+    if (erro instanceof Error && erro.name === "RecursoInexistentePNCP") {
+      return { itens: [], alerta: null };
+    }
+    const motivo = erro instanceof Error ? erro.message : String(erro);
+    return {
+      itens: null,
+      alerta: `Itens do PNCP indisponíveis no momento da análise (${motivo.slice(0, 120)}).`,
+    };
+  }
+}
+
+/**
+ * Resposta que não é JSON válido ganha uma segunda chamada. Em 24/09/2026 o
+ * mesmo prompt falhou 1 vez em 5, sem corte de saída (finish_reason "stop"
+ * nas repetições); refazer a chamada custa menos que a pessoa refazer a
+ * análise. Resposta fora do contrato (JSON válido, campos errados) não repete.
+ */
+async function gerarResultado(gerador: GeradorChat, prompt: string) {
+  const primeira = await gerador.gerar(prompt);
+  try {
+    return parseAnaliseResultado(primeira);
+  } catch (erro) {
+    if (!(erro instanceof Error) || !erro.message.includes("JSON válido")) throw erro;
+    return parseAnaliseResultado(await gerador.gerar(prompt));
+  }
 }
 
 export async function executarAnaliseLicitacao(
@@ -45,6 +104,8 @@ export async function executarAnaliseLicitacao(
   const repo = parametros.repositorio ?? repositorioAnalise;
   const gerador = parametros.gerador ?? criarGeradorChat();
   const embedder = parametros.embedder ?? obterEmbedderPadrao();
+  const obterItens = parametros.obterItens ?? obterItensDoPncp;
+  const agora = parametros.agora ?? (() => new Date());
   const { licitacaoId, forcar = false } = parametros;
 
   const materiaPrima = await repo.obterMateriaPrima(licitacaoId);
@@ -125,15 +186,17 @@ export async function executarAnaliseLicitacao(
       );
     }
 
+    const { itens, alerta: alertaItens } = await carregarItens(materiaPrima.licitacao, obterItens);
+
     const prompt = construirPromptAnalise({
       metadados: materiaPrima.licitacao,
       blocos,
       evidencias,
       cobertura,
+      itens,
     });
 
-    const respostaTexto = await gerador.gerar(prompt);
-    const resultadoBruto = parseAnaliseResultado(respostaTexto);
+    const resultadoBruto = await gerarResultado(gerador, prompt);
     const textosPorFonte = new Map([
       ...blocos.map((b) => [b.id, b.texto] as const),
       ...evidencias.map((e) => [e.id, e.trecho] as const),
@@ -142,6 +205,8 @@ export async function executarAnaliseLicitacao(
       validarFontes(resultadoBruto, fontesValidas),
       textosPorFonte,
     );
+    resultado.fatosPncp = calcularFatosPncp(materiaPrima.licitacao, itens, agora());
+    if (alertaItens) resultado.alertasSistema.push(alertaItens);
 
     const fontesSalvas = [
       ...blocos.map((b) => ({

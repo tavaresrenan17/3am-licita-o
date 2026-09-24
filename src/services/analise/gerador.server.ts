@@ -77,9 +77,8 @@ export class GeradorChatOpenAI implements GeradorChat {
     const sinal = AbortSignal.timeout(this.timeoutMs);
 
     const systemContent = [
-      "Você é o consultor sênior de inteligência técnica em licitações e contratações públicas brasileiras (Lei nº 14.133/2021 consolidada, atualizada para 2026 pelo Decreto nº 12.807/2025 e jurisprudência pacificada do TCU).",
-      "Sua missão é auditar os documentos oficiais do certame para defender a segurança jurídica, as margens comerciais e a saúde de caixa da empresa fornecedora/construtora.",
-      "Estruture a análise com rigor cirúrgico e responda exclusivamente em formato JSON válido conforme solicitado.",
+      "Você extrai informações de editais de licitações públicas brasileiras (Lei nº 14.133/2021) com fidelidade ao texto dos documentos.",
+      "Responda exclusivamente em formato JSON válido, conforme solicitado.",
     ].join("\n\n");
 
     const enviarRequisicao = async (modeloRequisicao: string, targetEndpoint = endpoint, targetHeaders = headers) => {

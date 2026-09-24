@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { formatarApresentacaoAnalise } from "./apresentacao";
 import type { AnaliseLicitacaoDTO } from "../../lib/dto";
 import { parsearAnaliseResultado } from "./contrato";
-import { respostaV2 } from "./__fixtures__/respostaV2";
+import { respostaV3 } from "./__fixtures__/respostaV3";
 
 describe("formatarApresentacaoAnalise", () => {
   it("trata nulo como nunca gerada", () => {
@@ -90,16 +90,37 @@ describe("formatarApresentacaoAnalise", () => {
     expect(a.estadoVisual).toBe("desatualizada");
     expect(a.permiteRegenerar).toBe(true);
     expect(a.rotuloBotaoAcao).toMatch(/refazer/i);
-    expect(a.vereditoFormatado?.texto).toMatch(/favor[aá]vel/i);
   });
 
-  it("trata estado pronta com veredito", () => {
+  it("trata a v2 (com veredito go / no-go) como formato antigo", () => {
     const dto: AnaliseLicitacaoDTO = {
       licitacaoId: "lic-1",
       estado: "pronta",
-      resultado: parsearAnaliseResultado(
-        JSON.stringify({ ...respostaV2("fonte-1"), veredito: "favoravel" }),
-      ),
+      resultado: {
+        formato: "v2",
+        veredito: "favoravel",
+        confianca: "alta",
+        resumoExecutivo: "Condições favoráveis.",
+        parecerEngenheiro: { decisao: "go" },
+      },
+      fontes: [],
+      cobertura: { estado: "completa", ativos: 1, disponiveis: 1, falhos: 0, pendentes: 0 },
+      modelo: "gpt-4o-mini",
+      erro: null,
+      geradoEm: new Date().toISOString(),
+      atualizadoEm: new Date().toISOString(),
+    };
+    const a = formatarApresentacaoAnalise(dto);
+    expect(a.estadoVisual).toBe("desatualizada");
+    expect(a.rotuloBotaoAcao).toMatch(/refazer/i);
+    expect(a.completude).toBeUndefined();
+  });
+
+  it("análise pronta mostra quanto do roteiro o edital respondeu, sem veredito", () => {
+    const dto: AnaliseLicitacaoDTO = {
+      licitacaoId: "lic-1",
+      estado: "pronta",
+      resultado: parsearAnaliseResultado(JSON.stringify(respostaV3("fonte-1"))),
       fontes: [],
       cobertura: { estado: "completa", ativos: 1, disponiveis: 1, falhos: 0, pendentes: 0 },
       modelo: "gpt-4o-mini",
@@ -111,6 +132,12 @@ describe("formatarApresentacaoAnalise", () => {
     expect(a.estadoVisual).toBe("pronta");
     expect(a.permiteRegenerar).toBe(false);
     expect(a.rotuloBotaoAcao).toMatch(/salva/i);
-    expect(a.vereditoFormatado?.texto).toMatch(/favor[aá]vel/i);
+    expect(a).not.toHaveProperty("vereditoFormatado");
+    expect(a.completude).toEqual({
+      camposPreenchidos: 17,
+      camposTotal: 51,
+      trechosConfirmados: 0,
+      documentosHabilitacao: 4,
+    });
   });
 });

@@ -1,11 +1,13 @@
 import { z } from "zod";
+import type { FatosPncp } from "./fatos";
 
 /**
- * v2 (23/09/2026): veredito + parecer no topo e o roteiro de três partes
- * pedido pela equipe (prazos e contatos, habilitação, requisitos operacionais).
- * Análises salvas em v1 continuam legíveis e podem ser refeitas.
+ * v3 (24/09/2026): a análise só extrai dados. Sai o veredito "go / no-go":
+ * sem conhecer a empresa, a IA recomendou consultas médicas e conexões de água.
+ * Entram os itens do PNCP no contexto e os fatos do certame calculados pelo
+ * sistema. Análises v1 e v2 ficam como formato antigo e podem ser refeitas.
  */
-export const PROMPT_VERSAO = "v2";
+export const PROMPT_VERSAO = "v3";
 export const ALGORITMO_VERSAO = "v1";
 
 export const TETO_CARACTERES_BLOCO = 12_000;
@@ -441,12 +443,14 @@ export const enderecoEntregaSchema = z.object({
 
 export type EnderecoEntrega = z.infer<typeof enderecoEntregaSchema>;
 
+/**
+ * Chaves que o modelo não envia e o `z.object` descarta (inclusive veredito e
+ * parecer de respostas no molde antigo). `fatosPncp` e `alertasSistema` saem
+ * vazios do parse: quem os preenche é o orquestrador, com dados do PNCP.
+ */
 export const analiseResultadoSchema = z
   .object({
-    veredito: z.enum(["favoravel", "atencao", "desfavoravel", "insuficiente"]),
-    confianca: z.enum(["alta", "media", "baixa"]),
     resumoExecutivo: z.string().trim().min(1),
-    parecerEngenheiro: parecerEngenheiroSchema.optional().catch(undefined),
     prazosContatos: parteCamposSchema(PARTE1_PRAZOS_CONTATOS),
     habilitacao: habilitacaoSchema,
     requisitosOperacionais: parteCamposSchema(PARTE3_REQUISITOS),
@@ -455,12 +459,32 @@ export const analiseResultadoSchema = z
       .nullish()
       .transform((v) => v ?? []),
   })
-  .transform((r) => ({ formato: "v2" as const, ...r }));
+  .transform((r) => ({
+    formato: "v3" as const,
+    ...r,
+    fatosPncp: null as FatosPncp | null,
+    alertasSistema: [] as string[],
+  }));
 
 export type AnaliseResultado = z.infer<typeof analiseResultadoSchema>;
 export type ParecerEngenheiro = z.infer<typeof parecerEngenheiroSchema>;
 export type Severidade = z.infer<typeof severidadeSchema>;
 export type ItemCitavel = z.infer<typeof itemCitavelSchema>;
+
+type Veredito = "favoravel" | "atencao" | "desfavoravel" | "insuficiente";
+type Confianca = "alta" | "media" | "baixa";
+
+/**
+ * Formato v2 (23/09/2026), só para LER: três partes com veredito e parecer.
+ * Refeito pelo botão "Refazer análise".
+ */
+export interface AnaliseResultadoV2 {
+  formato: "v2";
+  veredito: Veredito;
+  confianca: Confianca;
+  resumoExecutivo: string;
+  parecerEngenheiro?: ParecerEngenheiro;
+}
 
 /**
  * Formato v1, só para LER análises salvas antes de 23/09/2026. Nenhuma análise
@@ -468,8 +492,8 @@ export type ItemCitavel = z.infer<typeof itemCitavelSchema>;
  */
 export interface AnaliseResultadoV1 {
   formato?: undefined;
-  veredito: AnaliseResultado["veredito"];
-  confianca: AnaliseResultado["confianca"];
+  veredito: Veredito;
+  confianca: Confianca;
   resumoExecutivo: string;
   pontosImportantes: ItemCitavel[];
   pontosAtencao?: ItemCitavel[];
@@ -498,11 +522,11 @@ export interface AnaliseResultadoV1 {
   };
 }
 
-export type AnaliseResultadoSalvo = AnaliseResultado | AnaliseResultadoV1;
+export type AnaliseResultadoSalvo = AnaliseResultado | AnaliseResultadoV2 | AnaliseResultadoV1;
 
 export const ehFormatoAtual = (
   r: AnaliseResultadoSalvo | null | undefined,
-): r is AnaliseResultado => r?.formato === "v2";
+): r is AnaliseResultado => r?.formato === "v3";
 
 export interface FonteConhecida {
   id: string;
@@ -513,7 +537,10 @@ export function parsearAnaliseResultado(json: string): AnaliseResultado {
   try {
     valor = JSON.parse(json);
   } catch {
-    throw new Error("Resposta de análise não contém JSON válido");
+    // O começo da resposta fica no erro salvo: é o que permite diagnosticar
+    // a falha intermitente vista em 24/09/2026 (1 em 5, sem corte de saída).
+    const inicio = json.trim().slice(0, 120).replace(/\s+/g, " ");
+    throw new Error(`Resposta de análise não contém JSON válido (início: "${inicio}")`);
   }
 
   if (valor && typeof valor === "object" && !Array.isArray(valor)) {
