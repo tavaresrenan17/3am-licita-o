@@ -89,8 +89,8 @@ const STATUS_CONFIG: Record<
     dot: "bg-muted-foreground/60",
   },
   proposta_enviada: {
-    badge: "border-primary/40 bg-primary/10 text-primary",
-    dot: "bg-primary",
+    badge: "border-brand/40 bg-brand/10 text-brand",
+    dot: "bg-brand",
   },
 };
 
@@ -152,11 +152,11 @@ export function StatusPncpBadge({ status }: { status: string }) {
 
 export function ScoreBadge({ score, className }: { score: number; className?: string }) {
   const tom =
-    score >= 75
-      ? "bg-success/12 text-success"
+    score >= 70
+      ? "bg-success/12 text-success border border-success/30"
       : score >= 40
-        ? "bg-warning/12 text-warning"
-        : "bg-destructive/10 text-destructive";
+        ? "bg-warning/12 text-warning border border-warning/30"
+        : "bg-muted/70 text-muted-foreground border border-border/50";
 
   return (
     <div

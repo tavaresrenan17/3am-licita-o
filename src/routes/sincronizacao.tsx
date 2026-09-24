@@ -536,7 +536,7 @@ function SincronizacaoPage() {
                         <span className="text-xs font-bold text-foreground">{opcao.rotulo}</span>
                         <span className="text-[10px] text-muted-foreground">{opcao.sub}</span>
                         <span
-                          className={`mt-1.5 text-[9px] font-semibold px-1.5 py-0.5 rounded-full ${
+                          className={`mt-1.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${
                             ativo
                               ? "bg-primary text-primary-foreground"
                               : "bg-muted text-muted-foreground"

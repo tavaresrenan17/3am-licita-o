@@ -44,7 +44,7 @@ function Citacao({ item, fontes }: { item: Citavel; fontes: Map<string, string> 
   if (!item.confirmado) {
     return (
       <span
-        className="inline-flex shrink-0 items-center gap-0.5 rounded bg-warning/15 px-1 text-[9px] font-semibold normal-case tracking-normal text-warning"
+        className="inline-flex shrink-0 items-center gap-0.5 rounded bg-warning/15 px-1 text-[10px] font-semibold normal-case tracking-normal text-warning"
         title={`Frase não localizada no edital — confira antes de usar.\n${onde}${item.trecho ? `\nCitado pela IA: “${item.trecho}”` : ""}`}
       >
         <AlertTriangle className="size-2.5" />
@@ -156,7 +156,7 @@ function ListaDocumentos({
                   <span className="font-medium text-foreground">{doc.documento}</span>
                   <span className="flex shrink-0 items-center gap-1.5">
                     {exigencia && (
-                      <Badge variant="outline" className="py-0 text-[9px]">
+                      <Badge variant="outline" className="py-0 text-[10px]">
                         {exigencia}
                       </Badge>
                     )}

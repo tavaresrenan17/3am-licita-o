@@ -37,12 +37,24 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 
-/** Um par rótulo/valor da grade de "Detalhes". Rótulo em negrito text-primary, valor normal. */
-function CampoDetalhe({ label, children }: { label: string; children: React.ReactNode }) {
+/** Um par rótulo/valor da grade de "Detalhes" com hierarquia visual clara. */
+function CampoDetalhe({
+  label,
+  children,
+  className,
+  mono = false,
+}: {
+  label: string;
+  children: React.ReactNode;
+  className?: string;
+  mono?: boolean;
+}) {
   return (
-    <div className="flex flex-wrap items-baseline gap-x-1.5 text-xs">
-      <dt className="shrink-0 font-bold text-primary">{label}</dt>
-      <dd className="min-w-0 text-foreground">{children}</dd>
+    <div className={cn("flex flex-col gap-0.5 min-w-0", className)}>
+      <dt className="text-[11px] font-medium text-muted-foreground">{label}</dt>
+      <dd className={cn("min-w-0 text-xs font-semibold text-foreground", mono && "font-mono num")}>
+        {children}
+      </dd>
     </div>
   );
 }
@@ -84,8 +96,9 @@ export function LicitacaoCard({
   return (
     <div
       className={cn(
-        "rounded-xl border border-border bg-card p-4 shadow-sm transition-shadow hover:shadow-md sm:p-5",
-        selecionada && "border-primary/50 ring-2 ring-primary/40",
+        "rounded-xl border border-border/70 bg-card p-4 transition-colors hover:border-border sm:p-5",
+        selecionada && "border-primary/60 ring-1 ring-primary/30 bg-accent/10",
+        l.prioridade && "border-highlight/50 bg-highlight/[0.02]",
       )}
     >
       {/* Barra superior: status, órgão, urgência | score, ações rápidas */}
@@ -103,16 +116,16 @@ export function LicitacaoCard({
 
           <span
             className={cn(
-              "flex size-6.5 shrink-0 items-center justify-center rounded-full border",
+              "flex size-6 shrink-0 items-center justify-center rounded-full border border-border/60",
               STATUS_ICON_TOM[l.status_interno],
             )}
             title={`Status interno: ${STATUS_INTERNO_LABEL[l.status_interno]}`}
           >
-            <Eye className="size-3.5" />
+            <Eye className="size-3" />
           </span>
 
           <span
-            className="inline-flex max-w-[220px] items-center truncate rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-semibold text-primary"
+            className="inline-flex max-w-[240px] items-center truncate rounded bg-muted/70 px-2 py-0.5 text-[11px] font-medium text-foreground/85"
             title={l.orgao}
           >
             {l.orgao}
@@ -120,7 +133,7 @@ export function LicitacaoCard({
 
           <span
             className={cn(
-              "inline-flex shrink-0 items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold",
+              "inline-flex shrink-0 items-center rounded-full border px-2 py-0.5 text-[10px] font-medium",
               urgencia.classes,
             )}
           >
@@ -128,7 +141,7 @@ export function LicitacaoCard({
           </span>
         </div>
 
-        <div className="flex shrink-0 items-center gap-1">
+        <div className="flex shrink-0 items-center gap-0.5">
           <ScoreBadge score={l.score_aderencia} />
 
           <button
@@ -137,19 +150,24 @@ export function LicitacaoCard({
               e.stopPropagation();
               onTogglePrioridade(l.id, l.prioridade);
             }}
-            className="flex size-7 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive cursor-pointer"
+            className={cn(
+              "flex size-7 items-center justify-center rounded transition-colors cursor-pointer",
+              l.prioridade
+                ? "text-highlight hover:text-highlight/80"
+                : "text-muted-foreground/70 hover:text-highlight",
+            )}
             title={l.prioridade ? "Remover prioridade" : "Marcar como prioritária"}
           >
-            <Heart className={cn("size-4", l.prioridade && "fill-destructive text-destructive")} />
+            <Heart className={cn("size-3.5", l.prioridade && "fill-highlight text-highlight")} />
           </button>
 
           <button
             type="button"
             onClick={compartilhar}
-            className="flex size-7 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-accent hover:text-primary cursor-pointer"
+            className="flex size-7 items-center justify-center rounded text-muted-foreground/60 transition-colors hover:text-foreground cursor-pointer"
             title="Copiar link da licitação"
           >
-            <Share2 className="size-4" />
+            <Share2 className="size-3.5" />
           </button>
 
           {l.url_pncp && (
@@ -158,10 +176,10 @@ export function LicitacaoCard({
               target="_blank"
               rel="noopener noreferrer"
               onClick={(e) => e.stopPropagation()}
-              className="flex size-7 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-accent hover:text-primary cursor-pointer"
+              className="flex size-7 items-center justify-center rounded text-muted-foreground/60 transition-colors hover:text-foreground cursor-pointer"
               title="Abrir no PNCP"
             >
-              <ExternalLink className="size-4" />
+              <ExternalLink className="size-3.5" />
             </a>
           )}
 
@@ -276,30 +294,30 @@ export function LicitacaoCard({
       </div>
 
       {/* Título */}
-      <Link to="/licitacoes/$id" params={{ id: l.id }} className="mt-3 block">
-        <h3 className="line-clamp-2 text-sm font-semibold uppercase tracking-tight text-foreground transition-colors hover:text-primary sm:text-base">
+      <Link to="/licitacoes/$id" params={{ id: l.id }} className="mt-2.5 block">
+        <h3 className="line-clamp-2 text-sm sm:text-base font-semibold tracking-tight text-foreground transition-colors hover:text-primary">
           {titulo}
         </h3>
       </Link>
 
       {/* Abas */}
-      <Tabs defaultValue="detalhes" className="mt-3 w-full">
-        <TabsList className="h-auto w-full justify-start gap-5 rounded-none border-b border-border bg-transparent p-0">
+      <Tabs defaultValue="detalhes" className="mt-2.5 w-full">
+        <TabsList className="h-auto w-full justify-start gap-4 rounded-none border-b border-border/40 bg-transparent p-0">
           <TabsTrigger
             value="detalhes"
-            className="h-auto shrink-0 rounded-none border-b-2 border-transparent bg-transparent px-0.5 pb-2 text-xs font-medium text-muted-foreground shadow-none data-[state=active]:border-highlight data-[state=active]:bg-transparent data-[state=active]:font-semibold data-[state=active]:text-primary data-[state=active]:shadow-none"
+            className="h-auto shrink-0 rounded-none border-b-2 border-transparent bg-transparent px-0.5 pb-1.5 text-xs font-medium text-muted-foreground shadow-none data-[state=active]:border-foreground/70 data-[state=active]:bg-transparent data-[state=active]:font-semibold data-[state=active]:text-foreground data-[state=active]:shadow-none"
           >
             Detalhes
           </TabsTrigger>
           <TabsTrigger
             value="arquivos"
-            className="h-auto shrink-0 rounded-none border-b-2 border-transparent bg-transparent px-0.5 pb-2 text-xs font-medium text-muted-foreground shadow-none data-[state=active]:border-highlight data-[state=active]:bg-transparent data-[state=active]:font-semibold data-[state=active]:text-primary data-[state=active]:shadow-none"
+            className="h-auto shrink-0 rounded-none border-b-2 border-transparent bg-transparent px-0.5 pb-1.5 text-xs font-medium text-muted-foreground shadow-none data-[state=active]:border-foreground/70 data-[state=active]:bg-transparent data-[state=active]:font-semibold data-[state=active]:text-foreground data-[state=active]:shadow-none"
           >
             Arquivos
           </TabsTrigger>
           <TabsTrigger
             value="dados"
-            className="h-auto shrink-0 rounded-none border-b-2 border-transparent bg-transparent px-0.5 pb-2 text-xs font-medium text-muted-foreground shadow-none data-[state=active]:border-highlight data-[state=active]:bg-transparent data-[state=active]:font-semibold data-[state=active]:text-primary data-[state=active]:shadow-none"
+            className="h-auto shrink-0 rounded-none border-b-2 border-transparent bg-transparent px-0.5 pb-1.5 text-xs font-medium text-muted-foreground shadow-none data-[state=active]:border-foreground/70 data-[state=active]:bg-transparent data-[state=active]:font-semibold data-[state=active]:text-foreground data-[state=active]:shadow-none"
           >
             Dados adicionais
           </TabsTrigger>
@@ -308,14 +326,14 @@ export function LicitacaoCard({
         <TabsContent value="detalhes" className="mt-3 space-y-3">
           <div>
             <p
-              className="line-clamp-2 text-xs uppercase leading-relaxed text-muted-foreground"
+              className="line-clamp-2 text-xs leading-relaxed text-foreground/90 font-medium"
               title={objeto}
             >
               {objeto}
             </p>
             {l.origem_semantica && l.trecho && (
               <p
-                className="mt-1.5 line-clamp-2 text-[11px] italic text-muted-foreground/80"
+                className="mt-1.5 line-clamp-2 rounded border border-primary/20 bg-primary/5 px-2.5 py-1 text-[11px] italic text-foreground/80"
                 title={l.trecho}
               >
                 “{l.trecho}”
@@ -323,28 +341,57 @@ export function LicitacaoCard({
             )}
           </div>
 
-          <dl className="grid grid-cols-1 gap-x-6 gap-y-2 sm:grid-cols-3">
-            <CampoDetalhe label="Publicação">{dataBR(l.data_publicacao)}</CampoDetalhe>
-            <CampoDetalhe label="Modalidade">{l.modalidade ?? "—"}</CampoDetalhe>
-            <CampoDetalhe label="Valor total estimado">
-              {l.valor_estimado === null ? "Sigiloso" : brl(l.valor_estimado)}
-            </CampoDetalhe>
+          {/* Métricas operacionais principais */}
+          <div className="grid grid-cols-1 gap-2.5 border-y border-border/40 py-2 sm:grid-cols-3">
+            <div className="flex flex-col gap-0.5">
+              <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                Valor Total Estimado
+              </span>
+              <span
+                className={cn(
+                  "font-mono text-sm sm:text-base font-semibold tracking-tight num",
+                  l.valor_estimado === null
+                    ? "text-xs font-normal text-muted-foreground"
+                    : "text-foreground",
+                )}
+              >
+                {l.valor_estimado === null ? "Sigiloso" : brl(l.valor_estimado)}
+              </span>
+            </div>
 
-            <CampoDetalhe label="Abertura">
-              {dataHoraExtenso(l.data_abertura_proposta)}
-            </CampoDetalhe>
-            <CampoDetalhe label="Registro de preço">
-              {l.srp === null ? "—" : l.srp ? "Sim" : "Não"}
-            </CampoDetalhe>
-            <CampoDetalhe label="Cidade">
-              <span className="inline-flex flex-wrap items-center gap-1.5">
+            <div className="flex flex-col gap-0.5">
+              <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                Abertura da Proposta
+              </span>
+              <span className="font-mono text-xs font-medium text-foreground num">
+                {dataHoraExtenso(l.data_abertura_proposta)}
+              </span>
+            </div>
+
+            <div className="flex flex-col gap-0.5">
+              <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                Localização
+              </span>
+              <div className="flex flex-wrap items-center gap-1.5 text-xs font-medium text-foreground">
                 <span>
                   {l.municipio ?? "—"}/{l.uf ?? "—"}
                 </span>
                 {l.distancia_km !== undefined && l.distancia_km !== null && (
                   <DistanceBadge distanciaKm={l.distancia_km} />
                 )}
-              </span>
+              </div>
+            </div>
+          </div>
+
+          <dl className="grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-3">
+            <CampoDetalhe label="Publicação" mono>
+              {dataBR(l.data_publicacao)}
+            </CampoDetalhe>
+            <CampoDetalhe label="Modalidade">
+              {l.modalidade ?? "—"}
+            </CampoDetalhe>
+            <CampoDetalhe label="Registro de preço">
+              {l.srp === null ? "—" : l.srp ? "Sim (SRP)" : "Não"}
             </CampoDetalhe>
           </dl>
         </TabsContent>

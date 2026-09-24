@@ -738,10 +738,10 @@ function LicitacoesSalvas() {
         </>
       }
     >
-      <section className="rounded-xl border border-border/80 bg-card/90 p-3.5 shadow-sm">
+      <section className="rounded-xl border border-border/60 bg-card/70 p-3">
         {/* --- Triagem Comercial por Status Interno --- */}
-        <div className="mb-2.5 flex flex-wrap items-center gap-1.5 border-b border-border/60 pb-2.5">
-          <span className="text-[11px] font-semibold text-muted-foreground mr-1 flex items-center gap-1">
+        <div className="mb-2 flex flex-wrap items-center gap-1 border-b border-border/40 pb-2">
+          <span className="text-[11px] font-medium text-muted-foreground mr-1.5">
             Status Interno:
           </span>
           <button
@@ -751,10 +751,10 @@ function LicitacoesSalvas() {
               setPagina(1);
             }}
             className={cn(
-              "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-all duration-150 cursor-pointer",
+              "px-2.5 py-1 text-[11px] font-medium transition-colors cursor-pointer rounded-md",
               !filtros.status_interno
-                ? "border-primary/80 bg-primary/20 text-primary font-semibold shadow-xs"
-                : "border-border/80 bg-muted/40 text-muted-foreground hover:border-border hover:text-foreground",
+                ? "bg-primary/10 text-primary font-semibold"
+                : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
             )}
           >
             <span>Todas</span>
@@ -768,10 +768,10 @@ function LicitacoesSalvas() {
               setPagina(1);
             }}
             className={cn(
-              "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-all duration-150 cursor-pointer",
+              "inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-medium transition-colors cursor-pointer rounded-md",
               filtros.status_interno === "interessante"
-                ? "border-success/70 bg-success/20 text-success font-semibold shadow-xs ring-1 ring-success/40"
-                : "border-border/80 bg-muted/40 text-muted-foreground hover:border-success/40 hover:text-success",
+                ? "bg-success/15 text-success font-semibold"
+                : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
             )}
           >
             <Star className="size-3 fill-success text-success" />
@@ -786,10 +786,10 @@ function LicitacoesSalvas() {
               setPagina(1);
             }}
             className={cn(
-              "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-all duration-150 cursor-pointer",
+              "inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-medium transition-colors cursor-pointer rounded-md",
               filtros.status_interno === "em_analise"
-                ? "border-warning/70 bg-warning/20 text-warning font-semibold shadow-xs ring-1 ring-warning/40"
-                : "border-border/80 bg-muted/40 text-muted-foreground hover:border-warning/40 hover:text-warning",
+                ? "bg-warning/15 text-warning font-semibold"
+                : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
             )}
           >
             <Search className="size-3 text-warning" />
@@ -804,10 +804,10 @@ function LicitacoesSalvas() {
               setPagina(1);
             }}
             className={cn(
-              "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-all duration-150 cursor-pointer",
+              "inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-medium transition-colors cursor-pointer rounded-md",
               filtros.status_interno === "nova"
-                ? "border-info/70 bg-info/20 text-info font-semibold shadow-xs ring-1 ring-info/40"
-                : "border-border/80 bg-muted/40 text-muted-foreground hover:border-info/40 hover:text-info",
+                ? "bg-info/15 text-info font-semibold"
+                : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
             )}
           >
             <Sparkles className="size-3 text-info" />
@@ -822,10 +822,10 @@ function LicitacoesSalvas() {
               setPagina(1);
             }}
             className={cn(
-              "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-all duration-150 cursor-pointer",
+              "inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-medium transition-colors cursor-pointer rounded-md",
               filtros.status_interno === "descartada"
-                ? "border-destructive/70 bg-destructive/20 text-destructive font-semibold shadow-xs ring-1 ring-destructive/40"
-                : "border-border/80 bg-muted/40 text-muted-foreground hover:border-destructive/40 hover:text-destructive",
+                ? "bg-destructive/15 text-destructive font-semibold"
+                : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
             )}
           >
             <XCircle className="size-3 text-destructive" />
@@ -840,10 +840,10 @@ function LicitacoesSalvas() {
               setPagina(1);
             }}
             className={cn(
-              "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-all duration-150 cursor-pointer",
+              "inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-medium transition-colors cursor-pointer rounded-md",
               filtros.status_interno === "proposta_enviada"
-                ? "border-brand/70 bg-brand/20 text-brand font-semibold shadow-xs ring-1 ring-brand/40"
-                : "border-border/80 bg-muted/40 text-muted-foreground hover:border-brand/40 hover:text-brand",
+                ? "bg-brand/15 text-brand font-semibold"
+                : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
             )}
           >
             <Send className="size-3 text-brand" />
@@ -852,9 +852,9 @@ function LicitacoesSalvas() {
         </div>
 
         {/* Presets Rápidos de Construção Civil */}
-        <div className="mb-3 flex flex-wrap items-center gap-1.5 border-b border-border/60 pb-2.5">
-          <span className="text-[11px] font-semibold text-muted-foreground mr-1">
-            Presets Rápidos:
+        <div className="mb-2.5 flex flex-wrap items-center gap-1 border-b border-border/40 pb-2">
+          <span className="text-[11px] font-medium text-muted-foreground mr-1.5">
+            Presets:
           </span>
           <button
             type="button"
@@ -867,10 +867,10 @@ function LicitacoesSalvas() {
               setPagina(1);
             }}
             className={cn(
-              "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-all duration-150 cursor-pointer",
+              "inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-medium transition-colors cursor-pointer rounded",
               filtros.recomendadas
-                ? "border-success/60 bg-success/15 text-success shadow-xs font-semibold"
-                : "border-border/80 bg-muted/40 text-muted-foreground hover:border-success/40 hover:text-foreground",
+                ? "bg-success/15 text-success font-semibold"
+                : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
             )}
           >
             <HardHat className="size-3 text-success" />
@@ -889,10 +889,10 @@ function LicitacoesSalvas() {
               setPagina(1);
             }}
             className={cn(
-              "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-all duration-150 cursor-pointer",
+              "inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-medium transition-colors cursor-pointer rounded",
               filtros.limite_ate === diaBR(3)
-                ? "border-warning/60 bg-warning/15 text-warning shadow-xs font-semibold"
-                : "border-border/80 bg-muted/40 text-muted-foreground hover:border-warning/40 hover:text-foreground",
+                ? "bg-warning/15 text-warning font-semibold"
+                : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
             )}
           >
             <span>Prazos Críticos (≤ 3d)</span>
@@ -910,10 +910,10 @@ function LicitacoesSalvas() {
               setPagina(1);
             }}
             className={cn(
-              "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-all duration-150 cursor-pointer",
+              "inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-medium transition-colors cursor-pointer rounded",
               filtros.valor_min === "1000000"
-                ? "border-primary/60 bg-primary/15 text-primary shadow-xs font-semibold"
-                : "border-border/80 bg-muted/40 text-muted-foreground hover:border-primary/40 hover:text-foreground",
+                ? "bg-primary/10 text-primary font-semibold"
+                : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
             )}
           >
             <span>Grandes Obras (&gt; R$ 1M)</span>
@@ -930,10 +930,10 @@ function LicitacoesSalvas() {
               setPagina(1);
             }}
             className={cn(
-              "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-all duration-150 cursor-pointer",
+              "inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-medium transition-colors cursor-pointer rounded",
               filtros.prioridade === "true"
-                ? "border-primary/60 bg-primary/15 text-primary shadow-xs font-semibold"
-                : "border-border/80 bg-muted/40 text-muted-foreground hover:border-primary/40 hover:text-foreground",
+                ? "bg-primary/10 text-primary font-semibold"
+                : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
             )}
           >
             <Star className="size-3 fill-primary text-primary" />
@@ -950,22 +950,22 @@ function LicitacoesSalvas() {
               setPagina(1);
             }}
             className={cn(
-              "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-all duration-150 cursor-pointer",
+              "inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-medium transition-colors cursor-pointer rounded",
               filtros.com_edital
-                ? "border-info/60 bg-info/15 text-info shadow-xs font-semibold"
-                : "border-border/80 bg-muted/40 text-muted-foreground hover:border-info/40 hover:text-foreground",
+                ? "bg-info/15 text-info font-semibold"
+                : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
             )}
           >
             <span>Com Edital</span>
           </button>
         </div>
 
-        <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           <div className="relative min-w-0 flex-1">
-            <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               ref={buscaInputRef}
-              className="h-8 pl-8 pr-16 text-xs placeholder:text-muted-foreground"
+              className="h-9 pl-9 pr-14 text-xs font-medium placeholder:text-muted-foreground"
               placeholder="Buscar por palavras-chave ou ideia vetorial (ex.: reforma de escola, pavimentação asfáltica)…"
               value={termo}
               onChange={(e) => setTermo(e.target.value)}
@@ -997,7 +997,7 @@ function LicitacoesSalvas() {
             type="button"
             size="sm"
             className={cn(
-              "h-8 gap-1.5 px-3 text-xs font-semibold cursor-pointer shadow-sm transition-all shrink-0",
+              "h-9 gap-1.5 px-3.5 text-xs font-semibold cursor-pointer shadow-xs transition-all shrink-0",
               termo.trim() !== (filtros.palavra_chave ?? "") && termo.trim().length > 0
                 ? "bg-primary text-primary-foreground hover:bg-primary/90 ring-2 ring-primary/40"
                 : "bg-primary text-primary-foreground hover:bg-primary/90",
@@ -1008,7 +1008,7 @@ function LicitacoesSalvas() {
           >
             <Sparkles className={cn("size-3.5", consulta.isFetching && "animate-spin")} />
             <span>Buscar</span>
-            <kbd className="ml-1 hidden rounded bg-primary-foreground/20 px-1 py-0.5 font-mono text-[9px] text-primary-foreground/90 sm:inline-block">
+            <kbd className="ml-1 hidden rounded bg-primary-foreground/20 px-1 py-0.5 font-mono text-[10px] text-primary-foreground/90 sm:inline-block">
               ↵ Enter
             </kbd>
           </Button>
@@ -1018,7 +1018,7 @@ function LicitacoesSalvas() {
               type="button"
               variant={filtrosExpandidos ? "secondary" : "outline"}
               size="sm"
-              className="h-8 text-xs cursor-pointer"
+              className="h-9 text-xs font-medium cursor-pointer"
               onClick={() => setFiltrosExpandidos((v) => !v)}
             >
               <SlidersHorizontal className="mr-1.5 size-3.5" />
@@ -1503,11 +1503,11 @@ function LicitacoesSalvas() {
                         <td className="px-4 py-3">
                           <div className="flex items-start gap-2">
                             {l.prioridade && (
-                              <Star className="mt-0.5 size-3.5 shrink-0 fill-primary text-primary" />
+                              <Star className="mt-0.5 size-3.5 shrink-0 fill-highlight text-highlight" />
                             )}
                             <div className="min-w-0">
                               <span
-                                className="line-clamp-2 text-[13px] font-medium leading-snug"
+                                className="line-clamp-2 text-xs font-semibold leading-snug"
                                 title={objeto}
                               >
                                 {objeto}

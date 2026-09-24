@@ -93,5 +93,5 @@ export const STATUS_ICON_TOM: Record<StatusInterno, string> = {
   em_analise: "border-warning/40 bg-warning/10 text-warning",
   interessante: "border-success/40 bg-success/10 text-success",
   descartada: "border-border bg-muted text-muted-foreground",
-  proposta_enviada: "border-primary/40 bg-primary/10 text-primary",
+  proposta_enviada: "border-brand/40 bg-brand/10 text-brand",
 };

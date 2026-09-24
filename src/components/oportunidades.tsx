@@ -52,7 +52,7 @@ function Indicador({
 }) {
   return (
     <div className={cn("rounded-lg p-4", destaque && "bg-muted/50")}>
-      <p className="text-[13px] font-semibold text-foreground">{rotulo}</p>
+      <p className="text-sm font-semibold text-foreground">{rotulo}</p>
       <p className="num mt-1.5 text-4xl font-bold leading-none tracking-tight">
         {carregando || valor === undefined ? (
           <span className="text-muted-foreground">—</span>
@@ -94,7 +94,7 @@ function BarraEstado({
       search={{ uf, apenas_abertas: true, ordenar: "data_limite_proposta", direcao: "asc" }}
       className="group grid grid-cols-[minmax(0,9rem)_1fr_auto] items-center gap-3 rounded-md px-2 py-1.5 hover:bg-muted/40"
     >
-      <span className="truncate text-[13px] text-foreground">{UF_NOME[uf] ?? uf}</span>
+      <span className="truncate text-xs font-medium text-foreground">{UF_NOME[uf] ?? uf}</span>
 
       {/* Marca fina, extremidade arredondada só na ponta do dado: a base fica
           reta, ancorada no eixo. */}
@@ -105,7 +105,7 @@ function BarraEstado({
         />
       </span>
 
-      <span className="num flex items-baseline gap-2 text-[13px] tabular-nums">
+      <span className="num flex items-baseline gap-2 text-xs tabular-nums">
         <span className="w-10 text-right text-[11px] text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100">
           {fatia.toFixed(0)}%
         </span>
@@ -174,7 +174,7 @@ export function PainelOportunidades({
 
         <div className="flex flex-col rounded-xl border border-border bg-card p-4 lg:col-span-2">
           <div className="flex items-baseline justify-between gap-3">
-            <h3 className="text-[13px] font-semibold">Licitações por estado</h3>
+            <h3 className="text-sm font-semibold">Licitações por estado</h3>
             <span className="text-[11px] text-muted-foreground">
               {carregando ? "carregando…" : `${numero(totalAbertas)} vigentes`}
             </span>
