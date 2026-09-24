@@ -322,7 +322,7 @@ export function AnaliseLicitacaoSheet({
                             <div className="p-1.5 rounded-lg bg-brand/20 text-brand">
                               <Compass className="h-4 w-4" />
                             </div>
-                            <span className="text-xs font-bold uppercase tracking-wider text-brand">
+                            <span className="text-xs font-bold uppercase tracking-wider text-foreground">
                               Decisão do Engenheiro Chefe (Go / No-Go)
                             </span>
                           </div>
@@ -511,7 +511,7 @@ export function AnaliseLicitacaoSheet({
                           <Swords className="h-4 w-4" />
                         </div>
                         <div>
-                          <h4 className="text-sm font-bold text-brand tracking-tight">
+                          <h4 className="text-sm font-bold text-foreground tracking-tight">
                             ⚔️ Estratégia de Combate & Impugnação Preventiva
                           </h4>
                           <p className="text-[11px] text-muted-foreground">
@@ -711,7 +711,7 @@ export function AnaliseLicitacaoSheet({
                             <Calendar className="h-4 w-4" />
                           </div>
                           <div>
-                            <h4 className="text-sm font-bold text-brand tracking-tight">
+                            <h4 className="text-sm font-bold text-foreground tracking-tight">
                               📅 Prazos Críticos & Cronograma Legal
                             </h4>
                             <p className="text-[11px] text-muted-foreground">

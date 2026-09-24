@@ -242,7 +242,7 @@ function DetalheLicitacao() {
                     {licitacao.orgao} · {licitacao.municipio ?? "—"}/{licitacao.uf ?? "—"}
                   </span>
                 </p>
-                <h2 className="mt-1 text-sm font-semibold uppercase text-brand">{titulo}</h2>
+                <h2 className="mt-1 text-sm font-semibold uppercase text-foreground">{titulo}</h2>
               </div>
               <ScoreBadge score={licitacao.score_aderencia} />
             </div>

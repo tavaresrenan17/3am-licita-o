@@ -277,7 +277,7 @@ export function LicitacaoCard({
 
       {/* Título */}
       <Link to="/licitacoes/$id" params={{ id: l.id }} className="mt-3 block">
-        <h3 className="line-clamp-2 text-sm font-semibold uppercase tracking-tight text-brand transition-colors hover:text-brand/80 sm:text-base">
+        <h3 className="line-clamp-2 text-sm font-semibold uppercase tracking-tight text-foreground transition-colors hover:text-primary sm:text-base">
           {titulo}
         </h3>
       </Link>

@@ -102,7 +102,7 @@ export function AppShell({
             )}
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <h1 className="truncate text-base font-semibold tracking-tight text-brand">{titulo}</h1>
+                <h1 className="truncate text-base font-semibold tracking-tight text-foreground">{titulo}</h1>
                 <div className="hidden xl:inline-flex items-center gap-1.5 rounded-full border border-success/30 bg-success/10 px-2 py-0.5 text-[10px] font-medium text-success">
                   <span className="size-1.5 rounded-full bg-success animate-pulse-subtle" />
                   <span>PNCP Integrado</span>

@@ -7,7 +7,10 @@
 /*
  * 3AM LICITAÇÃO — design system (claro e vivo / escuro e denso).
  * Fundo menta-acinzentado no claro, grafite-ardósia no escuro.
- * Primária azul-petróleo, ação de IA em verde-água, títulos em roxo e destaque em laranja.
+ * Primária azul-petróleo, ação de IA em verde-água e destaque em laranja.
+ * Títulos usam a cor padrão do texto (foreground). O roxo (brand) não é cor de
+ * texto padrão: fica só onde carrega significado — proposta enviada, blocos da
+ * análise por IA e seus ícones.
  * Todas as cores em oklch e expostas como tokens semânticos.
  */
 
